@@ -1,0 +1,19 @@
+name: ozon-products-sync
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'   # 00:00 UTC = 03:00 Мск, один раз в сутки
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Sync Ozon -> Supabase
+        run: node scripts/ozon_to_supabase.mjs
+        env:
+          OZON_CLIENT_ID: ${{ secrets.OZON_CLIENT_ID }}
+          OZON_API_KEY: ${{ secrets.OZON_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
