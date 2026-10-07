@@ -246,7 +246,11 @@ const localISO=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'
 const parseISO=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);};
 const DOW_TARGET={0:7,1:13,2:12,3:11,4:10,5:9,6:8};
 const DOW_NAME={0:'вс',1:'пн',2:'вт',3:'ср',4:'чт',5:'пт',6:'сб'};
-function matrixOf(offer){ return (/^(CAP|GLV|SEAL|RNC)-/.test(offer))?'m1':'m2'; }
+function matrixOf(offer){
+  if(/^(CAP|INS|FW|MS|ML|SE)-/.test(offer)) return 'm1'; // Илья
+  if(/^(SCI|BAG|CT)-/.test(offer)) return 'm2';           // Ольга
+  return 'm2'; // все остальные → Ольга
+}
 function setMode(m){
   MODE=m;
   document.getElementById('modeSum').classList.toggle('on',m==='summary');
