@@ -554,7 +554,11 @@ const wfmt=(k,v)=>{ if(k==='qty'||k==='sales'){ const r=Math.round(v*100)/100; r
 const localISO=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 const daysBetween=(a,b)=>Math.round((b-a)/86400000);
 const ddmm=iso=>iso.slice(8,10)+'.'+iso.slice(5,7);
-function matrixOf(offer){ return (/^(CAP|GLV|SEAL|RNC)-/.test(offer))?'m1':'m2'; }
+function matrixOf(offer){
+  if(/^(CAP|INS|FW|MS|ML|SE)-/.test(offer)) return 'm1'; // Илья
+  if(/^(SCI|BAG|CT)-/.test(offer)) return 'm2';           // Ольга
+  return 'm2'; // все остальные → Ольга
+}
 function monthOfWeekISO(iso){
   const d=parseW(iso);
   const monday=new Date(d); monday.setDate(d.getDate()-((d.getDay()+6)%7));
