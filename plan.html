@@ -1,0 +1,2358 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beauty Art — Реализация плана продаж</title>
+<link href="https://fonts.googleapis.com/css2?family=Forum&display=swap" rel="stylesheet">
+<style>
+ .login-box {
+    max-width: 400px;
+    margin: 100px auto;
+    background: white;
+    border-radius: 16px;
+    padding: 40px;
+    box-shadow: 0 10px 40px rgba(28,13,46,0.3);
+    border: 2px solid rgba(84,66,115,0.2);
+    text-align: center;
+}
+
+.login-logo {
+    width: 80px;
+    height: auto;
+    margin-bottom: 15px;
+}
+
+.login-title {
+    font-family: 'Forum', serif;
+    font-size: 1.8em;
+    color: #1C0D2E;
+    margin-bottom: 10px;
+}
+
+.login-subtitle {
+    color: #666;
+    font-size: 0.95em;
+    margin-bottom: 25px;
+    font-family: 'Forum', serif;
+}
+
+.password-input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid rgba(84,66,115,0.2);
+    border-radius: 10px;
+    font-size: 1em;
+    font-family: 'Forum', serif;
+    margin-bottom: 15px;
+    box-sizing: border-box;
+}
+
+.password-input:focus {
+    outline: none;
+    border-color: #E33D78;
+}
+
+.login-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #78A6C7, #E33D78);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1.05em;
+    font-family: 'Forum', serif;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.login-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(227,61,120,0.4);
+}
+
+.error-message {
+    display: none;
+    color: #E33D78;
+    font-size: 0.9em;
+    margin-top: 15px;
+    font-family: 'Forum', serif;
+}
+ body{font-family:'Forum',-apple-system,sans-serif;background:linear-gradient(135deg,#78A6C7,#E33D78,#7D3673);min-height:100vh;padding:20px;margin:0}
+ .login{max-width:1200px;margin:40px auto;background:#fff;border-radius:16px;padding:30px;box-shadow:0 10px 30px rgba(28,13,46,.3)}
+ .wrap{max-width:1200px;margin:0 auto 40px;background:#fff;border-radius:16px;padding:30px;box-shadow:0 10px 30px rgba(28,13,46,.3)}
+ h2{font-family:'Forum';color:#1C0D2E}
+ input,textarea,select{padding:6px 8px;border:2px solid rgba(84,66,115,.2);border-radius:8px;font-family:'Forum';font-size:.9em}
+ button{padding:6px 10px;border:none;border-radius:8px;background:linear-gradient(90deg,#78A6C7,#E33D78);color:#fff;font-family:'Forum';cursor:pointer}
+ .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+ table{width:100%;border-collapse:collapse;font-size:.78em;min-width:900px}
+ th,td{padding:5px 7px;border-bottom:1px dashed #cbd5e1;text-align:left;vertical-align:middle}
+ th{color:#666;white-space:nowrap}
+ th.wrap2{white-space:normal;line-height:1.15}
+ .hide{display:none}
+ .meta{color:#94a3b8;font-size:.85em;margin:6px 0}
+ .err{color:#E33D78;font-size:.9em;margin:8px 0}
+ .num{font-weight:700;color:#1C0D2E;white-space:nowrap}
+ .calc{color:#544273}
+ .g{color:#16a34a}.r{color:#E33D78}.n{color:#94a3b8}
+ .factcell{color:#94a3b8}
+ .autocell{color:#544273}
+ .editable{cursor:pointer;white-space:nowrap}
+ .editable::after{content:" ✎";opacity:.3;font-size:.8em}
+ .editable:hover{color:#E33D78}
+ .editable:hover::after{opacity:1}
+ td.okey{cursor:pointer}
+ td.okey:hover{color:#E33D78}
+ .wedit{cursor:pointer;white-space:nowrap}
+ .editbtn{opacity:.35;font-size:.8em;margin-left:4px;cursor:pointer}
+ .editbtn:hover{opacity:1;color:#E33D78}
+ .resetbtn{opacity:.55;font-size:.85em;margin-left:4px;cursor:pointer;color:#94a3b8}
+ .resetbtn:hover{opacity:1;color:#d97706}
+ .stocklink{color:#544273;text-decoration:underline;transition:transform .2s ease,color .2s;display:inline-block}
+ .stocklink:hover{transform:scale(1.05);color:#E33D78}
+ tr.zeroplan td{background:rgba(227,61,120,.12)}
+ .dateshort{cursor:pointer;color:#544273;font-size:.85em;border-bottom:1px dashed rgba(84,66,115,.4);white-space:nowrap}
+ .dateshort:hover{color:#E33D78}
+ .datelocked{cursor:default;color:#94a3b8;font-size:.85em;border-bottom:none;white-space:nowrap}
+ .datehidden{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;border:0;padding:0}
+ tr.dgroup td{background:rgba(120,166,199,.14);font-weight:700;color:#33506b;padding-top:10px}
+ tr.protorow td{background:#f8f9fb;padding:12px}
+ .protohead{font-size:.9em;color:#1C0D2E;margin-bottom:10px;font-weight:700;border-bottom:1px solid rgba(84,66,115,.1);padding-bottom:6px}
+ .psection{border:1px solid rgba(84,66,115,.1);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#fff}
+ .psectitle{font-weight:700;color:#544273;font-size:.85em;margin-bottom:8px}
+ .sec-head{cursor:pointer;user-select:none}
+ .sec-caret{display:inline-block;margin-right:6px}
+ .protowrap{max-width:1100px}
+ .pulsewrap{overflow-x:auto}
+ .pulsemetric{color:#544273;font-weight:700}
+ .pulsetable{width:auto;min-width:0;font-size:.82em;border-collapse:collapse}
+ .pulsetable th,.pulsetable td{padding:2px 4px;border-bottom:1px dashed rgba(84,66,115,.12);text-align:center;white-space:nowrap}
+ .pulsetable th{color:#94a3b8;font-size:.8em}
+ .pulsetable th:first-child,.pulsetable td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:1}
+ .prec{font-size:.85em;color:#544273;padding:4px 0;border-bottom:1px dashed rgba(84,66,115,.08)}
+ .prec:last-child{border-bottom:none}
+ .prec b{color:#1C0D2E;display:inline-block;min-width:90px}
+ .pitem{border:1px solid rgba(84,66,115,.15);border-radius:8px;background:#fff;padding:7px 10px;margin:0 0 6px;border-left:4px solid}
+ .pitem .pdate{color:#94a3b8;margin-right:8px}
+ .pchild{margin:6px 0 6px 18px;padding:6px 10px;border-left:3px solid rgba(84,66,115,.25);background:#f8f9fb;border-radius:6px;font-size:.92em}
+ .pchild .pdate{color:#94a3b8;margin-right:8px}
+ .pchildform{margin:6px 0 4px 18px;padding:6px 8px;border:1px dashed rgba(84,66,115,.3);border-radius:6px;background:#fff;display:flex;gap:6px;flex-wrap:wrap}
+ .pchildform input[type=text]{flex:1;min-width:160px}
+ .pmetrics i{font-style:normal;background:rgba(120,166,199,.2);border-radius:5px;padding:1px 6px;margin-right:4px;color:#33506b;font-size:.85em}
+ .paction{color:#1C0D2E}
+ .psub{font-size:.85em;color:#544273;margin-top:4px}
+ .psub button{padding:2px 8px;font-size:.85em;margin-right:4px}
+ .badge{border-radius:5px;padding:1px 7px;font-size:.85em;font-weight:700;display:inline-block}
+ .badge.g{background:rgba(22,163,74,.15);color:#16a34a}
+ .badge.r{background:rgba(227,61,120,.15);color:#E33D78}
+ .badge.n{background:rgba(148,163,184,.2);color:#64748b}
+ .badge.w{background:rgba(217,119,6,.15);color:#d97706}
+ .pform{border:1px dashed rgba(84,66,115,.3);border-radius:8px;padding:8px 10px;margin-top:6px;background:#fff}
+ .pfrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+ .pform input[type=text]{flex:1;min-width:200px}
+ .pform select,.pform input[type=date],.pform input[type=number],.pform input[type=text]{height:36px;box-sizing:border-box}
+ .datestub{display:inline-flex;align-items:center;height:36px;box-sizing:border-box;padding:0 10px;border:2px solid rgba(84,66,115,.2);border-radius:8px;background:#f8f9fb;color:#94a3b8;font-size:.9em;white-space:nowrap}
+ .pnote{border:1px solid rgba(84,66,115,.1);border-radius:6px;padding:6px 10px;margin-bottom:5px;background:#fefefe}
+ .pnote .pdate{color:#94a3b8;font-size:.8em;display:block;margin-bottom:3px}
+ .pnote .ntxt{color:#1C0D2E;font-size:.88em;white-space:pre-wrap}
+ .pnote button{padding:1px 6px;font-size:.75em;margin-top:4px}
+ .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+ .toolbar input[type=text]{flex:1;min-width:180px}
+ .toolbar select{height:36px;box-sizing:border-box}
+ .progress{margin:10px 0}
+ .progtext{font-size:.85em;color:#544273;margin-bottom:4px}
+ .progbar{height:8px;border-radius:8px;background:#e2e8f0;overflow:hidden}
+ .progfill{height:100%;width:0%;background:linear-gradient(90deg,#78A6C7,#E33D78);transition:width .2s}
+ .progfill.bad{background:#E33D78}
+ th.mhead{background:linear-gradient(90deg,rgba(120,166,199,.18),transparent);color:#544273;font-size:.95em}
+ th.sub{background:rgba(120,166,199,.1)}
+ th.whead{background:rgba(227,61,120,.08);color:#7D3673}
+ th.wsub{background:rgba(227,61,120,.05);font-size:.75em}
+ .mtoggle{padding:0 5px;margin-right:4px;background:none;border:1px solid rgba(84,66,115,.3);border-radius:5px;color:#544273;cursor:pointer;font-size:.8em}
+ td.wcell{background:rgba(227,61,120,.03)}
+ th.sep,td.sep{border-left:1px dashed rgba(84,66,115,.3)}
+ tr.mgroup td{background:linear-gradient(90deg,rgba(125,54,115,.18),transparent);font-weight:700;color:#7D3673;padding-top:12px;border-bottom:2px solid rgba(125,54,115,.25)}
+ tr.mgroup button{background:none;border:1px solid rgba(125,54,115,.4);border-radius:5px;color:#7D3673;cursor:pointer;padding:0 6px;margin-right:6px}
+ .mxcard{border:2px solid rgba(84,66,115,.12);border-radius:12px;background:#fff;padding:12px 14px;margin:0 0 14px}
+ .mxtitle{font-family:'Forum';font-weight:700;color:#544273;font-size:1em;margin-bottom:8px}
+ .totalhead{cursor:pointer;user-select:none}
+ .totalhead:hover{color:#E33D78}
+ .totalcaret{display:inline-block;margin-right:6px;color:#544273}
+ .mxbody{display:flex;gap:12px;align-items:stretch;flex-wrap:wrap;min-height:280px}
+ .panel{border:1px solid rgba(84,66,115,.15);border-radius:12px;background:#fff;padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+ .panelhead{display:flex;align-items:center;gap:8px}
+ .paneltitle{font-family:'Forum';font-size:.82em;font-weight:700;color:#544273}
+ .panelhead .pieSwitch{margin-left:auto}
+ .panel-charts{flex:1 1 520px;min-width:460px}
+.panel-speedo {
+  flex: 0 0 168px;
+  width: 168px;
+}
+.speedo-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  gap: 6px;
+}
+.speedo-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border-radius: 10px;
+  padding: 4px 2px;
+}
+.speedo-item.clickable { cursor: pointer; transition: background .15s; }
+.speedo-item.clickable:hover { background: rgba(120,166,199,.12); }
+.speedo-label {
+  font-family: 'Forum';
+  font-size: .78em;
+  font-weight: 700;
+  color: #544273;
+}
+.speedo-svg {
+  width: 130px;
+  height: 82px;
+}
+.speedo-val {
+  font-family: 'Forum';
+  font-size: 1.4em;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+.speedo-val.ok { color: #16a34a; }
+.speedo-val.warn { color: #d97706; }
+.speedo-val.bad { color: #E33D78; animation: pulseBad 1.2s ease-in-out infinite; }
+.speedo-val.n { color: #94a3b8; }
+.speedo-sub {
+  font-size: .65em;
+  color: #94a3b8;
+  text-align: center;
+  line-height: 1.2;
+}
+ .panel-kpi{flex:1 1 100%;min-width:0}
+ .piesrow{display:flex;gap:10px;flex:1;align-items:flex-start}
+ .piecard{display:flex;flex-direction:column;flex:0 0 242px;width:242px;overflow:hidden}
+ .ptitle{font-size:.72em;color:#94a3b8;font-weight:700;margin-bottom:4px}
+ .piebox{display:flex;flex-direction:column;gap:8px;align-items:flex-start;width:100%}
+ .pieWrap{position:relative;width:120px;height:120px;flex:0 0 auto}
+ svg.pie{width:100%;height:100%;display:block;animation:piein .5s ease}
+ @keyframes piein{from{opacity:0;transform:scale(.9) rotate(-15deg)}to{opacity:1;transform:none}}
+ .seg{cursor:pointer;transition:transform .18s ease,opacity .18s ease;transform-origin:110px 110px}
+ .seg:hover,.seg.hl{transform:scale(1.06)}
+ svg.dim .seg:not(:hover):not(.hl){opacity:.4}
+ .pieCenter{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center;padding:0 18px}
+ .pcVal{font-size:.72em;font-weight:700;color:#1C0D2E;line-height:1.1}
+ .pcCap{font-size:.6em;color:#94a3b8;margin-top:2px}
+ .tip{position:fixed;z-index:50;background:#1C0D2E;color:#fff;border-radius:8px;padding:6px 10px;font-size:.78em;pointer-events:none;opacity:0;transition:opacity .12s;white-space:nowrap;box-shadow:0 4px 14px rgba(28,13,46,.4)}
+ .legend{font-size:.72em;color:#544273}
+ .lrow{display:flex;align-items:center;gap:8px;margin:4px 0;white-space:nowrap;cursor:pointer;padding:3px 6px;border-radius:6px;transition:background .15s;width:100%;overflow:hidden}
+ .lrow:hover,.lrow.hl{background:rgba(120,166,199,.18)}
+ .dot{width:12px;height:12px;border-radius:3px;display:inline-block;flex:0 0 auto}
+ .lval{margin-left:auto;font-weight:700;color:#1C0D2E}
+ .lcnt{color:#94a3b8;font-size:.9em}
+ .kpisrow{display:flex;align-items:stretch;flex:1;gap:0}
+ .kpicol{flex:1;display:flex;flex-direction:column;gap:6px;padding:0 10px;min-width:0}
+ .kpicol.sep{border-left:1px dashed rgba(84,66,115,.3)}
+ .kpititle{font-size:.72em;color:#94a3b8;font-weight:700;flex:0 0 auto}
+ .kpirow{flex:1 1 0;min-height:0;padding:4px 2px;border-bottom:1px dashed rgba(84,66,115,.12)}
+ .kpirow:last-child{border-bottom:none}
+ .klabel{font-size:.66em;color:#94a3b8;white-space:nowrap}
+ .kval{font-size:.95em;font-weight:700;color:#1C0D2E;white-space:nowrap}
+ .panel-hypotheses{flex:1 1 100%;width:100%}
+ .hypo-stats{display:flex;gap:10px;margin-top:8px;justify-content:center}
+ .hypo-card{flex:0 1 220px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 8px;border-radius:10px;background:#f8f9fb;position:relative;transition:transform .2s,box-shadow .2s}
+ .hypo-card:hover{transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
+ .hypo-active{background:linear-gradient(135deg,rgba(148,163,184,.15),rgba(148,163,184,.08))}
+ .hypo-success{background:linear-gradient(135deg,rgba(22,163,74,.15),rgba(22,163,74,.08))}
+ .hypo-fail{background:linear-gradient(135deg,rgba(227,61,120,.15),rgba(227,61,120,.08))}
+ .hypo-num{font-family:'Forum';font-size:1.8em;font-weight:700;line-height:1;color:#1C0D2E;margin-bottom:4px}
+ .hypo-active .hypo-num{color:#64748b}
+ .hypo-success .hypo-num{color:#16a34a}
+ .hypo-fail .hypo-num{color:#E33D78}
+ .hypo-label{font-size:.72em;color:#94a3b8;font-weight:700}
+ .hypo-icon{position:absolute;top:6px;right:6px;font-size:.9em;opacity:.5}
+ .hypo-rate{max-width:460px;margin:12px auto 0;padding:10px;background:#f8f9fb;border-radius:8px}
+ .hypo-rate-bar{height:8px;border-radius:4px;background:#e2e8f0;overflow:hidden;margin-bottom:6px}
+ .hypo-rate-fill{height:100%;background:linear-gradient(90deg,#16a34a,#4ade80);transition:width .3s;border-radius:4px}
+ .hypo-rate-text{font-size:.72em;color:#544273;font-weight:700;text-align:center}
+ .ksub{font-size:.65em;color:#94a3b8;font-weight:400;margin-top:2px;line-height:1.2}
+ .header{max-width:1200px;margin:20px auto 20px;display:flex;align-items:center;gap:20px;padding:25px 30px;background:rgba(255,255,255,0.15);border-radius:16px;border:2px solid rgba(255,255,255,0.3);box-shadow:0 8px 32px rgba(28,13,46,0.2);position:relative;z-index:200}
+ .logo-link{display:inline-block;flex:0 0 auto}
+ .logo{width:80px;height:auto;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.2));transition:transform .3s ease;display:block}
+ .logo-link:hover .logo{transform:scale(1.1)}
+ .company-name{font-family:'Forum',serif;font-size:2.5em;font-weight:400;color:white;text-shadow:0 2px 8px rgba(28,13,46,0.4);letter-spacing:2px}
+ .header-nav{margin-left:auto;display:flex;gap:10px}
+ .nav-item{position:relative}
+ .nav-btn{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.3);border-radius:10px;color:#fff;padding:10px 16px;font-family:'Forum',serif;font-size:1em;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all .3s;text-shadow:0 1px 3px rgba(0,0,0,0.25)}
+ .nav-btn:hover{background:rgba(255,255,255,0.25);transform:translateY(-1px)}
+ .nav-btn .caret{font-size:.72em;transition:transform .2s}
+ .nav-item.open .nav-btn .caret{transform:rotate(180deg)}
+ .nav-menu{position:absolute;top:calc(100% + 10px);right:0;min-width:250px;background:rgba(255,255,255,0.18);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.35);border-radius:12px;padding:8px;display:none;z-index:300;box-shadow:0 10px 30px rgba(28,13,46,.25)}
+ .nav-item.open .nav-menu{display:block}
+ .nav-menu a{display:block;padding:10px 14px;border-radius:8px;color:#fff;text-decoration:none;font-family:'Forum',serif;font-size:.95em;transition:background .2s;text-shadow:0 1px 3px rgba(0,0,0,.25)}
+ .nav-menu a:hover{background:rgba(255,255,255,0.22)}
+ .pmwrap{display:inline-flex;margin-left:12px;border:1px solid rgba(84,66,115,.25);border-radius:8px;overflow:hidden;vertical-align:middle}
+ .pmbtn{padding:2px 10px;border:none;background:#fff;color:#544273;font-family:'Forum';font-size:.72em;cursor:pointer}
+ .pmbtn.on{background:linear-gradient(90deg,#78A6C7,#E33D78);color:#fff}
+ .pieSwitch{position:relative;display:inline-grid;grid-template-columns:1fr 1fr;border:1px solid rgba(84,66,115,.25);border-radius:8px;overflow:hidden;vertical-align:middle;cursor:pointer;user-select:none}
+ .pieSwitch .psKnob{position:absolute;top:0;bottom:0;left:0;width:50%;background:linear-gradient(90deg,#78A6C7,#E33D78);transition:left .2s ease}
+ .pieSwitch.on .psKnob{left:50%}
+ .pieSwitch .psLab{position:relative;z-index:1;padding:2px 12px;text-align:center;font-family:'Forum';font-size:.72em;color:#544273;transition:color .2s}
+ .pieSwitch .psLab.act{color:#fff}
+ .tempwrap{height:280px;overflow:auto;width:100%}
+ table.temp{width:100%;border-collapse:collapse;font-size:.8em;min-width:680px}
+ table.temp th,table.temp td{padding:5px 7px;border-bottom:1px dashed #cbd5e1;text-align:right;white-space:nowrap}
+ table.temp th{color:#666;font-size:.85em;text-align:left;vertical-align:middle}
+ table.temp th.sortable{cursor:pointer;user-select:none}
+ table.temp th.sortable:hover{color:#E33D78}
+ table.temp th .sortArrow{display:inline-block;margin-left:3px;color:#E33D78;opacity:.85;font-size:.75em}
+ table.temp th.sortable:not(.sorted) .sortArrow{opacity:.25}
+ table.temp th:first-child,table.temp td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:1}
+ table.temp th.ghead{background:linear-gradient(90deg,rgba(120,166,199,.18),transparent);color:#544273;font-size:.95em}
+ table.temp th.shead{background:rgba(120,166,199,.1)}
+ table.temp .sep{border-left:1px dashed rgba(84,66,115,.3)}
+ .thermobody{flex:1;display:flex;gap:10px;align-items:stretch;justify-content:center}
+ .thermo{position:relative;width:26px;border-radius:14px;background:#eef0f4;border:1px solid rgba(84,66,115,.15);overflow:visible}
+ .thermofill{position:absolute;bottom:0;left:0;right:0;border-radius:14px;background:linear-gradient(0deg,#E33D78,#d97706);transition:height .6s ease}
+ .thermofill.warn{background:linear-gradient(0deg,#d97706,#f59e0b)}
+ .thermofill.ok{background:linear-gradient(0deg,#16a34a,#4ade80)}
+ .thermoemoji{position:absolute;top:-13px;left:50%;transform:translateX(-50%);font-size:16px;line-height:1}
+ .thermoinfo{display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0}
+ .progval{font-family:'Forum';font-size:1.9em;font-weight:700;line-height:1.1}
+ .progval.ok{color:#16a34a}
+ .progval.warn{color:#d97706}
+ .progval.bad{color:#E33D78;animation:pulseBad 1.2s ease-in-out infinite}
+ .progval.n{color:#94a3b8}
+ @keyframes pulseBad{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+ .progsub{font-size:.72em;color:#94a3b8}
+ .upwrap{position:relative;display:inline-block}
+ .upmenu{position:absolute;top:calc(100% + 6px);left:0;background:#fff;border:1px solid rgba(84,66,115,.25);border-radius:8px;padding:4px;display:flex;flex-direction:column;gap:4px;min-width:210px;box-shadow:0 6px 18px rgba(28,13,46,.15);z-index:300}
+ .upmenu.hide{display:none}
+ .upmenu button{background:#f8f9fb;color:#544273;text-align:left}
+ .upmenu button:hover{background:rgba(120,166,199,.2)}
+ @media (max-width:1100px){
+   .mxbody{flex-wrap:wrap}
+   .panel-charts,.panel-speedo,.panel-kpi{flex:1 1 100%;width:100%}
+ }
+ @media (min-width:961px){
+   .tablewrap{overflow-x:auto}
+ }
+ @media (max-width:640px){
+   body{padding:8px}
+   .login,.wrap{padding:16px;margin:16px auto;border-radius:12px}
+   h2{font-size:1.15em}
+   .toolbar{flex-direction:column;align-items:stretch}
+   button{padding:10px 14px;font-size:1em}
+   table{font-size:.72em;min-width:800px}
+   th,td{padding:4px 5px}
+   .meta{font-size:.78em}
+   .header{flex-wrap:wrap}
+   .header-nav{margin-left:0;width:100%}
+   .mxbody{flex-direction:column;align-items:stretch;height:auto}
+   .tempwrap{max-height:320px}
+   .piesrow{flex-wrap:wrap}
+   .thermobody{height:160px}
+   .kpisrow{flex-wrap:wrap}
+ }
+  /* === ДАШБОРД В ОДИН РЯД: компактные переопределения === */
+ .mxbody{flex-wrap:nowrap;gap:10px}
+ .panel{padding:8px 10px;gap:6px}
+ .panel-charts{flex:1 1 420px;min-width:0;width:auto}
+ .piesrow{gap:8px}
+ .piecard{flex:1 1 0;width:auto;min-width:0}
+ .pieWrap{width:104px;height:104px}
+ .ptitle{font-size:.66em}
+ .legend{font-size:.66em}
+ .lrow{padding:2px 4px;gap:6px}
+ .panel-speedo{flex:0 0 148px;width:148px}
+ .speedo-svg{width:112px;height:70px}
+ .speedo-label{font-size:.7em}
+ .speedo-val{font-size:1.2em}
+ .speedo-sub{font-size:.6em}
+ .panel-kpi{flex:1 1 230px;min-width:0}
+ .kpicol{padding:0 8px}
+ .kpititle{font-size:.66em}
+ .klabel{font-size:.6em;white-space:normal}
+ .kval{font-size:.85em}
+ .ksub{font-size:.6em}
+ .panel-hypotheses{flex:0 0 190px;width:190px}
+ .hypo-stats{flex-direction:column;gap:6px;justify-content:flex-start;margin-top:6px}
+ .hypo-card{flex:0 0 auto;flex-direction:row;align-items:center;justify-content:flex-start;gap:8px;padding:8px 10px}
+ .hypo-num{font-size:1.3em;margin-bottom:0}
+ .hypo-label{font-size:.66em}
+ .hypo-icon{position:static;margin-left:auto;font-size:.85em}
+ .hypo-rate{max-width:none;margin:8px 0 0;padding:8px}
+ .hypo-rate-text{font-size:.66em}
+ @media (max-width:1100px){
+   .mxbody{flex-wrap:wrap}
+   .panel-charts,.panel-speedo,.panel-kpi,.panel-hypotheses{flex:1 1 100%;width:100%}
+   .hypo-stats{flex-direction:row;justify-content:center}
+   .hypo-card{flex:0 1 220px;flex-direction:column;align-items:center;justify-content:center;padding:12px 8px}
+   .hypo-num{font-size:1.8em;margin-bottom:4px}
+   .hypo-icon{position:absolute;top:6px;right:6px}
+ }
+</style></head>
+<body>
+<div class="login-box" id="login">
+    <img src="https://i.ibb.co/ZzbPQmQt/IMG-8031.png" alt="Beauty Art Logo" class="login-logo">
+    <div class="login-title">Закрытый раздел</div>
+    <div class="login-subtitle">Введите пароль для доступа</div>
+    <input type="password" id="pwd" class="password-input" placeholder="Пароль" onkeypress="if(event.key==='Enter')go()">
+    <button class="login-btn" onclick="go()">Войти</button>
+    <div class="error-message" id="errorMessage">Неверный пароль. Попробуйте ещё раз.</div>
+</div>
+<div class="hide" id="app">
+  <div class="header">
+    <a href="index.html" class="logo-link" title="На главную">
+      <img src="https://i.ibb.co/ZzbPQmQt/IMG-8031.png" alt="Beauty Art Logo" class="logo">
+    </a>
+    <div class="company-name">Beauty Art</div>
+    <nav class="header-nav">
+      <div class="nav-item">
+        <button class="nav-btn" onclick="toggleNav(this)">Управление продажами <span class="caret">▾</span></button>
+        <div class="nav-menu">
+          <a href="weekly.html">Управление остатками</a>
+          <a href="plan.html">Реализация плана продаж</a>
+          <a href="private.html">Сводный отчёт</a>
+        </div>
+      </div>
+      <div class="nav-item">
+        <button class="nav-btn" onclick="toggleNav(this)">Управление закупками <span class="caret">▾</span></button>
+        <div class="nav-menu">
+          <a href="products.html">База товаров</a>
+        </div>
+      </div>
+    </nav>
+  </div>
+  <div class="wrap">
+    <h2>📊 Реализация плана продаж</h2>
+    <div class="meta" id="meta">загрузка…</div>
+    <div class="err" id="err"></div>
+    <div class="toolbar">
+      <input type="text" id="q" placeholder="Поиск по названию / артикулу" oninput="render()">
+      <select id="month" onchange="onMonth(this.value)"></select>
+      <span class="upwrap">
+        <button id="btnUpload" onclick="toggleUploadMenu(event)">⬆ CSV</button>
+        <div class="upmenu hide" id="upmenu">
+          <button onclick="startChargesUpload()">Начисления Ozon</button>
+          <button onclick="startAdsUpload()">Аналитика продвижения</button>
+        </div>
+      </span>
+      <button id="btnExcel" onclick="exportPlanExcel()">📥 Excel</button>
+      <input type="file" id="chargesInput" accept=".csv" style="display:none" onchange="importCharges(this.files[0])">
+      <input type="date" id="adsDate" style="display:none" onchange="onAdsDate(this.value)">
+      <button id="btnAdsFile" class="hide" onclick="document.getElementById('adsInput').click()">📄 Файл за <span id="adsDateLabel"></span></button>
+      <input type="file" id="adsInput" accept=".csv" style="display:none" onchange="importAds(this.files[0])">
+    </div>
+    <div class="progress hide" id="progWrap">
+      <div class="progtext" id="progText">Загрузка…</div>
+      <div class="progbar"><div class="progfill" id="progFill"></div></div>
+    </div>
+    <div id="summary"></div>
+    <div class="tablewrap">
+      <table>
+        <thead id="th"></thead>
+        <tbody id="tb"></tbody>
+      </table>
+    </div>
+    <div class="tip" id="tip"></div>
+  </div>
+</div>
+ <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+function toggleNav(btn){const item=btn.closest('.nav-item');const wasOpen=item.classList.contains('open');document.querySelectorAll('.nav-item.open').forEach(i=>i.classList.remove('open'));if(!wasOpen)item.classList.add('open');}
+document.addEventListener('click',(e)=>{if(!e.target.closest('.nav-item')){document.querySelectorAll('.nav-item.open').forEach(i=>i.classList.remove('open'));}});
+document.addEventListener('click',(e)=>{if(!e.target.closest('.upwrap')){const m=document.getElementById('upmenu');if(m)m.classList.add('hide');}});
+const PASSWORD_HASH='6dd81b2b2385ffaeae34bc09050f3258110c5c7f1db578c69bcbc30ad8a121e0';
+const SUPABASE_URL='https://jvoofakrkhzoblhhuyvr.supabase.co';
+const ANON='sb_publishable_IA4ReUU9xTL7hb_sbsHaFA_LPATJazE';
+const HD={apikey:ANON,Authorization:'Bearer '+ANON};
+const TAX_RATE=0.03;
+let ROWS=[],PLAN={},BYID={},WD={},WEEKS=[],WEEKISO=[],PPM={},PROTO={},NOTES={},DEV={},OFFER_PID={},SKU_PID={};
+let EXP={qty:false,rev:false,mar:false,price:false,pct:false};
+let GM={m1:false,m2:false};
+let PIEMODE={m1:'plan',m2:'plan',t:'plan'};
+let ORDMODE={m1:'summary',m2:'summary',t:'summary'};
+let TOTAL_OPEN=false;
+function toggleTotal(){
+  TOTAL_OPEN=!TOTAL_OPEN;
+  const el=document.getElementById('totalbody');
+  const c=document.getElementById('totalcaret');
+  if(el)el.classList.toggle('hide',!TOTAL_OPEN);
+  if(c)c.textContent=TOTAL_OPEN?'▾':'▸';
+}
+let TEMP_SORT={m1:{col:'devPlan',dir:'desc'},m2:{col:'devPlan',dir:'desc'},t:{col:'devPlan',dir:'desc'}};
+function toggleTempSort(gid,col){
+  const s=TEMP_SORT[gid];
+  if(s.col===col){ s.dir=s.dir==='desc'?'asc':'desc'; }
+  else{ s.col=col; s.dir='desc'; }
+  renderOrderTemps(gid);
+}
+function setOrdMode(gid,m){ORDMODE[gid]=m;render();}
+function togglePieMode(gid){PIEMODE[gid]=PIEMODE[gid]==='plan'?'forecast':'plan';render();}
+function pieStats(list,mode){
+  const buckets=[{label:'до 5%',color:'#E33D78',rev:0,cnt:0},{label:'5–10%',color:'#d97706',rev:0,cnt:0},{label:'свыше 10%',color:'#16a34a',rev:0,cnt:0}];
+  let total=0,cnt=0;
+  list.forEach(p=>{
+    let rev=null,pct=null;
+    if(mode==='plan'){const pl=PLAN[p.product_id]||{price:Number(p.price||0),plan_qty:0,margin_pct:0};rev=pl.plan_qty*pl.price;pct=pl.margin_pct;}
+    else{const rv=projVal(p,'revn').ffV,mr=projVal(p,'mar').ffV;rev=(rv!=null&&rv>0)?rv:null;pct=(rev!=null&&mr!=null)?mr/rev*100:null;}
+    if(rev==null||rev<=0)return;
+    if(pct==null)pct=0;
+    total+=rev;cnt+=1;
+    const b=pct<=5?buckets[0]:(pct<=10?buckets[1]:buckets[2]);b.rev+=rev;b.cnt+=1;
+  });
+  return {buckets,total,cnt};
+}
+let openProto=new Set();
+const DWN=['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+const MLBL={qty:'Заказы',revo:'Выручка (заказы)',sales:'Продажи',revn:'Выручка',mar:'Маржа',price:'Цена',pct:'Маржин.'};
+const MUNIT={qty:'шт',revo:'₽',sales:'шт',revn:'₽',mar:'₽',price:'₽',pct:'%'};
+const WDKEY={qty:'qty',revo:'rev',sales:'sales',revn:'revn',mar:'mar',price:'price',pct:'pct'};
+const COLLBL={
+  qty:{fc:'Прогноз<br>(заказы)',dv:'—'},
+  revo:{fc:'Прогноз<br>(заказы)',dv:'—'},
+  sales:{fc:'Расчётный<br>прогноз',dv:'Расчётное<br>отклонение'},
+  revn:{fc:'Расчётный<br>прогноз',dv:'Расчётное<br>отклонение'},
+  mar:{fc:'Расчётный<br>прогноз',dv:'Расчётное<br>отклонение'},
+  price:{fc:'Ср.взвеш.<br>цена, ₽',dv:'Отклонение'},
+  pct:{fc:'Ср.взвеш.<br>маржин., %',dv:'Отклонение'}
+};
+const METRICS=[
+  {key:'sales',label:'Продажи, шт',add:true,plan:true,edit:'plan_qty'},
+  {key:'revn',label:'Выручка, ₽',add:true,plan:true},
+  {key:'mar',label:'Маржа, ₽',add:true,plan:true},
+  {key:'price',label:'Цена, ₽',add:false,plan:true,edit:'price'},
+  {key:'pct',label:'Маржин., %',add:false,plan:true,edit:'margin_pct'}
+];
+const now0=new Date();
+let MONTH=now0.getFullYear()+'-'+String(now0.getMonth()+1).padStart(2,'0');
+const MNAMES=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+function fillMonthSelect(){
+  const sel=document.getElementById('month');
+  if(!sel)return;
+  const now=new Date();
+  let h='';
+  for(let i=-2;i<=3;i++){
+    const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+    const v=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    h+=`<option value="${v}">${MNAMES[d.getMonth()]} ${d.getFullYear()}</option>`;
+  }
+  sel.innerHTML=h;
+}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const pad=n=>String(n).padStart(2,'0');
+const esc=s=>(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>Number(n||0).toLocaleString('ru-RU',{maximumFractionDigits:0});
+const fmt2=n=>Number(n||0).toLocaleString('ru-RU',{maximumFractionDigits:2});
+const f1=n=>Number(n||0).toLocaleString('ru-RU',{maximumFractionDigits:1});
+const fmtM=n=>n>=1e6?(n/1e6).toLocaleString('ru-RU',{maximumFractionDigits:2})+' млн':fmt(n);
+const fmtFor=(k,v)=>(k==='price'||k==='pct')?fmt2(v):fmt(v);
+const wfmt=(k,v)=>{ if(k==='qty'||k==='sales'){ const r=Math.round(v*100)/100; return Number.isInteger(r)?fmt(r):r.toLocaleString('ru-RU',{maximumFractionDigits:2}); } return fmtFor(k,v); };
+const localISO=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const daysBetween=(a,b)=>Math.round((b-a)/86400000);
+const ddmm=iso=>iso.slice(8,10)+'.'+iso.slice(5,7);
+function matrixOf(offer){ return (/^(CAP|GLV|SEAL|RNC)-/.test(offer))?'m1':'m2'; }
+function monthOfWeekISO(iso){
+  const d=parseW(iso);
+  const monday=new Date(d); monday.setDate(d.getDate()-((d.getDay()+6)%7));
+  const thu=new Date(monday); thu.setDate(monday.getDate()+3);
+  return thu.getFullYear()+'-'+String(thu.getMonth()+1).padStart(2,'0');
+}
+ function calendarWeeksOfMonth(y,m){
+  const ws=isoWeeksOfMonth(y,m-1).map(localISO);
+  const set=new Set(ws);
+  set.add(weekStartOf(localISO(new Date(y,m-1,1))));
+  set.add(weekStartOf(localISO(new Date(y,m,0))));
+  return [...set].sort();
+}
+function weekBoundsOfMonth(y,m){
+  const ws=isoWeeksOfMonth(y,m-1);
+  if(!ws.length)return [null,null];
+  return [localISO(ws[0]), localISO(weekEnd(ws[ws.length-1]))];
+}
+ function isoWeeksOfMonth(y,m){
+  const out=[]; let d=new Date(y,m,1);
+  d.setDate(d.getDate()-((d.getDay()+6)%7));
+  for(let i=0;i<6;i++){ const thu=new Date(d); thu.setDate(thu.getDate()+3);
+    if(thu.getFullYear()===y&&thu.getMonth()===m) out.push(new Date(d));
+    d.setDate(d.getDate()+7); }
+  return out;
+}
+const wlabel=w=>{const e=new Date(w);e.setDate(e.getDate()+6);return `${pad(w.getDate())}.${pad(w.getMonth()+1)}–${pad(e.getDate())}.${pad(e.getMonth()+1)}`;};
+const weekEnd=w=>{const e=new Date(w);e.setDate(e.getDate()+6);return e;};
+function parseW(s){const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
+function fmtDateISO(iso){const [y,m,d]=iso.split('-');return `${d}.${m}`;}
+function dateHead(iso){const d=parseW(iso);return `${DWN[d.getDay()]}, ${fmtDateISO(iso)}`;}
+function currentWeekISO(){
+  const t=new Date(); t.setHours(0,0,0,0);
+  for(let i=0;i<WEEKS.length;i++){ if(t>=WEEKS[i]&&t<=weekEnd(WEEKS[i])) return WEEKISO[i]; }
+  return null;
+}
+function openDate(pid){
+  const inp=document.getElementById('dt_'+pid);
+  if(!inp)return;
+  try{ if(inp.showPicker){inp.showPicker();return;} }catch(e){}
+  inp.style.pointerEvents='auto'; inp.style.opacity='1'; inp.style.position='relative'; inp.focus();
+}
+async function go(){
+  const err = document.getElementById('errorMessage');
+  const input = document.getElementById('pwd').value;
+  
+  if(!input){
+    err.style.display = 'block';
+    err.textContent = 'Введите пароль';
+    return;
+  }
+  
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  const h = [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join('');
+  
+  if(h !== PASSWORD_HASH){
+    err.style.display = 'block';
+    err.textContent = 'Неверный пароль. Попробуйте ещё раз.';
+    document.getElementById('pwd').value = '';
+    return;
+  }
+  
+  err.style.display = 'none';
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').classList.remove('hide');
+  const now=new Date();
+  const t=new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const day=t.getDay();
+  const monday=new Date(t);
+  monday.setDate(t.getDate() - ((day+6)%7));
+  const thu=new Date(monday);
+  thu.setDate(monday.getDate()+3);
+  MONTH=thu.getFullYear()+'-'+String(thu.getMonth()+1).padStart(2,'0');
+  fillMonthSelect();
+  document.getElementById('month').value=MONTH;
+  load();
+}
+let PLAN_NEXT={},PLAN_PREV={};
+function nextMonthISO(){const [y,m]=MONTH.split('-').map(Number);const d=new Date(y,m,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+function prevMonthISO(){const [y,m]=MONTH.split('-').map(Number);const d=new Date(y,m-2,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
+function weeksOfNextMonth(){const [ny,nm]=nextMonthISO().split('-').map(Number);return isoWeeksOfMonth(ny,nm-1);}
+async function loadPlans(){
+  const [r,r2,r3]=await Promise.all([
+    fetch(SUPABASE_URL+`/rest/v1/sales_plan?month=eq.${MONTH}&select=product_id,price,plan_qty,margin_pct`,{headers:HD}),
+    fetch(SUPABASE_URL+`/rest/v1/sales_plan?month=eq.${nextMonthISO()}&select=product_id,price,plan_qty,margin_pct`,{headers:HD}),
+    fetch(SUPABASE_URL+`/rest/v1/sales_plan?month=eq.${prevMonthISO()}&select=product_id,price,plan_qty,margin_pct`,{headers:HD})
+  ]);
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const fill=j=>{const o={};j.forEach(x=>o[x.product_id]={price:Number(x.price||0),plan_qty:Number(x.plan_qty||0),margin_pct:Number(x.margin_pct||0)});return o;};
+  PLAN=fill(await r.json());
+  PLAN_NEXT=r2.ok?fill(await r2.json()):{};
+  PLAN_PREV=r3.ok?fill(await r3.json()):{};
+}
+function planOf(pid,ym){
+  if(ym===MONTH)return PLAN[pid]||null;
+  if(ym===nextMonthISO())return PLAN_NEXT[pid]||null;
+  if(ym===prevMonthISO())return PLAN_PREV[pid]||null;
+  return null;
+}
+const EFF_CACHE={};
+function effMonth(y,m){
+  const key=y+'-'+m;
+  if(EFF_CACHE[key]!=null)return EFF_CACHE[key];
+  const last=new Date(y,m,0).getDate();
+  let B=0,W=0;
+  for(let d=1;d<=last;d++){const wd=new Date(y,m-1,d).getDay();if(wd===0||wd===6)W++;else B++;}
+  return EFF_CACHE[key]=B+0.7*W;
+}
+function effDaysRange(fromISO,toISO){
+  if(fromISO>toISO)return 0;
+  let B=0,W=0,d=parseW(fromISO);const end=parseW(toISO);
+  while(d<=end){const wd=d.getDay();if(wd===0||wd===6)W++;else B++;d.setDate(d.getDate()+1);}
+  return B+0.7*W;
+}
+function dayShare(p,dateISO,metric){
+  const ym=dateISO.slice(0,7);
+  const pl=planOf(p.product_id,ym);
+  if(!pl||!(pl.plan_qty>0))return null;
+  const [y,m]=ym.split('-').map(Number);
+  const q=(pl.plan_qty/0.95)/effMonth(y,m)*(isWeekend(dateISO)?0.7:1);
+  if(metric==='sales')return q;
+  if(metric==='revn')return q*pl.price;
+  if(metric==='mar')return q*pl.price*pl.margin_pct/100;
+  return null;
+}
+function weekTargetParts(p,weekISO,metric){
+  const parts={};let total=0;
+  for(let i=0;i<7;i++){
+    const d=addDaysISO(weekISO,i);
+    const s=dayShare(p,d,metric);
+    if(s==null)continue;
+    const ym=d.slice(0,7);
+    if(!parts[ym])parts[ym]={sum:0,days:0};
+    parts[ym].sum+=s;parts[ym].days+=1;
+    total+=s;
+  }
+  return {total,parts};
+}
+async function loadWeeks(){
+  const [y,m]=MONTH.split('-').map(Number);
+  const weeks=calendarWeeksOfMonth(y,m);
+  if(!weeks.length){WD={};return;}
+  const inList='('+weeks.map(w=>`"${w}"`).join(',')+')';
+  WD={};
+  let off=0;
+  while(true){
+    const r=await fetch(SUPABASE_URL+`/rest/v1/sales_plan_weeks?week=in.${inList}&select=product_id,week,metric,plan,forecast,fact&order=product_id.asc,week.asc,metric.asc&limit=1000&offset=${off}`,{headers:HD});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    j.forEach(x=>{ ((WD[x.product_id]=WD[x.product_id]||{})[x.metric]=WD[x.product_id][x.metric]||{})[x.week]={plan:Number(x.plan||0),forecast:x.forecast==null?null:Number(x.forecast),fact:x.fact==null?null:Number(x.fact)}; });
+    if(j.length<1000)break;
+    off+=1000;
+  }
+}
+async function loadPPM(){
+  const [y,m]=MONTH.split('-').map(Number);
+  const [wFrom,wTo]=weekBoundsOfMonth(y,m);
+  const [r1,r2]=await Promise.all([
+    fetch(SUPABASE_URL+`/rest/v1/product_plan_meta?month=eq.${MONTH}&select=product_id,weekday,protocol,work_date`,{headers:HD}),
+    fetch(SUPABASE_URL+`/rest/v1/product_plan_meta?month=lt.${MONTH}&work_date=not.is.null&work_date=gte.${wFrom}&work_date=lte.${wTo}&select=product_id,weekday,protocol,work_date`,{headers:HD})
+  ]);
+  if(!r1.ok||!r2.ok)throw new Error('HTTP '+(r1.status||r2.status));
+  const cur=await r1.json();
+  const ext=(await r2.json()).filter(r=>monthOfWeekISO(r.work_date)===MONTH);
+  const seen=new Set(cur.map(r=>r.product_id));
+  const added=ext.filter(r=>!seen.has(r.product_id));
+  PPM={};
+  [...cur, ...added].forEach(x=>PPM[x.product_id]={weekday:x.weekday,protocol:x.protocol,work_date:x.work_date});
+}
+async function loadProto(){
+  const [y,m]=MONTH.split('-').map(Number);
+  const [wFrom,wTo]=weekBoundsOfMonth(y,m);
+  const [r1,r2]=await Promise.all([
+    fetch(SUPABASE_URL+`/rest/v1/product_protocol?month=eq.${MONTH}&deadline=is.null&select=*&order=created_at.asc`,{headers:HD}),
+    fetch(SUPABASE_URL+`/rest/v1/product_protocol_notes?month=eq.${MONTH}&select=*&order=created_at.desc`,{headers:HD})
+  ]);
+  if(!r1.ok||!r2.ok)throw new Error('HTTP '+(r1.status||r2.status));
+  let rows=await r1.json();
+  const rX=await fetch(SUPABASE_URL+`/rest/v1/product_protocol?parent_id=is.null&deadline=gte.${wFrom}&deadline=lte.${wTo}&select=*&order=created_at.asc`,{headers:HD});
+  if(rX.ok){
+    const seen=new Set(rows.map(r=>r.id));
+    const added=(await rX.json()).filter(r=>!seen.has(r.id)&&monthOfWeekISO(r.deadline)===MONTH);
+    rows=rows.concat(added);
+    if(added.length){
+      const rC=await fetch(SUPABASE_URL+`/rest/v1/product_protocol?parent_id=in.(${added.map(r=>r.id).join(',')})&select=*&order=created_at.asc`,{headers:HD});
+      if(rC.ok){
+        const seen2=new Set(rows.map(r=>r.id));
+        rows=rows.concat((await rC.json()).filter(r=>!seen2.has(r.id)));
+      }
+    }
+  }
+  rows.sort((a,b)=>String(a.created_at).localeCompare(String(b.created_at)));
+  PROTO={}; NOTES={};
+  rows.forEach(x=>{(PROTO[x.product_id]=PROTO[x.product_id]||[]).push(x);});
+  (await r2.json()).forEach(x=>{(NOTES[x.product_id]=NOTES[x.product_id]||[]).push(x);});
+}
+async function loadDev(){
+  const r=await fetch(SUPABASE_URL+`/rest/v1/deviation_history?entity_type=eq.product&fire=eq.false&select=entity_key,report_date,dev_up,dev_down,clusters_up,clusters_down&order=report_date.desc&limit=2000`,{headers:HD});
+  if(!r.ok){DEV={};return;}
+  DEV={};
+  (await r.json()).forEach(x=>{ if(DEV[x.entity_key]==null) DEV[x.entity_key]={up:+(x.dev_up||0),down:+(x.dev_down||0),cu:x.clusters_up||'',cd:x.clusters_down||''}; });
+}
+async function loadChargesFor(pid){
+  const offer=(BYID[pid]||{}).offer_id;
+  const box=document.getElementById('chgtbl_'+pid);
+  if(!WEEKISO.length){ if(box)box.innerHTML='<div class="psub">нет недель</div>'; return; }
+  const first=WEEKISO[0], last=localISO(weekEnd(parseW(WEEKISO[WEEKISO.length-1])));
+  let rows=[],off=0;
+  while(true){
+    const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_charges?offer_id=eq.${encodeURIComponent(offer)}&charge_date=gte.${first}&charge_date=lte.${last}&select=charge_type,amount,qty,price&limit=1000&offset=${off}`,{headers:HD});
+    if(!r.ok)break;
+    const j=await r.json(); rows=rows.concat(j); if(j.length<1000)break; off+=1000;
+  }
+  const adsMap=await loadAdSpend(first,last);
+  const adsByDay=adsMap.get(pid)||new Map();
+  let ads=0; adsByDay.forEach((v,d)=>{ if(d>=first&&d<=last) ads+=v; });
+  if(box)box.innerHTML=renderCharges(pid,rows,ads);
+}
+ let COST={};
+async function loadCosts(){
+  const r=await fetch(SUPABASE_URL+'/rest/v1/product_prices?select=product_id,cost,created_at&order=created_at.desc&limit=5000',{headers:HD});
+  if(!r.ok){COST={};return;}
+  COST={};
+  (await r.json()).forEach(p=>{ if(COST[p.product_id]==null) COST[p.product_id]=Number(p.cost||0); });
+}
+ let COST_HIST={};
+async function loadCostHistory(){
+  const r=await fetch(SUPABASE_URL+'/rest/v1/product_prices?select=product_id,cost,created_at&order=created_at.asc&limit=10000',{headers:HD});
+  if(!r.ok){COST_HIST={};return;}
+  COST_HIST={};
+  (await r.json()).forEach(p=>{ (COST_HIST[p.product_id]=COST_HIST[p.product_id]||[]).push({t:String(p.created_at||'').slice(0,10),c:Number(p.cost||0)}); });
+}
+function costAt(pid,dISO){
+  const arr=COST_HIST[pid];
+  if(!arr||!arr.length) return {cost:COST[pid]||0, prov:true};
+  let best=null;
+  for(const rec of arr){ if(rec.t<=dISO) best=rec; else break; }
+  if(best) return {cost:best.c, prov:false};
+  return {cost:arr[0].c, prov:true};
+}
+async function provisionalWeeks(){
+  const r=await fetch(SUPABASE_URL+'/rest/v1/sales_plan_weeks?cost_provisional=eq.true&select=week&limit=1000',{headers:HD});
+  if(!r.ok)return [];
+  return [...new Set((await r.json()).map(x=>x.week))];
+}
+function parseCSV(t){const rows=[];let row=[],cur='',q=false;for(let i=0;i<t.length;i++){const c=t[i];if(q){if(c=='"'){if(t[i+1]=='"'){cur+='"';i++;}else q=false;}else cur+=c;}else{if(c=='"')q=true;else if(c==';'){row.push(cur);cur='';}else if(c==','){row.push(cur);cur='';}else if(c=='\n'){row.push(cur);rows.push(row);row=[];cur='';}else if(c!='\r')cur+=c;}}if(cur!==''||row.length){row.push(cur);rows.push(row);}return rows;}
+function setP(pct,txt,bad){
+  document.getElementById('progWrap').classList.remove('hide');
+  const f=document.getElementById('progFill');
+  f.style.width=pct+'%'; f.classList.toggle('bad',!!bad);
+  document.getElementById('progText').textContent=txt;
+}
+function parseMoney(s){let t=String(s||'').replace(/[^0-9\-,\.]/g,'');if(t.includes(',')&&t.includes('.'))t=t.replace(/,/g,'');else t=t.replace(',','.');const n=Number(t);return isFinite(n)?n:0;}
+function parseDateRu(s){const m=String(s||'').match(/(\d{2})\.(\d{2})\.(\d{4})/);return m?m[3]+'-'+m[2]+'-'+m[1]:null;}
+function weekStartOf(iso){const d=parseW(iso);d.setDate(d.getDate()-((d.getDay()+6)%7));return localISO(d);}
+async function syncPnl(extraWeeks){
+  const weeks=[...new Set([...WEEKISO,...(extraWeeks||[])])].sort();
+  if(!weeks.length)return;
+  const first=weeks[0], last=localISO(weekEnd(parseW(weeks[weeks.length-1])));
+  let rows=[];
+  let dcur=first;
+  while(dcur<=last){
+    let off=0;
+    while(true){
+      let j=null;
+      for(let a=0;a<4;a++){
+        const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_charges?charge_date=eq.${dcur}&order=source_id.asc&select=offer_id,charge_date,charge_type,amount,qty,price&limit=1000&offset=${off}`,{headers:HD});
+        if(r.ok){j=await r.json();break;}
+        await sleep(700*(a+1));
+      }
+      if(j==null)throw new Error('syncPnl: сервер недоступен на дне '+dcur+', пересчёт прерван БЕЗ записи фактов');
+      rows=rows.concat(j); if(j.length<1000)break; off+=1000;
+    }
+    dcur=addDaysISO(dcur,1);
+  }
+  const adsMap=await loadAdSpend(first,last);
+  const day=new Map();
+  rows.forEach(c=>{
+    const pid=OFFER_PID[c.offer_id]; if(!pid)return;
+    const d=c.charge_date; if(!d)return;
+    let m=day.get(pid); if(!m){m=new Map();day.set(pid,m);}
+    let g=m.get(d); if(!g){g={pnl:0,sales:0,gmv:0,revg:0,ug:0,revP:0};m.set(d,g);}
+    const amt=Number(c.amount||0), qty=Number(c.qty||0), price=Number(c.price||0);
+    g.pnl+=amt;
+    if(c.charge_type==='Выручка'){ g.gmv+=price*qty; g.revg+=price*qty; g.ug+=qty; g.sales+=qty; g.revP+=amt; }
+    else if(c.charge_type==='Возврат выручки'){ g.gmv+=price*qty; g.sales-=qty; g.revP+=amt; }
+  });
+  const body=[];
+  weeks.forEach(w=>{
+    const ws=parseW(w); const wDays=[];
+    for(let i=0;i<7;i++){ const d=new Date(ws); d.setDate(d.getDate()+i); wDays.push(localISO(d)); }
+    day.forEach((m,pid)=>{
+      let pnl=0,sales=0,gmv=0,revg=0,ug=0,revP=0,cogs=0,ads=0,prov=false,any=false;
+      const am=adsMap.get(pid);
+      wDays.forEach(d=>{
+        const g=m.get(d); if(!g)return;
+        any=true;
+        pnl+=g.pnl; sales+=g.sales; gmv+=g.gmv; revg+=g.revg; ug+=g.ug; revP+=g.revP;
+        ads+=am?(am.get(d)||0):0;
+        const ci=costAt(pid,d);
+        cogs+=ci.cost*g.sales;
+        if(ci.prov)prov=true;
+      });
+      if(!any)return;
+      const tax=TAX_RATE*revP;
+      const mar=pnl-cogs-ads-tax, retn=gmv;
+      const row=(metric,fact)=>({product_id:pid,week:w,metric,fact,cogs:Math.round(cogs*100)/100,cost_provisional:prov});
+      body.push(row('sales',sales));
+      body.push(row('revn',Math.round(retn*100)/100));
+      body.push(row('mar',Math.round(mar*100)/100));
+      body.push(row('revg',Math.round(revg*100)/100));
+      body.push(row('ug',ug));
+      if(ug>0)body.push(row('price',Math.round(revg/ug*100)/100));
+      if(retn!==0)body.push(row('pct',Math.round(mar/retn*10000)/100));
+    });
+  });
+  for(let i=0;i<body.length;i+=500){
+    const part=body.slice(i,i+500);
+    await fetch(SUPABASE_URL+'/rest/v1/sales_plan_weeks?on_conflict=product_id,week,metric',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},body:JSON.stringify(part)});
+  }
+}
+async function fixHypotheses(){
+  const today=localISO(new Date());
+  for(const pid in PROTO){
+    for(const it of PROTO[pid]){
+      try{
+        if(it.parent_id||!it.deadline)continue;
+        if(it.fact_ctx!=null||it.fact_dev!=null)continue;
+        const base=it.baseline_ctx?JSON.parse(it.baseline_ctx):null;
+        if(!base||!('orders' in base))continue;
+        const metric=it.metric||'orders';
+        const created=localISO(new Date(it.created_at));
+        let payload=null;
+        if(metric==='orders'){
+          if(today<=it.deadline)continue;
+          const f=await ordersAvgWeekdays(pid,addDaysISO(created,1),it.deadline);
+          if(f==null)continue;
+          payload={fact_ctx:JSON.stringify({orders:f,orders_from:addDaysISO(created,1),orders_to:it.deadline,pct:null,pct_date:null,fix_date:today}),fact_dev:1,fact_date:today};
+        }else{
+          if(today<addDaysISO(it.deadline,1))continue;
+          const f=await marginAggPeriod(pid,addDaysISO(it.deadline,-2),it.deadline);
+          if(f==null)continue;
+          payload={fact_ctx:JSON.stringify({orders:null,orders_from:null,orders_to:null,pct:f.pct,pct_from:f.from,pct_to:f.to,pct_days:f.days,fix_date:today}),fact_dev:1,fact_date:today};
+        }
+        const r=await fetch(SUPABASE_URL+`/rest/v1/product_protocol?id=eq.${it.id}`,{method:'PATCH',headers:{...HD,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify(payload)});
+        if(!r.ok)console.warn('fixHypotheses: PATCH fail',it.id,r.status);
+      }catch(e){console.warn('fixHypotheses: item fail',it&&it.id,e&&e.message);}
+    }
+  }
+}
+async function importCharges(file){
+  if(!file)return;
+  const btn=document.getElementById('btnUpload'); btn.disabled=true; btn.textContent='⏳ Загрузка…';
+  document.getElementById('progFill').classList.remove('bad');
+  try{
+    setP(5,'Чтение файла…');
+    const text=await file.text();
+    setP(15,'Разбор строк…');
+    const rows=parseCSV(text);
+    const out=[]; const seen=new Set(); let skipped=0; let noEvent=0;
+    for(const r of rows){
+      const id=(r[0]||'').trim();
+      if(!id||/период:/i.test(id)||/ID начисления/i.test(id))continue;
+      const d=parseDateRu(r[1]); const offer=(r[4]||'').trim(); const type=(r[3]||'').trim(); const grp=(r[2]||'').trim();
+      if(!d||!offer||!type){skipped++;continue;}
+      const amt=parseMoney(r[15]);
+      const qty=Number(String(r[7]||'0').replace(/[^\d-]/g,''))||0;
+      const price=parseMoney(r[8]);
+      const ev=parseDateRu(r[9]||'');
+      if(!ev)noEvent++;
+      const row_key=[id,grp,type,offer,String(r[5]||''),String(r[7]||''),String(r[9]||''),amt].join('|');
+      if(seen.has(row_key))continue; seen.add(row_key);
+      out.push({row_key,source_id:id,charge_date:d,event_date:ev,offer_id:offer,group_name:grp,charge_type:type,amount:amt,qty:qty,price:price});
+    }
+    if(!out.length){ setP(100,'В файле нет подходящих строк (все пропущены).',true); setTimeout(()=>document.getElementById('progWrap').classList.add('hide'),5000); return; }
+    for(let i=0;i<out.length;i+=500){
+      const part=out.slice(i,i+500);
+      setP(30+Math.round((i/out.length)*60),`Запись в базу: ${Math.min(i+500,out.length)} из ${out.length}…`);
+      const r=await fetch(SUPABASE_URL+'/rest/v1/ozon_charges?on_conflict=row_key',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},body:JSON.stringify(part)});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+    }
+    setP(90,'Пересчёт маржи по неделям…');
+    const provW=await provisionalWeeks();
+    await syncPnl(provW);
+    await loadWeeks();
+    TEMPS_CACHE={key:'',data:null};
+    await fixHypotheses();
+    await loadProto();  // обновить PROTO после фиксации
+    render();
+    setP(100,`✔ Готово! Импортировано начислений: ${out.length} (пропущено: ${skipped}). Строк без даты J: ${noEvent}. Маржа пересчитана.`);
+    setTimeout(()=>document.getElementById('progWrap').classList.add('hide'),5000);
+  }catch(e){
+    setP(100,'Ошибка импорта: '+e.message,true);
+  }finally{
+    btn.disabled=false;btn.textContent='⬆ CSV';document.getElementById('chargesInput').value='';
+  }
+}
+ function toggleUploadMenu(e){e.stopPropagation();document.getElementById('upmenu').classList.toggle('hide');}
+function startChargesUpload(){document.getElementById('upmenu').classList.add('hide');document.getElementById('chargesInput').click();}
+function startAdsUpload(){
+  document.getElementById('upmenu').classList.add('hide');
+  const d=document.getElementById('adsDate');
+  d.style.display='';d.focus();
+  try{ if(d.showPicker)d.showPicker(); }catch(e){}
+}
+function onAdsDate(v){
+  if(!v)return;
+  ADS_DATE=v;
+  const lbl=document.getElementById('adsDateLabel');
+  if(lbl)lbl.textContent=v.split('-').reverse().join('.');
+  const d=document.getElementById('adsDate');
+  d.style.display='none';
+  const b=document.getElementById('btnAdsFile');
+  if(b)b.classList.remove('hide');
+}
+let ADS_DATE=null;
+const ADS_MEMO=new Map();
+async function loadAdSpend(from,to){
+  const key=from+'|'+to;
+  if(ADS_MEMO.has(key))return ADS_MEMO.get(key);
+  const map=new Map();let off=0;
+  while(true){
+    const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_ad_spend?spend_date=gte.${from}&spend_date=lte.${to}&select=offer_id,spend_date,amount&limit=1000&offset=${off}`,{headers:HD});
+    if(!r.ok)break;
+    const j=await r.json();
+    j.forEach(x=>{const pid=SKU_PID[x.offer_id]||OFFER_PID[x.offer_id];if(!pid)return;let m=map.get(pid);if(!m){m=new Map();map.set(pid,m);}m.set(x.spend_date,(m.get(x.spend_date)||0)+Number(x.amount||0));});
+    if(j.length<1000)break;off+=1000;
+  }
+  ADS_MEMO.set(key,map);
+  return map;
+}
+async function importAds(file){
+  if(!file)return;
+  if(!ADS_DATE){alert('Сначала выберите дату отчёта');return;}
+  const btn=document.getElementById('btnUpload'); btn.disabled=true; btn.textContent='⏳ Загрузка…';
+  try{
+    setP(5,'Чтение аналитики продвижения…');
+    const text=await file.text();
+    const rows=parseCSV(text);
+    const bySku=new Map();
+    for(const r of rows){
+      const sku=(r[0]||'').trim();
+      if(!sku||/период:/i.test(sku)||sku==='SKU')continue;
+      if(!/^\d+$/.test(sku))continue;
+      bySku.set(sku,(bySku.get(sku)||0)+parseMoney(r[5]));
+    }
+    const body=[];const unknown=[];
+    bySku.forEach((amt,sku)=>{
+      const pid=SKU_PID[sku];
+      if(pid)body.push({offer_id:sku,spend_date:ADS_DATE,amount:Math.round(amt*100)/100,updated_at:new Date().toISOString()});
+      else unknown.push(sku);
+    });
+    if(!body.length){ setP(100,'В файле нет расходов по известным SKU.',true); setTimeout(()=>document.getElementById('progWrap').classList.add('hide'),5000); return; }
+    for(let i=0;i<body.length;i+=500){
+      const part=body.slice(i,i+500);
+      const r=await fetch(SUPABASE_URL+'/rest/v1/ozon_ad_spend?on_conflict=offer_id,spend_date',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},body:JSON.stringify(part)});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+    }
+    setP(90,'Пересчёт маржи с учётом рекламы…');
+    ADS_MEMO.clear();
+    const provW=await provisionalWeeks();
+    await syncPnl(provW);
+    await loadWeeks();
+    await fixHypotheses();
+    await loadProto();
+    document.querySelectorAll('[id^="chg_"],[id^="pulse_"]').forEach(el=>{delete el.dataset.loaded;});
+    render();
+    setP(100,`✔ Готово! SKU с расходами: ${body.length}.${unknown.length?` Неизвестных SKU: ${unknown.length} (${unknown.slice(0,5).join(', ')}${unknown.length>5?'…':''}).`:''} Маржа пересчитана с рекламой.`);
+    setTimeout(()=>document.getElementById('progWrap').classList.add('hide'),6000);
+  }catch(e){ setP(100,'Ошибка загрузки рекламы: '+e.message,true); }
+  finally{
+    btn.disabled=false;btn.textContent='⬆ CSV';
+    document.getElementById('adsInput').value='';ADS_DATE=null;
+    const b=document.getElementById('btnAdsFile'); if(b)b.classList.add('hide');
+    const d=document.getElementById('adsDate'); d.value=''; d.style.display='none';
+  }
+}
+ let TEMPS_CACHE={key:'',data:null};
+function tempsKey(){return MONTH+'|'+localISO(new Date());}
+async function computeOrderTemps(){
+  if(TEMPS_CACHE.key===tempsKey()&&TEMPS_CACHE.data)return TEMPS_CACHE.data;
+  const today=new Date();today.setHours(0,0,0,0);
+  const tISO=localISO(today);
+  const yISO=addDaysISO(tISO,-1);
+  if(!WEEKISO.length)return {m1:[],m2:[]};
+  const [yy,mm]=MONTH.split('-').map(Number);
+  const periodStart=localISO(new Date(yy,mm-1,1));
+  const periodEnd=localISO(new Date(yy,mm,0));
+  const yIsWe=isWeekend(yISO);
+  const baseDays=[];let d;
+  if(yIsWe){
+    const curWeStart=(parseW(yISO).getDay()===0)?addDaysISO(yISO,-1):yISO;
+    d=addDaysISO(curWeStart,-1);
+    while(baseDays.length<4){if(isWeekend(d))baseDays.unshift(d);d=addDaysISO(d,-1);}
+  }else{
+    d=addDaysISO(yISO,-1);
+    while(baseDays.length<3){if(!isWeekend(d))baseDays.unshift(d);d=addDaysISO(d,-1);}
+  }
+  const baseDiv=baseDays.length;
+  const fetchFrom=baseDays[0]<periodStart?baseDays[0]:periodStart;
+  const byOffer=new Map();let off=0;
+  while(true){
+    const r=await fetch(SUPABASE_URL+`/rest/v1/product_sales?sale_date=gte.${fetchFrom}&sale_date=lte.${yISO}&select=offer_id,sale_date,qty&limit=1000&offset=${off}`,{headers:HD});
+    if(!r.ok)break;
+    const j=await r.json();
+    j.forEach(x=>{let m=byOffer.get(x.offer_id);if(!m){m=new Map();byOffer.set(x.offer_id,m);}m.set(x.sale_date,(m.get(x.sale_date)||0)+Number(x.qty||0));});
+    if(j.length<1000)break;off+=1000;
+  }
+  const effRemain=tISO<=periodEnd?effDaysRange(tISO<periodStart?periodStart:tISO,periodEnd):0;
+  const effTotal=effDaysRange(periodStart,periodEnd);
+  const res={m1:[],m2:[]};
+  ROWS.forEach(p=>{
+    const pl=PLAN[p.product_id];
+    if(!pl||!(pl.plan_qty>0))return;
+    const gid=matrixOf(p.offer_id);
+    const m=byOffer.get(p.offer_id);
+    let sum=0;baseDays.forEach(x=>{sum+=m?(m.get(x)||0):0;});
+    const avg=sum/baseDiv;
+    const yest=m?(m.get(yISO)||0):0;
+    let exec=0;
+    if(m)m.forEach((v,k)=>{if(k>=periodStart&&k<=yISO)exec+=v;});
+    const eElapsed=effDaysRange(periodStart, yISO<periodEnd?yISO:periodEnd);
+    const proj=eElapsed>0? exec/eElapsed*effTotal : null;
+    const need=pl.plan_qty/0.95;
+    const remain=need-exec;
+    const rc=effRemain>0?remain/effRemain:0;
+    const rp=effTotal>0?need/effTotal:0;
+    const k=yIsWe?0.7:1;
+    const expected=rp*k;
+    const rcExp=rc*k;
+    res[gid].push({offer:p.offer_id,yest:yest,avg:avg,devAvg:yest-avg,rc:rc,rcExp:rcExp,devCatch:avg-rcExp,rp:rp,expected:expected,devPlan:yest-expected,proj:proj,price:pl.price});
+  });
+  res.m1.sort((a,b)=>a.devPlan-b.devPlan);
+  res.m2.sort((a,b)=>a.devPlan-b.devPlan);
+  res.t=res.m1.concat(res.m2);
+  TEMPS_CACHE={key:tempsKey(),data:res};
+  return res;
+}
+function clsDev(v){return v<0?'r':(v>0?'g':'n');}
+function rndDev(v){return (v>0?'+':'')+Math.round(v);}
+async function renderOrderTemps(gid){
+  const box=document.getElementById('ordbody_'+gid);
+  if(!box)return;
+  const now=new Date(); now.setHours(0,0,0,0);
+  if(!WEEKISO.length){box.innerHTML='<div class="psub">нет недель</div>';return;}
+  const [yy,mm]=MONTH.split('-').map(Number);
+  const periodStart=localISO(new Date(yy,mm-1,1));
+  const pre=localISO(now)<periodStart;
+  const data=await computeOrderTemps();
+  const rows=(data[gid]||[]).slice();
+  const s=TEMP_SORT[gid];
+  const cmp=(a,b)=>{
+    const va=a[s.col], vb=b[s.col];
+    if(typeof va==='string'&&typeof vb==='string'){
+      const c=va.localeCompare(vb,'ru');
+      return s.dir==='asc'?c:-c;
+    }
+    return s.dir==='asc'?(va-vb):(vb-va);
+  };
+  rows.sort(cmp);
+  const arrow=(col)=>{
+    const active=s.col===col;
+    const mark=s.dir==='asc'?'▴':'▾';
+    return `<span class="sortArrow">${active?mark:'⇅'}</span>`;
+  };
+  const sortCls=(col)=>`shead sortable${s.col===col?' sorted':''}`;
+  const yISO=addDaysISO(localISO(new Date()),-1);
+  const yIsWe=isWeekend(yISO);
+  const baseLbl=yIsWe?'пред. 2 выходных':'3 будн. дня';
+  let h=`<table class="temp"><thead><tr><th rowspan="2" class="shead sortable${s.col==='offer'?' sorted':''}" onclick="toggleTempSort('${gid}','offer')">Артикул${arrow('offer')}</th><th rowspan="2" class="ghead sep shead sortable${s.col==='yest'?' sorted':''}" onclick="toggleTempSort('${gid}','yest')">Заказы<br>вчера${arrow('yest')}</th><th colspan="2" class="ghead sep">Средний темп (${baseLbl})</th><th colspan="2" class="ghead sep" title="${yIsWe?'требуемые темпы в масштабе выходного дня (×0,7)':'требуемые темпы в масштабе буднего дня'}">Догоняющий темп</th><th colspan="2" class="ghead sep">Плановый темп</th></tr><tr><th class="shead sep sortable${s.col==='avg'?' sorted':''}" onclick="toggleTempSort('${gid}','avg')">Средние${arrow('avg')}</th><th class="${sortCls('devAvg')}" onclick="toggleTempSort('${gid}','devAvg')">Откл.${arrow('devAvg')}</th><th class="shead sep sortable${s.col==='rc'?' sorted':''}" onclick="toggleTempSort('${gid}','rc')">Требуемые${arrow('rc')}</th><th class="${sortCls('devCatch')}" onclick="toggleTempSort('${gid}','devCatch')">Откл.${arrow('devCatch')}</th><th class="shead sep sortable${s.col==='rp'?' sorted':''}" onclick="toggleTempSort('${gid}','rp')">Требуемые${arrow('rp')}</th><th class="${sortCls('devPlan')}" onclick="toggleTempSort('${gid}','devPlan')">Откл.${arrow('devPlan')}</th></tr></thead><tbody>`;
+  rows.forEach(r=>{
+  h+=`<tr><td class="num">${esc(r.offer)}</td><td class="num sep">${r.yest}</td><td class="num sep">${Math.round(r.avg)}</td><td class="num ${clsDev(r.devAvg)}">${rndDev(r.devAvg)}</td><td class="num sep" title="догоняющий темп с поправкой на тип вчерашнего дня (×0,7 для выходных)">${Math.round(r.rcExp)}</td><td class="num ${clsDev(r.devCatch)}">${rndDev(r.devCatch)}</td><td class="num sep" title="плановый темп, скорректированный под тип вчерашнего дня (×0,7 для выходных)">${Math.round(r.expected)}</td><td class="num ${clsDev(r.devPlan)}">${rndDev(r.devPlan)}</td></tr>`;
+  });
+  h+='</tbody></table>';
+  box.innerHTML=(pre?`<div class="psub" style="padding:6px 10px;margin-bottom:6px;background:rgba(217,119,6,.08);border:1px dashed rgba(217,119,6,.35);border-radius:8px">⏳ Предпериод: календарный период начинается ${ddmm(periodStart)} — темпы показаны на предстоящий период, выполнение пока 0</div>`:'')+h;
+}
+async function renderProgBar(gid){
+  const val=document.getElementById('progval_'+gid);
+  const fill=document.getElementById('progfill_'+gid);
+  const sub=document.getElementById('progsub_'+gid);
+  const emo=document.getElementById('progemoji_'+gid);
+  if(!val||!fill||!sub)return;
+  const now=new Date(); now.setHours(0,0,0,0);
+  const [yy,mm]=MONTH.split('-').map(Number);
+  const periodStart=localISO(new Date(yy,mm-1,1));
+  const periodEnd=localISO(new Date(yy,mm,0));
+  if(!WEEKISO.length){val.textContent='—';val.className='progval n';fill.style.height='0%';if(emo)emo.textContent='🚫';sub.textContent='нет недель';return;}
+  if(localISO(now)<periodStart){
+    val.textContent='—';val.className='progval n';fill.style.height='0%';
+    if(emo)emo.textContent='⏳';sub.textContent='старт периода '+ddmm(periodStart);return;
+  }
+  if(localISO(now)>periodEnd){
+    val.textContent='—';val.className='progval n';fill.style.height='0%';
+    if(emo)emo.textContent='🏁';sub.textContent='период завершён';return;
+  }
+  const data=await computeOrderTemps();
+  const rows=data[gid]||[];
+  let F=0,P=0;
+  rows.forEach(x=>{P+=x.expected;F+=Math.min(x.yest,x.expected);});
+  if(!rows.length||P<=0){val.textContent='—';val.className='progval n';fill.style.height='0%';if(emo)emo.textContent='🚫';sub.textContent='нет данных плана';return;}
+  const pct=F/P*100;
+  const cls=pct>=90?'ok':(pct>=80?'warn':'bad');
+  const emoji=pct>=95?'🚀':(pct>=90?'🔥':(pct>=80?'🙂':(pct>=60?'😐':'💩')));
+  val.textContent=Math.round(pct)+'%';
+  val.className='progval '+cls;
+  fill.className='thermofill'+(cls==='ok'?' ok':(cls==='warn'?' warn':''));
+  fill.style.height=Math.min(pct,100)+'%';
+  if(emo)emo.textContent=emoji;
+  sub.textContent=`${fmt(Math.round(F))} / ${fmt(Math.round(P))} шт`;
+}
+const SPEEDO_STOPS=[
+  [40,227,61,120],   // 💩 красный
+  [70,217,119,6],    // 😐 оранжевый
+  [85,245,158,11],   // 🙂 жёлтый
+  [92,22,163,74],    // 🔥 зелёный
+  [100,74,222,128]   // 🚀 ярко-зелёный
+];
+function speedoColor(pct){
+  const p=Math.max(SPEEDO_STOPS[0][0],Math.min(pct,SPEEDO_STOPS[SPEEDO_STOPS.length-1][0]));
+  for(let i=0;i<SPEEDO_STOPS.length-1;i++){
+    const a=SPEEDO_STOPS[i],b=SPEEDO_STOPS[i+1];
+    if(p<=b[0]){
+      const t=(p-a[0])/(b[0]-a[0]);
+      return `rgb(${Math.round(a[1]+(b[1]-a[1])*t)},${Math.round(a[2]+(b[2]-a[2])*t)},${Math.round(a[3]+(b[3]-a[3])*t)})`;
+    }
+  }
+  const l=SPEEDO_STOPS[SPEEDO_STOPS.length-1];
+  return `rgb(${l[1]},${l[2]},${l[3]})`;
+}
+function speedoArc(a0,a1){
+  const cx=40,cy=45,r=30,rad=a=>a*Math.PI/180;
+  const x0=cx+r*Math.sin(rad(a0)),y0=cy-r*Math.cos(rad(a0));
+  const x1=cx+r*Math.sin(rad(a1)),y1=cy-r*Math.cos(rad(a1));
+  return `M ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+}
+async function renderSpeedo(gid, type){
+  const svg=document.getElementById(`speedo_${type}_${gid}`);
+  const val=document.getElementById(`speedoval_${type}_${gid}`);
+  const sub=document.getElementById(`speedosub_${type}_${gid}`);
+  if(!svg||!val||!sub)return;
+  const reset=()=>{svg.innerHTML='';val.textContent='—';val.className='speedo-val n';val.style.color='';};
+
+  const now=new Date(); now.setHours(0,0,0,0);
+  const [yy,mm]=MONTH.split('-').map(Number);
+  const periodStart=localISO(new Date(yy,mm-1,1));
+  const periodEnd=localISO(new Date(yy,mm,0));
+
+  if(!WEEKISO.length){reset();sub.textContent='нет недель';return;}
+  if(localISO(now)<periodStart){reset();sub.textContent='старт '+ddmm(periodStart);return;}
+  if(localISO(now)>periodEnd){reset();sub.textContent='завершён';return;}
+
+  const data=await computeOrderTemps();
+  const rows=data[gid]||[];
+  let F=0,P=0;
+  rows.forEach(x=>{
+    const pl=PLAN[ROWS.find(r=>r.offer_id===x.offer)?.product_id]||{};
+    const price=pl.price||1;
+    if(type==='orders'){P+=x.expected;F+=Math.min(x.yest,x.expected);}
+    else{P+=x.expected*price;F+=x.yest*price;}
+  });
+  if(!rows.length||P<=0){reset();sub.textContent='нет данных';return;}
+
+  const pct=F/P*100;
+  const cls=pct>=90?'ok':(pct>=80?'warn':'bad');
+  const emoji=pct>=95?'🚀':(pct>=90?'🔥':(pct>=80?'🙂':(pct>=60?'😐':'💩')));
+  const col=speedoColor(pct);
+  const angle=-90+Math.min(pct,100)/100*180;
+  const zones=[[-90,18,'#E33D78'],[18,54,'#d97706'],[54,72,'#f59e0b'],[72,81,'#16a34a'],[81,90,'#4ade80']];
+
+  svg.innerHTML=`
+    <path d="${speedoArc(-90,90)}" fill="none" stroke="#e2e8f0" stroke-width="8" stroke-linecap="round"/>
+    ${zones.map(z=>`<path d="${speedoArc(z[0],z[1])}" fill="none" stroke="${z[2]}" stroke-width="8" opacity="0.35"/>`).join('')}
+    <g transform="rotate(${angle} 40 45)">
+      <path d="M 38.3 47 L 40 16.5 L 41.7 47 Z" fill="${col}"/>
+      <text x="40" y="13" text-anchor="middle" font-size="9" transform="rotate(${-angle} 40 13)">${emoji}</text>
+    </g>
+    <circle cx="40" cy="45" r="3" fill="${col}"/>
+  `;
+
+  val.textContent=Math.round(pct)+'%';
+  val.className='speedo-val '+cls;
+  val.style.color=col;
+
+  const unit=type==='orders'?'шт':'₽';
+  sub.textContent=`${fmt(Math.round(F))} / ${fmt(Math.round(P))} ${unit}`;
+
+}
+async function renderKpiPnl(gid){
+  const elRev=document.getElementById('kpipnl_'+gid);
+  const elQty=document.getElementById('kpipnlqty_'+gid);
+  if(!elRev && !elQty)return;
+  const data=await computeOrderTemps();
+  const rows=data[gid]||[];
+  let rev=0, qty=0, any=false;
+  rows.forEach(x=>{ 
+    if(x.proj!=null){ 
+      rev+=x.proj*(x.price||0); 
+      qty+=x.proj;
+      any=true; 
+    } 
+  });
+  if(elRev) elRev.textContent=any? fmt(rev):'—';
+  if(elQty) elQty.textContent=any? fmt(qty):'—';
+}
+async function exportPlanExcel(){
+  if(typeof XLSX==='undefined'){alert('Библиотека Excel не загрузилась — проверьте интернет и обновите страницу.');return;}
+  const btn=document.getElementById('btnExcel'); btn.disabled=true; btn.textContent='⏃ Формирование…';
+  try{
+    const data=await computeOrderTemps();
+    const tISO=localISO(new Date());
+    const yIsWe=isWeekend(addDaysISO(tISO,-1));
+    const baseLbl=yIsWe?'пред. 2 выходных':'3 будн. дня';
+    const wb=XLSX.utils.book_new();
+    for(const [gid,gname] of [['m1','Илья'],['m2','Ольга']]){
+      const list=(data[gid]||[]).slice().sort((a,b)=>a.devCatch-b.devCatch);
+      const rowsOut=list.map(r=>({'Артикул':r.offer,['Средние заказы ('+baseLbl+')']:Math.round(r.avg),'Заказы вчера':r.yest,'Требуемые заказы':Math.round(r.rcExp),'Отклонение':Math.round(r.devCatch)}));
+      const ws=XLSX.utils.json_to_sheet(rowsOut);
+      ws['!cols']=[{wch:24},{wch:26},{wch:14},{wch:17},{wch:12}];
+      XLSX.utils.book_append_sheet(wb,ws,gname);
+    }
+    XLSX.writeFile(wb,`plan_orders_${tISO}.xlsx`);
+  }catch(e){alert('Ошибка экспорта: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='📥 Excel';}
+}
+function renderCharges(pid,rows,ads){
+  ads=ads||0;
+  if(!rows||!rows.length)return '<div class="psub">нет начислений за период</div>';
+  const byType=new Map(); let ug=0,retq=0,pnl=0,revG=0,retG=0,taxBase=0;
+  rows.forEach(c=>{
+    const amt=Number(c.amount||0), pr=Number(c.price||0);
+    byType.set(c.charge_type,(byType.get(c.charge_type)||0)+amt);
+    pnl+=amt;
+    if(c.charge_type==='Выручка'){ ug+=Number(c.qty||0); revG+=pr; taxBase+=amt; }
+    else if(c.charge_type==='Возврат выручки'){ retq+=Number(c.qty||0); retG+=pr; taxBase+=amt; }
+  });
+  const cost=COST[pid]||0, sales=ug-retq, tax=TAX_RATE*taxBase, marOp=pnl-cost*sales, marNet=marOp-ads-tax;
+  let gmvNet=0;
+  rows.forEach(c=>{ const pr=Number(c.price||0), q=Number(c.qty||0); if(c.charge_type==='Выручка'||c.charge_type==='Возврат выручки') gmvNet+=pr*q; });
+  const arr=[...byType.entries()].sort((a,b)=>a[1]-b[1]);
+  const line=([t,v])=>{
+    if(t==='Выручка')return `<div class="prec"><b>${esc(t)}</b> <span class="g">${fmt2(revG)} ₽</span></div>`;
+    if(t==='Возврат выручки')return `<div class="prec"><b>${esc(t)}</b> <span class="r">${fmt2(retG)} ₽</span></div>`;
+    return `<div class="prec"><b>${esc(t)}</b> <span class="${v<0?'r':'g'}">${fmt2(v)} ₽</span></div>`;
+  };
+  return arr.map(line).join('')
+    +`<div class="prec"><b>PNL до себестоимости</b> <span class="${pnl<0?'r':'g'}">${fmt2(pnl)} ₽</span></div>`
+    +`<div class="prec"><b>− себестоимость × продажи</b> <span class="r">−${fmt2(cost*sales)} ₽</span> <span style="opacity:.5;font-size:.85em">(${fmt2(cost)} ₽ × ${sales} шт)</span></div>`
+    +`<div class="prec"><b>Маржа операционная</b> <span class="${marOp<0?'r':'g'}">${fmt2(marOp)} ₽</span></div>`
+    +`<div class="prec"><b>Рекламные расходы</b> <span class="r">−${fmt2(ads)} ₽</span></div>`
+    +`<div class="prec"><b>Налог (3% от выручки P)</b> <span class="r">−${fmt2(tax)} ₽</span></div>`
+    +`<div class="prec"><b>Маржа чистая</b> <span class="${marNet<0?'r':'g'}">${fmt2(marNet)} ₽</span>${gmvNet>0?` <span style="opacity:.5;font-size:.85em">• маржинальность ${fmt2(marNet/gmvNet*100)}%</span>`:''}</div>`;
+}
+async function load(){
+  const err=document.getElementById('err'); err.textContent='';
+  for(let a=1;a<=3;a++){
+    try{
+      const [y,m]=MONTH.split('-').map(Number);
+      WEEKS=isoWeeksOfMonth(y,m-1); WEEKISO=WEEKS.map(localISO);
+      const rp=await fetch(SUPABASE_URL+'/rest/v1/products?select=product_id,offer_id,name,price,archived,raw&order=name.asc&limit=1000',{headers:HD});
+      if(!rp.ok)throw new Error('HTTP '+rp.status);
+      ROWS=(await rp.json()).filter(x=>!x.archived);
+      BYID={}; ROWS.forEach(p=>BYID[p.product_id]=p);
+      OFFER_PID={}; ROWS.forEach(p=>OFFER_PID[p.offer_id]=p.product_id);
+      SKU_PID={}; ROWS.forEach(p=>{const sku=p.raw&&p.raw.sku!=null?String(p.raw.sku):'';if(sku)SKU_PID[sku]=p.product_id;});
+      await Promise.all([loadPlans(),loadWeeks(),loadPPM(),loadProto(),loadDev(),loadCosts(),loadCostHistory()]);
+      const planCnt=ROWS.filter(r=>((PLAN[r.product_id]||{}).plan_qty||0)>0).length;
+      document.getElementById('meta').textContent=`Период: ${MONTH} • позиций: ${ROWS.length} • в плане: ${planCnt} • обновлено: ${new Date().toLocaleString('ru-RU')}`;
+      render(); backgroundFix(); return;
+    }catch(e){ if(a<3){await sleep(800*a);continue;} err.textContent='Ошибка загрузки: '+e.message; }
+  }
+}
+async function onMonth(v){ if(!v)return; MONTH=v; const err=document.getElementById('err'); err.textContent='';
+  try{ const [y,m]=MONTH.split('-').map(Number); WEEKS=isoWeeksOfMonth(y,m-1); WEEKISO=WEEKS.map(localISO); await Promise.all([loadPlans(),loadWeeks(),loadPPM(),loadProto(),loadDev(),loadCosts(),loadCostHistory()]);
+      const planCnt=ROWS.filter(r=>((PLAN[r.product_id]||{}).plan_qty||0)>0).length;
+      document.getElementById('meta').textContent=`Период: ${MONTH} • позиций: ${ROWS.length} • в плане: ${planCnt} • обновлено: ${new Date().toLocaleString('ru-RU')}`;
+      render(); backgroundFix(); }catch(e){ err.textContent='Ошибка: '+e.message; }
+}
+async function backgroundFix(){
+  try{ await fixHypotheses(); await loadProto(); render(); }catch(e){ console.warn('background fix:',e&&e.message); }
+}
+function toggleMetric(k){ EXP[k]=!EXP[k]; render(); }
+function toggleGM(k){ GM[k]=!GM[k]; render(); }
+function toggleProto(pid){ if(openProto.has(pid))openProto.delete(pid); else openProto.add(pid); render(); }
+async function upsertPPM(pid,patch){
+  const cur=PPM[pid]||{weekday:null,protocol:null,work_date:null};
+  const next=Object.assign({},cur,patch);
+  PPM[pid]=next;
+  if(next.work_date){
+    const [wy,wm]=next.work_date.split('-').map(Number);
+    const targetMonth=wy+'-'+String(wm).padStart(2,'0');
+    await fetch(SUPABASE_URL+`/rest/v1/product_plan_meta?product_id=eq.${pid}&work_date=not.is.null&month=neq.${targetMonth}`,{method:'DELETE',headers:HD});
+  }
+  await fetch(SUPABASE_URL+'/rest/v1/product_plan_meta?on_conflict=product_id,month',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},body:JSON.stringify({product_id:pid,month:MONTH,weekday:next.weekday,protocol:next.protocol,work_date:next.work_date})});
+}
+async function setWorkDate(pid,val){ await upsertPPM(pid,{work_date:val||null}); render(); }
+async function editField(pid,field){
+  const p=BYID[pid]; if(!p)return;
+  const pl=PLAN[pid]||{price:Number(p.price||0),plan_qty:0,margin_pct:0};
+  const labels={price:'Цена продажи, ₽',plan_qty:'План, шт',margin_pct:'План маржинальность, %'};
+  const val=prompt(labels[field]+':', pl[field]);
+  if(val==null)return;
+  const num=Number(String(val).replace(',','.'));
+  if(!isFinite(num)||num<0){alert('Некорректное значение');return;}
+  pl[field]=num; PLAN[pid]=pl;
+  TEMPS_CACHE={key:'',data:null};
+  const r=await fetch(SUPABASE_URL+'/rest/v1/sales_plan?on_conflict=month,product_id',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},body:JSON.stringify({month:MONTH,product_id:pid,price:pl.price,plan_qty:pl.plan_qty,margin_pct:pl.margin_pct})});
+  if(!r.ok){alert('Ошибка сохранения: HTTP '+r.status);return;}
+  render();
+}
+async function editWeek(pid,week,metric){
+  const rec=(WD[pid]&&WD[pid][metric]&&WD[pid][metric][week])?WD[pid][metric][week]:{forecast:null};
+  const val=prompt(`Прогноз на ${week} (пусто = авторасчёт):`, rec.forecast==null?'':rec.forecast);
+  if(val==null)return;
+  let payload;
+  if(String(val).trim()===''){ payload={forecast:null}; }
+  else{ const num=Number(String(val).replace(',','.')); if(!isFinite(num)||num<0){alert('Некорректное значение');return;} payload={forecast:num}; }
+  const r=await fetch(SUPABASE_URL+'/rest/v1/sales_plan_weeks?on_conflict=product_id,week,metric',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},body:JSON.stringify(Object.assign({product_id:pid,week,metric},payload))});
+  if(!r.ok){alert('Ошибка сохранения: HTTP '+r.status);return;}
+  ((WD[pid]=WD[pid]||{})[metric]=WD[pid][metric]||{})[week]=Object.assign(rec,payload);
+  render();
+}
+async function resetWeek(ev,pid,week,metric){
+  ev.stopPropagation();
+  if(!confirm('Вернуть расчётное значение прогноза?'))return;
+  const r=await fetch(SUPABASE_URL+`/rest/v1/sales_plan_weeks?product_id=eq.${pid}&week=eq.${week}&metric=eq.${metric}`,{method:'DELETE',headers:HD});
+  if(!r.ok){alert('Ошибка сохранения: HTTP '+r.status);return;}
+  if(WD[pid]&&WD[pid][metric]&&WD[pid][metric][week]) WD[pid][metric][week].forecast=null;
+  render();
+}
+function getRec(pid,key,w){ return (WD[pid]&&WD[pid][key]&&WD[pid][key][w])?WD[pid][key][w]:{plan:0,forecast:null,fact:null}; }
+function monthlyPlan(p,key){
+  const pl=PLAN[p.product_id]||{price:Number(p.price||0),plan_qty:0,margin_pct:0};
+  const cost=COST[p.product_id]||0;
+  if(key==='qty'||key==='revo')return null;
+  if(key==='sales')return pl.plan_qty;
+  if(key==='revn')return pl.plan_qty*pl.price;
+  if(key==='mar')return pl.plan_qty*pl.price*pl.margin_pct/100;
+  if(key==='price')return pl.price;
+  return pl.margin_pct;
+}
+function elapsedInfo(){
+  if(!WEEKISO.length) return {E:0,T:0};
+  const [ey,em]=MONTH.split('-').map(Number);
+  const first=new Date(ey,em-1,1);
+  const last=new Date(ey,em,0);
+  const T=daysBetween(first,last)+1;
+  const today=new Date(); today.setHours(0,0,0,0);
+  let E;
+  if(today>last) E=T;
+  else if(today<first) E=0;
+  else { const D=new Date(today); D.setDate(D.getDate()-1); E=daysBetween(first,D)+1; }
+  if(E<0)E=0; if(E>T)E=T;
+  return {E,T};
+}
+function priceFactForWeek(pid,week){ const r=getRec(pid,'price',week); return r.fact!=null?r.fact:null; }
+function sumFact(pid,metric){ let s=0,any=false; WEEKISO.forEach(w=>{ const r=getRec(pid,metric,w); if(r.fact!=null){s+=r.fact;any=true;} }); return any?s:null; }
+function avgPriceFact(p){
+  let G=0,U=0,any=false;
+  WEEKISO.forEach(w=>{
+    const rg=getRec(p.product_id,'revg',w), ru=getRec(p.product_id,'ug',w);
+    if(rg.fact!=null&&ru.fact!=null&&ru.fact>0){ G+=rg.fact; U+=ru.fact; any=true; }
+  });
+  return (any&&U>0)? G/U : null;
+}
+function avgPctFact(p){
+  let M=0,R=0,any=false;
+  WEEKISO.forEach(w=>{
+    const rm=getRec(p.product_id,'mar',w), rr=getRec(p.product_id,'revn',w);
+    if(rm.fact!=null&&rr.fact!=null&&rr.fact!==0){ M+=rm.fact; R+=rr.fact; any=true; }
+  });
+  return (any&&R!==0)? M/R*100 : null;
+}
+function pctFactForWeek(pid,week){ const r=getRec(pid,'pct',week); return r.fact!=null?r.fact:null; }
+function calcFactToDate(p,key){
+  key=WDKEY[key]||key;
+  if(!WEEKISO.length) return null;
+  const [y,m]=MONTH.split('-').map(Number);
+  const first=new Date(y,m-1,1), last=new Date(y,m,0);
+  const today=new Date(); today.setHours(0,0,0,0);
+  const D=new Date(today); D.setDate(D.getDate()-1);
+  if(D<first) return null;
+  const end=D<last?D:last;
+  let F=0,any=false;
+  const cweeks=calendarWeeksOfMonth(y,m);
+  for(const w of cweeks){
+    const rec=getRec(p.product_id,key,w);
+    if(rec.fact==null) continue;
+    any=true;
+    let elapsed=0;
+    for(let i=0;i<7;i++){ if(parseW(addDaysISO(w,i))<=D) elapsed++; }
+    const per=rec.fact/Math.max(elapsed,1);
+    for(let i=0;i<7;i++){
+      const dd=parseW(addDaysISO(w,i));
+      if(dd>=first&&dd<=end) F+=per;
+    }
+  }
+  if(!any) return null;
+  return F;
+}
+function calcForecast(p,key){
+  const F=calcFactToDate(p,key);
+  if(F==null) return null;
+  const [y,m]=MONTH.split('-').map(Number);
+  const first=new Date(y,m-1,1), last=new Date(y,m,0);
+  const today=new Date(); today.setHours(0,0,0,0);
+  const D=new Date(today); D.setDate(D.getDate()-1);
+  const end=D<last?D:last;
+  const E=effDaysRange(localISO(first),localISO(end));
+  if(E<=0) return null;
+  const T=effDaysRange(localISO(first),localISO(last));
+  return F/E*T;
+}
+const calcForecastQty=p=>calcForecast(p,'qty');
+function projVal(p,key){
+  const planV=monthlyPlan(p,key);
+  const P=calcForecast(p,key);
+  if(P!=null) return {ffV:P, dev:planV==null?null:P-planV};
+  if(planV==null) return {ffV:null, dev:null};
+  const {E,T}=elapsedInfo();
+  return {ffV:null, dev:-planV*E/T};
+}
+function seriesFor(p,key){
+  const P=monthlyPlan(p,key);
+  key=WDKEY[key]||key;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const n=WEEKISO.length;
+  const recs=WEEKISO.map(w=>getRec(p.product_id,key,w));
+  const past=WEEKISO.map(w=>weekEnd(parseW(w))<today);
+  const val=new Array(n).fill(0);
+  const kind=new Array(n).fill('auto');
+  let sumFactCalc=0;
+  for(let i=0;i<n;i++){
+    const f=recs[i].fact;
+    if(f!=null){
+      if(past[i]){ val[i]=f; kind[i]='fact'; sumFactCalc+=f; }
+      else{
+        const w=parseW(WEEKISO[i]);
+        const D=new Date(today); D.setDate(D.getDate()-1);
+        let E=daysBetween(w,D)+1; if(E<0)E=0; if(E>7)E=7;
+        const v=E>0? f+(f/E)*(7-E) : f;
+        val[i]=v; kind[i]='calc'; sumFactCalc+=v;
+      }
+    } else if(recs[i].forecast!=null){
+      val[i]=recs[i].forecast; kind[i]='manual';
+    }
+  }
+  const nonFact=kind.filter(k=>k==='auto'||k==='manual').length;
+  const baseline=nonFact>0?(P-sumFactCalc)/nonFact:0;
+  return WEEKISO.map((w,i)=>{
+    let fc;
+    if(kind[i]==='auto'){
+      const wt=weekTargetParts(p,w,key);
+      fc=wt.total>0?wt.total:baseline;
+    }
+    else fc=val[i];
+    return { past:past[i], fact:recs[i].fact, manual:kind[i]==='manual', locked:kind[i]==='fact'||kind[i]==='calc', forecast:fc };
+  });
+}
+function collVal(p,key){
+  const mt=METRICS.find(m=>m.key===key);
+  if(mt.add) return seriesFor(p,key).reduce((a,x)=>a+x.forecast,0);
+  const cur=currentWeekISO();
+  if(cur){ const rec=getRec(p.product_id,key,cur);
+    const today=new Date(); today.setHours(0,0,0,0);
+    const v=(weekEnd(parseW(cur))<today&&rec.fact!=null)?rec.fact:(rec.forecast!=null?rec.forecast:null);
+    if(v!=null) return v; }
+  return monthlyPlan(p,key);
+}
+function forecastClose(p,key){
+  const mt=METRICS.find(m=>m.key===key);
+  const series=seriesFor(p,key);
+  let lastFact=null; series.forEach(s=>{ if(s.fact!=null) lastFact=s.fact; });
+  if(!mt.add){ return lastFact!=null?lastFact:collVal(p,key); }
+  if(lastFact==null){ return series.reduce((a,s)=>a+s.forecast,0); }
+  let sumFact=0,noFact=0;
+  series.forEach(s=>{ if(s.fact!=null) sumFact+=s.fact; else noFact++; });
+  return sumFact + lastFact*noFact;
+}
+function devFor(p,key){ return forecastClose(p,key)-monthlyPlan(p,key); }
+function currentFact(pid,key){
+  const lk=key;
+  const cw=currentWeekISO();
+  if(!cw) return monthlyPlan({product_id:pid},lk);
+  key=WDKEY[key]||key;
+  const rec=getRec(pid,key,cw);
+  if(rec.fact!=null) return rec.fact;
+  if(rec.forecast!=null) return rec.forecast;
+  return monthlyPlan({product_id:pid},lk);
+}
+function recFor(pid,key){
+  const cw=currentWeekISO();
+  if(!cw) return null;
+  const cwIdx=WEEKISO.indexOf(cw);
+  const nw=WEEKISO[cwIdx+1];
+  if(!nw) return null;
+  const wk=WDKEY[key]||key;
+  const rC=getRec(pid,wk,cw), rN=getRec(pid,wk,nw);
+  const curV=rC.fact!=null?rC.fact:(rC.forecast!=null?rC.forecast:null);
+  const nxtV=rN.forecast!=null?rN.forecast:(rN.fact!=null?rN.fact:null);
+  if(curV==null||nxtV==null) return null;
+  const d=nxtV-curV;
+  const pct=curV!==0?(d/Math.abs(curV)*100):0;
+  return {cw,nw,curV,nxtV,d,pct};
+}
+function recForV2(pid,key){
+  const mt=METRICS.find(m=>m.key===key);
+  if(!mt.add) return recFor(pid,key);
+  const cw=currentWeekISO(); if(!cw) return null;
+  const ci=WEEKISO.indexOf(cw); if(ci<0) return null;
+  const series=seriesFor({product_id:pid},key);
+  let bi=ci;
+  while(bi>0&&series[bi].fact==null)bi--;
+  if(series[bi].fact==null)return null;
+  const ni=bi+1;
+  const cur=series[bi].forecast;
+  const p=BYID[pid]; if(!p)return null;
+  let target,nwISO,parts=null;
+  if(ni<WEEKISO.length){
+    nwISO=WEEKISO[ni];
+    const recN=getRec(pid,WDKEY[key]||key,nwISO);
+    if(recN.forecast!=null){ target=recN.forecast; }
+    else{ const wt=weekTargetParts(p,nwISO,key); if(!wt.total)return null; target=wt.total; parts=wt.parts; }
+  }else{
+    nwISO=addDaysISO(WEEKISO[WEEKISO.length-1],7);
+    const wt=weekTargetParts(p,nwISO,key);
+    if(!wt.total)return null;
+    target=wt.total; parts=wt.parts;
+  }
+  const d=target-cur;
+  const pct=cur!==0?(d/Math.abs(cur)*100):0;
+  return {cw:WEEKISO[bi],nw:nwISO,curV:cur,nxtV:target,d,pct,parts};
+}
+function recText(r,unit){
+  if(!r) return {text:'—',cls:'n'};
+  const abs=Math.abs(r.d);
+  const pctF=(r.pct<0?'−':'+')+Math.round(Math.abs(r.pct))+'%';
+  const u=unit?(' '+unit):'';
+  if(r.d>0.0001) return {text:`увеличить на ${fmt(abs)}${u} (${pctF})`,cls:'r'};
+  if(r.d<-0.0001) return {text:`уменьшить на ${fmt(abs)}${u} (${pctF})`,cls:'g'};
+  return {text:'без изменений',cls:'n'};
+}
+function verdict(it){
+  const base=it.baseline_ctx?JSON.parse(it.baseline_ctx):null;
+  if(!base||!('orders' in base)){
+    if(it.fact_dev==null)return null;
+    const B=Number(it.baseline_dev||0),T=Number(it.target_dev||0),F=Number(it.fact_dev||0);
+    if(B===T)return F>=B?'success':'fail';
+    const pr=(F-B)/(T-B),tol=Math.abs(T-B)*0.1;
+    if(pr>=1||Math.abs(F-T)<=tol)return 'success';
+    return pr>0?'partial':'fail';
+  }
+  if(it.fact_ctx==null)return null;
+  const fact=JSON.parse(it.fact_ctx);
+  const m=it.metric||'orders';
+  const B=(m==='orders')?base.orders:base.pct;
+  const F=(m==='orders')?fact.orders:fact.pct;
+  const T=(m==='orders')?Number(it.target_orders):Number(it.target_pct);
+  if(B==null||F==null||T==null||isNaN(T))return null;
+  if(Math.abs(T-B)<0.01)return F>=B?'success':'fail';
+  const pr=(F-B)/(T-B),tol=Math.abs(T-B)*0.1;
+  if(pr>=1||Math.abs(F-T)<=tol)return 'success';
+  if(pr>0)return 'partial';
+  return 'fail';
+}
+function addDaysISO(iso,n){const d=parseW(iso);d.setDate(d.getDate()+n);return localISO(d);}
+function isWeekend(iso){const w=parseW(iso).getDay();return w===0||w===6;}
+function lastWeekdayBefore(iso){let d=addDaysISO(iso,-1);while(isWeekend(d))d=addDaysISO(d,-1);return d;}
+function weekdayOptions(startISO){
+  const out=[];
+  let i=1;
+  while(out.length<3){
+    const d=addDaysISO(startISO,i);
+    if(!isWeekend(d))out.push(d);
+    i++;
+  }
+  return out;
+}
+async function fetchSalesMap(pid,from,to){
+  const offer=(BYID[pid]||{}).offer_id;const map=new Map();let off=0;
+  while(true){
+    let j=null;
+    for(let a=0;a<3;a++){
+      const r=await fetch(SUPABASE_URL+`/rest/v1/product_sales?offer_id=eq.${encodeURIComponent(offer)}&sale_date=gte.${from}&sale_date=lte.${to}&select=sale_date,qty&limit=1000&offset=${off}`,{headers:HD});
+      if(r.ok){j=await r.json();break;}
+      await sleep(700*(a+1));
+    }
+    if(j==null){console.warn('fetchSalesMap: сервер недоступен после ретраев',offer,from,to);break;}
+    j.forEach(x=>map.set(x.sale_date,(map.get(x.sale_date)||0)+Number(x.qty||0)));
+    if(j.length<1000)break;off+=1000;
+  }
+  return map;
+}
+async function fetchChargesMap(pid,from,to){
+  const offer=(BYID[pid]||{}).offer_id;const map=new Map();let off=0;
+  while(true){
+    let j=null;
+    for(let a=0;a<3;a++){
+      const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_charges?offer_id=eq.${encodeURIComponent(offer)}&event_date=gte.${from}&event_date=lte.${to}&select=event_date,charge_type,amount,qty,price&limit=1000&offset=${off}`,{headers:HD});
+      if(r.ok){j=await r.json();break;}
+      await sleep(700*(a+1));
+    }
+    if(j==null){console.warn('fetchChargesMap: сервер недоступен после ретраев',offer,from,to);break;}
+    j.forEach(c=>{const d=c.event_date;if(!d)return;let g=map.get(d);if(!g){g={pnl:0,gmv:0,sales:0,revP:0};map.set(d,g);}const amt=Number(c.amount||0),qty=Number(c.qty||0),price=Number(c.price||0);g.pnl+=amt;if(c.charge_type==='Выручка'){g.gmv+=price*qty;g.sales+=qty;g.revP+=amt;}else if(c.charge_type==='Возврат выручки'){g.gmv+=price*qty;g.sales-=qty;g.revP+=amt;}});
+    if(j.length<1000)break;off+=1000;
+  }
+  return map;
+}
+function marginOfDay(map,pid,d){const g=map.get(d);if(!g||g.gmv<=0)return null;const cost=COST[pid]||0;return Math.round(((g.pnl-cost*g.sales)/g.gmv*100)*100)/100;}
+async function ordersForDay(pid,iso){const m=await fetchSalesMap(pid,iso,iso);return m.get(iso)||0;}
+async function ordersAvgWeekdays(pid,from,to){
+  const m=await fetchSalesMap(pid,from,to);
+  let sum=0,cnt=0,d=from;
+  while(d<=to){if(!isWeekend(d)){sum+=(m.get(d)||0);cnt++;}d=addDaysISO(d,1);}
+  if(!cnt)return null;
+  return Math.round(sum/cnt*100)/100;
+}
+ function lastWeekdaysBefore(iso,n){const out=[];let d=addDaysISO(iso,-1);while(out.length<n){if(!isWeekend(d))out.unshift(d);d=addDaysISO(d,-1);}return out;}
+async function ordersBaseWindow(pid,startISO){
+  const days=lastWeekdaysBefore(startISO,3);
+  const m=await fetchSalesMap(pid,days[0],days[days.length-1]);
+  let sum=0;days.forEach(d=>{sum+=(m.get(d)||0);});
+  return {avg:Math.round(sum/days.length*100)/100,from:days[0],to:days[days.length-1],days:days.length};
+}
+async function marginAggPeriod(pid,fromISO,toISO){
+  const map=await fetchChargesMap(pid,fromISO,toISO);
+  const adsMap=await loadAdSpend(fromISO,toISO);
+  const adsByDay=adsMap.get(pid)||new Map();
+  let pnl=0,gmv=0,sales=0,revP=0,cnt=0,ads=0,d=fromISO;
+  while(d<=toISO){
+    const g=map.get(d);
+    if(g&&g.gmv>0){pnl+=g.pnl;gmv+=g.gmv;sales+=g.sales;revP+=g.revP||0;cnt++;}
+    ads+=adsByDay.get(d)||0;
+    d=addDaysISO(d,1);
+  }
+  if(!cnt||gmv<=0)return null;
+  const cost=COST[pid]||0;
+  const tax=TAX_RATE*revP;
+  return {pct:Math.round(((pnl-cost*sales-ads-tax)/gmv*100)*100)/100,from:fromISO,to:toISO,days:cnt};
+}
+async function loadSmartBase(pid){
+  const el=document.getElementById('smartbase_'+pid);
+  if(!el)return;
+  const start=localISO(new Date());
+  const obw=await ordersBaseWindow(pid,start);
+  const mb=await marginAggPeriod(pid,addDaysISO(start,-4),addDaysISO(start,-2));
+  el.textContent=`База: заказы ${f1(obw.avg)} шт/день (${ddmm(obw.from)}…${ddmm(obw.to)}, 3 будн. дн) • маржин. ${mb==null?'—':f1(mb.pct)+'%'} (${ddmm(addDaysISO(start,-4))}…${ddmm(addDaysISO(start,-2))}, за период ${mb?mb.days:0} дн)`;
+}
+function smartMetricChanged(pid){
+  const m=document.getElementById('pm_'+pid).value;
+  const t=document.getElementById('pt_'+pid);
+  const dw=document.getElementById('pdate_'+pid);
+  const start=localISO(new Date());
+  if(m==='orders'){
+    t.placeholder='Цель: заказы, шт/день';
+    dw.innerHTML=`<select id="pd_${pid}">${weekdayOptions(start).map(o=>`<option value="${o}">${ddmm(o)}</option>`).join('')}</select>`;
+  }else{
+    t.placeholder='Цель: маржин., %';
+    dw.innerHTML=`<span class="datestub">${ddmm(addDaysISO(start,3))} (авто)</span>`;
+  }
+}
+async function addProto(pid){
+  const metric=document.getElementById(`pm_${pid}`).value;
+  const tRaw=document.getElementById(`pt_${pid}`).value.trim();
+  const action=(document.getElementById(`pa_${pid}`).value||'').trim();
+  if(!action){alert('Заполните текст гипотезы');return;}
+  if(tRaw===''){alert(metric==='orders'?'Укажите цель: заказы, шт/день':'Укажите цель: маржин., %');return;}
+  const vT=Number(String(tRaw).replace(',','.'));
+  if(!isFinite(vT)||(metric==='orders'&&vT<0)){alert('Некорректное значение цели');return;}
+  const today=new Date(); today.setHours(0,0,0,0);
+  const start=localISO(today);
+  let deadline;
+  if(metric==='orders'){
+    deadline=document.getElementById(`pd_${pid}`).value;
+    if(!deadline){alert('Выберите дату контроля');return;}
+  }else{
+    deadline=addDaysISO(start,3);
+  }
+  const p=BYID[pid]; if(!p)return;
+  const targetM=monthOfWeekISO(deadline);
+  const active=(PROTO[pid]||[]).find(it=>!it.parent_id&&it.metric===metric&&it.fact_ctx==null&&it.fact_dev==null&&(it.deadline?monthOfWeekISO(it.deadline)===targetM:it.month===targetM));
+  if(active){alert(`По товару уже есть активная гипотеза по этой метрике с контролем в ${MNAMES[+targetM.slice(5,7)-1]} (${ddmm(active.deadline)})`);return;}
+  if(targetM!==MONTH){
+    const [ty,tm]=targetM.split('-').map(Number);
+    const [tf,tt]=weekBoundsOfMonth(ty,tm);
+    const rr=await fetch(SUPABASE_URL+`/rest/v1/product_protocol?product_id=eq.${pid}&parent_id=is.null&deadline=gte.${tf}&deadline=lte.${tt}&select=metric,fact_ctx,fact_dev,deadline`,{headers:HD});
+    if(rr.ok){
+      const dup=(await rr.json()).some(it=>it.metric===metric&&it.fact_ctx==null&&it.fact_dev==null&&monthOfWeekISO(it.deadline)===targetM);
+      if(dup){alert(`По товару уже есть активная гипотеза по этой метрике с контролем в ${MNAMES[tm-1]}`);return;}
+    }
+  }
+  const obw=await ordersBaseWindow(pid,start);
+  const ob=obw.avg;
+  const mb=await marginAggPeriod(pid,addDaysISO(start,-4),addDaysISO(start,-2));
+  if(metric==='margin'&&mb==null){alert('Нет данных по маржинальности за 3 дня до старта — создание невозможно');return;}
+  const B=metric==='orders'?ob:mb.pct;
+  if(Math.abs(vT-B)<0.01){alert('Цель равна базовому значению — измените цель');return;}
+  const r=await fetch(SUPABASE_URL+'/rest/v1/product_protocol',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify([{product_id:pid,month:MONTH,action,deadline,metric,target_orders:metric==='orders'?vT:null,target_pct:metric==='margin'?vT:null,baseline_ctx:JSON.stringify({orders:ob,orders_from:obw.from,orders_to:obw.to,orders_days:obw.days,pct:mb?mb.pct:null,pct_from:mb?mb.from:null,pct_to:mb?mb.to:null,pct_days:mb?mb.days:null})}])});
+  if(!r.ok){alert('Ошибка сохранения: HTTP '+r.status+': '+(await r.text()));return;}
+  await upsertPPM(pid,{work_date:deadline});
+  await loadProto(); render();
+}
+async function addNote(pid){
+  const el=document.getElementById(`pn_${pid}`); if(!el)return;
+  const txt=(el.value||'').trim();
+  if(!txt){alert('Напишите заметку');return;}
+  const r=await fetch(SUPABASE_URL+'/rest/v1/product_protocol_notes',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify([{product_id:pid,month:MONTH,note:txt}])});
+  if(!r.ok){alert('Ошибка сохранения: HTTP '+r.status);return;}
+  await loadProto(); render();
+}
+async function deleteNote(id){
+  if(!confirm('Удалить заметку?'))return;
+  await fetch(SUPABASE_URL+`/rest/v1/product_protocol_notes?id=eq.${id}`,{method:'DELETE',headers:HD});
+  await loadProto(); render();
+}
+function dform(n){const a=Math.abs(n)%100,b=a%10;return a>10&&a<20?'дней':b===1?'день':(b>=2&&b<=4?'дня':'дней');}
+ function renderItem(it){
+  const today=new Date(); today.setHours(0,0,0,0);
+  const dl=it.deadline?parseW(it.deadline):null;
+  const daysLeft=dl?Math.round((dl-today)/86400000):null;
+  const base=it.baseline_ctx?JSON.parse(it.baseline_ctx):null;
+  const fact=it.fact_ctx?JSON.parse(it.fact_ctx):null;
+  const legacy=!base||!('orders' in base);
+  const created=ddmm(localISO(new Date(it.created_at)));
+  const v=verdict(it);
+  let status,cls;
+  if(v==null){
+    if(daysLeft!=null&&daysLeft<0){status=`<span class="n">ожидает загрузки CSV</span>`;cls='n';}
+    else if(daysLeft===0){status=`<span class="badge n">в работе (сегодня)</span>`;cls='n';}
+    else{status=`<span class="badge n">в работе (осталось ${daysLeft} ${dform(daysLeft)})</span>`;cls='n';}
+  }else if(v==='success'){status=`<span class="badge g">успешна</span>`;cls='g';}
+  else if(v==='partial'){status=`<span class="badge w">частичный успех</span>`;cls='w';}
+  else{status=`<span class="badge r">неудачна</span>`;cls='r';}
+  let body;
+  if(legacy){
+    const B=Number(it.baseline_dev||0), T=Number(it.target_dev||0), F=it.fact_dev!=null?Number(it.fact_dev):null;
+    const progress=F!=null&&T!==B?Math.round((F-B)/(T-B)*100):null;
+    body=`<div class="psub">Цель по отклонению маржи: от ${fmt(B)} ₽ к ${fmt(T)} ₽ • Контроль: ${it.deadline?ddmm(it.deadline):'—'}</div>
+      ${F!=null?`<div class="psub">Отклонение маржи на фиксацию (${it.fact_date?ddmm(it.fact_date):''}) составляет ${fmt(F)} ₽${progress!=null?` • прогресс ${progress}%`:''}</div>`:''}`;
+  }else{
+    const m=it.metric||'orders';
+    const fP=x=>x==null?'—':f1(x)+'%';
+    let baseLine,tgtLine,factLine='';
+    if(m==='orders'){
+      const bWinO=base.orders_from?`${ddmm(base.orders_from)}…${ddmm(base.orders_to)}`:(base.orders_date?ddmm(base.orders_date):'—');
+      baseLine=`База: ${f1(base.orders)} шт/день (${bWinO}, будни)`;
+      tgtLine=`Цель: ${f1(it.target_orders)} шт/день`;
+      if(fact)factLine=`Факт (${fact.orders_from?ddmm(fact.orders_from):'—'}…${fact.orders_to?ddmm(fact.orders_to):'—'}, будни): ${f1(fact.orders)} шт/день`;
+    }else{
+      const bWin=base.pct_from?`${ddmm(base.pct_from)}…${ddmm(base.pct_to)}`:(base.pct_date?ddmm(base.pct_date):'—');
+      baseLine=`База: ${fP(base.pct)} (${bWin}, за период)`;
+      tgtLine=`Цель: ${fP(it.target_pct)}`;
+      if(fact){
+        const fWin=fact.pct_from?`${ddmm(fact.pct_from)}…${ddmm(fact.pct_to)}`:(fact.pct_date?ddmm(fact.pct_date):'—');
+        factLine=`Факт: ${fP(fact.pct)} (${fWin}, за период ${fact.pct_days||'—'} дн)`;
+      }
+    }
+    body=`<div class="psub">Метрика: ${m==='orders'?'заказы':'маржинальность'} • Контроль: ${it.deadline?ddmm(it.deadline):'—'}</div>
+      <div class="psub">${baseLine}</div>
+      <div class="psub">${tgtLine}</div>
+      ${factLine?`<div class="psub">${factLine}</div>`:''}`;
+  }
+  const kids=(PROTO[it.product_id]||[]).filter(c=>c.parent_id===it.id);
+  const kidsHtml=kids.map(k=>`<div class="pchild"><span class="pdate">${new Date(k.created_at).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit'})}</span><span class="paction">${esc(k.action)}</span></div>`).join('');
+  const canAdd=legacy?(it.fact_dev==null):(it.fact_ctx==null);
+  const addForm=canAdd?`<div class="pchildform"><input type="text" id="pca_${it.id}" placeholder="Текст дополнения"><button onclick="addProtoChild(${it.product_id},${it.id})">Сохранить</button></div>`:'';
+  return `<div class="pitem" style="border-left-color:${cls==='g'?'#16a34a':cls==='w'?'#d97706':cls==='r'?'#E33D78':'rgba(84,66,115,.25)'}">
+    <div><span class="pdate">${created}</span>
+    <span class="paction">${esc(it.action)}</span></div>
+    ${body}
+    <div class="psub">${status}</div>
+    ${kidsHtml}
+    ${addForm}
+  </div>`;
+}
+async function addProtoChild(pid,parentId){
+  const aEl=document.getElementById('pca_'+parentId);
+  const action=(aEl?aEl.value:'').trim();
+  if(!action){alert('Введите текст дополнения');return;}
+  const r=await fetch(SUPABASE_URL+'/rest/v1/product_protocol',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify([{product_id:pid,month:MONTH,action,parent_id:parentId}])});
+  if(!r.ok){alert('Ошибка сохранения: HTTP '+r.status+': '+(await r.text()));return;}
+  await loadProto(); render();
+}
+function renderSmartForm(pid){
+  const p=BYID[pid];
+  if(!p)return '';
+  const start=localISO(new Date());
+  return `<div class="pform">
+    <div class="pfrow">
+      <select id="pm_${pid}" onchange="smartMetricChanged(${pid})">
+        <option value="orders">Заказы</option>
+        <option value="margin">Маржинальность</option>
+      </select>
+      <input type="number" id="pt_${pid}" step="0.01" placeholder="Цель: заказы, шт/день">
+      <span id="pdate_${pid}"><select id="pd_${pid}">${weekdayOptions(start).map(o=>`<option value="${o}">${ddmm(o)}</option>`).join('')}</select></span>
+    </div>
+    <div class="pfrow"><input type="text" id="pa_${pid}" placeholder="Гипотеза (действие)"><button onclick="addProto(${pid})">Добавить</button></div>
+    <div class="psub" id="smartbase_${pid}">База: расчёт…</div>
+    <div class="psub">Заказы: контроль — один из 3 следующих будних дней, база — среднее за 3 будних дня до старта, факт — среднее по будням периода. Маржинальность: контроль ${ddmm(addDaysISO(start,3))} автоматически; база — агрегированная за ${ddmm(addDaysISO(start,-4))}…${ddmm(addDaysISO(start,-2))}, факт — агрегированная за 3 дня до контроля включительно.</div>
+  </div>`;
+}
+function renderRecs(pid){
+  const p=BYID[pid];
+  let h='';
+  METRICS.forEach(m=>{
+    if(m.key==='qty'||m.key==='revo')return;
+    const unit=MUNIT[m.key];
+    if(m.key==='price'){
+      const ap=p?avgPriceFact(p):null;
+      if(ap==null){ h+=`<div class="prec"><b>${MLBL[m.key]}, ${unit}</b> <span class="n">нет данных</span></div>`; return; }
+      const plan=monthlyPlan(p,'price');
+      const diff=ap-plan;
+      let txt,cls;
+      if(Math.abs(diff)<0.005){txt='без изменений';cls='n';}
+      else if(diff>0){txt=`снизить цену на ${fmt2(diff)} ${unit}`;cls='g';}
+      else {txt=`поднять цену на ${fmt2(-diff)} ${unit}`;cls='r';}
+      h+=`<div class="prec"><b>${MLBL[m.key]}, ${unit}</b> ср.взвеш. цена = ${fmt2(ap)} ${unit} → план = ${fmt2(plan)} ${unit} • <span class="${cls}">${txt}</span></div>`;
+      return;
+    }
+       if(m.key==='pct'){
+      const ap=p?avgPctFact(p):null;
+      if(ap==null){ h+=`<div class="prec"><b>${MLBL[m.key]}, ${unit}</b> <span class="n">нет данных</span></div>`; return; }
+      const plan=monthlyPlan(p,'pct');
+      const diff=ap-plan;
+      let txt,cls;
+      if(Math.abs(diff)<0.005){txt='без изменений';cls='n';}
+      else if(diff>0){txt=`выше плана на ${fmt2(diff)} п.п.`;cls='g';}
+      else {txt=`ниже плана на ${fmt2(-diff)} п.п.`;cls='r';}
+      h+=`<div class="prec"><b>${MLBL[m.key]}, ${unit}</b> ср.взвеш. = ${fmt2(ap)} ${unit} → план = ${fmt2(plan)} ${unit} • <span class="${cls}">${txt}</span></div>`;
+      return;
+    }
+    const r=recForV2(pid,m.key);
+    const rec=recText(r,unit);
+    if(!r){ h+=`<div class="prec"><b>${MLBL[m.key]}, ${unit}</b> <span class="n">нет данных</span></div>`; return; }
+    let tgtTip='';
+    if(r.parts){
+      tgtTip=' title="'+Object.keys(r.parts).sort().map(ym=>{const v=r.parts[ym];return MNAMES[+ym.slice(5,7)-1]+': '+fmtFor(m.key,v.sum)+' '+unit+' ('+v.days+' дн)';}).join(' + ')+'"';
+    }
+    h+=`<div class="prec"><b>${MLBL[m.key]}, ${unit}</b> темп ${wlabel(parseW(r.cw))} = ${fmtFor(m.key,r.curV)} ${unit} → цель ${wlabel(parseW(r.nw))} = <span${tgtTip} style="cursor:help;border-bottom:1px dashed rgba(84,66,115,.4)">${fmtFor(m.key,r.nxtV)} ${unit}</span> • <span class="${rec.cls}">${rec.text}</span></div>`;
+  });
+  return h||'<div class="psub">нет данных</div>';
+}
+function renderStock(pid){
+  const offer=(BYID[pid]||{}).offer_id;
+  const dv=DEV[offer];
+  if(!dv) return '<div class="psub">нет данных</div>';
+  let h='';
+  if(dv.up>0.01){
+    const cls=(dv.cu||'').split('|').filter(x=>x);
+    const clsStr=cls.length?` (${cls.join(', ')})`:'';
+    h+=`<div class="prec"><span class="r">увеличить на ${f1(dv.up)} шт/д${clsStr}</span></div>`;
+  }
+  if(dv.down>0.01){
+    const cls=(dv.cd||'').split('|').filter(x=>x);
+    const clsStr=cls.length?` (${cls.join(', ')})`:'';
+    h+=`<div class="prec"><span class="g">уменьшить на ${f1(dv.down)} шт/д${clsStr}</span></div>`;
+  }
+  return h||'<div class="psub">нет данных</div>';
+}
+function renderNotes(pid){
+  const items=NOTES[pid]||[];
+  const list=items.map(n=>`<div class="pnote">
+    <span class="pdate">${new Date(n.created_at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+    <div class="ntxt">${esc(n.note)}</div>
+    <button onclick="deleteNote(${n.id})">удалить</button>
+  </div>`).join('')||'<div class="psub">пока нет заметок</div>';
+  return list+`<div class="pfrow"><textarea id="pn_${pid}" rows="2" placeholder="Новая заметка..." style="flex:1;min-width:200px"></textarea><button onclick="addNote(${pid})">Добавить</button></div>`;
+}
+function protoBlock(pid,offer){
+  return `<div class="protohead">Протокол действий • ${esc(offer)}</div>
+    <div class="psection"><div class="psectitle">📈 Рекомендации на следующую неделю</div>${renderRecs(pid)}</div>
+    <div class="psection"><div class="psectitle"><a href="https://maximsnz.github.io/beautyart/weekly.html" target="_blank" class="stocklink">📦 Рекомендации по управлению остатками</a></div>${renderStock(pid)}</div>
+<div class="psection"><div class="psectitle sec-head" onclick="toggleSection('chg_${pid}')"><span class="sec-caret" id="caret_chg_${pid}">▸</span>💰 Начисления за период (декомпозиция)</div><div class="hide" id="chg_${pid}"><div id="chgtbl_${pid}" class="psub">загрузка…</div></div></div>
+<div class="psection"><div class="psectitle sec-head" onclick="toggleSection('pulse_${pid}')"><span class="sec-caret" id="caret_pulse_${pid}">▸</span>🩺 Рука на пульсе</div><div class="hide" id="pulse_${pid}"><div id="pulsetbl_${pid}" class="psub">загрузка…</div></div></div>
+    <div class="psection"><div class="psectitle">🎯 SMART-протокол</div>${(PROTO[pid]||[]).filter(it=>!it.parent_id).map(renderItem).join('')||'<div class="psub">пока нет пунктов</div>'}${renderSmartForm(pid)}</div>
+    <div class="psection"><div class="psectitle">📝 Заметки менеджера</div>${renderNotes(pid)}</div>`;
+}
+function toggleSection(id){
+  const el=document.getElementById(id); if(!el)return;
+  el.classList.toggle('hide');
+  const open=!el.classList.contains('hide');
+  const c=document.getElementById('caret_'+id); if(c)c.textContent=open?'▾':'▸';
+  if(open&&id.indexOf('chg_')===0&&!el.dataset.loaded){
+    el.dataset.loaded='1';
+    loadChargesFor(Number(id.slice(4)));
+  }
+  if(open&&id.indexOf('pulse_')===0&&!el.dataset.loaded){
+    el.dataset.loaded='1';
+    loadPulse(Number(id.slice(6)));
+  }
+}
+async function loadPulse(pid){
+  const offer=(BYID[pid]||{}).offer_id;
+  const box=document.getElementById('pulsetbl_'+pid);
+  if(!WEEKISO.length){ if(box)box.innerHTML='<div class="psub">нет недель</div>'; return; }
+  const start=parseW(WEEKISO[0]);
+  const end=weekEnd(parseW(WEEKISO[WEEKISO.length-1]));
+  const first=localISO(start), last=localISO(end);
+  let salesRows=[],off=0;
+  while(true){
+    const r=await fetch(SUPABASE_URL+`/rest/v1/product_sales?offer_id=eq.${encodeURIComponent(offer)}&sale_date=gte.${first}&sale_date=lte.${last}&select=sale_date,qty&order=sale_date.asc&limit=1000&offset=${off}`,{headers:HD});
+    if(!r.ok)break;
+    const j=await r.json(); salesRows=salesRows.concat(j); if(j.length<1000)break; off+=1000;
+  }
+  const byDaySales=new Map();
+  salesRows.forEach(r=>{ byDaySales.set(r.sale_date,(byDaySales.get(r.sale_date)||0)+Number(r.qty||0)); });
+  let stockRows=[],off2=0;
+  while(true){
+    const r=await fetch(SUPABASE_URL+`/rest/v1/stock_history?offer_id=eq.${encodeURIComponent(offer)}&report_date=gte.${first}&report_date=lte.${last}&select=report_date,stock&order=report_date.asc&limit=1000&offset=${off2}`,{headers:HD});
+    if(!r.ok)break;
+    const j=await r.json(); stockRows=stockRows.concat(j); if(j.length<1000)break; off2+=1000;
+  }
+  const rawStock=new Map();
+  stockRows.forEach(r=>{ rawStock.set(r.report_date,(rawStock.get(r.report_date)||0)+Number(r.stock||0)); });
+  let chargeRows=[],off3=0;
+  while(true){
+    const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_charges?offer_id=eq.${encodeURIComponent(offer)}&event_date=gte.${first}&event_date=lte.${last}&select=event_date,charge_type,amount,qty,price&limit=1000&offset=${off3}`,{headers:HD});
+    if(!r.ok)break;
+    const j=await r.json(); chargeRows=chargeRows.concat(j); if(j.length<1000)break; off3+=1000;
+  }
+  const byDayCh=new Map();
+  chargeRows.forEach(c=>{
+    const d=c.event_date; if(!d)return;
+    let g=byDayCh.get(d); if(!g){g={gmv:0,sales:0,pnl:0,revg:0,revP:0};byDayCh.set(d,g);}
+    const amt=Number(c.amount||0), qty=Number(c.qty||0), price=Number(c.price||0);
+    g.pnl+=amt;
+    if(c.charge_type==='Выручка'){ g.gmv+=price*qty; g.sales+=qty; g.revg+=price*qty; g.revP+=amt; }
+    else if(c.charge_type==='Возврат выручки'){ g.gmv+=price*qty; g.sales-=qty; g.revP+=amt; }
+  });
+  const days=[];
+  for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){ days.push(localISO(new Date(d))); }
+  const salesVals=days.map(iso=>{ const v=byDaySales.get(iso); return v==null?null:v; });
+  const stockVals=days.map(iso=>{ const v=rawStock.get(iso); return v==null?null:v; });
+  const adsMap=await loadAdSpend(first,last);
+  const adsByDay=adsMap.get(pid)||new Map();
+  const cost=COST[pid]||0;
+  const marginVals=days.map(iso=>{
+    const g=byDayCh.get(iso);
+    const ads=adsByDay.get(iso)||0;
+    if(!g||g.gmv<=0) return null;
+    return (g.pnl-cost*g.sales-ads-TAX_RATE*g.revP)/g.gmv*100;
+  });
+  const drrVals=days.map(iso=>{
+    const ads=adsByDay.get(iso)||0;
+    if(ads===0) return null;
+    const g=byDayCh.get(iso);
+    const revg=g?g.revg:0;
+    if(!revg||revg<=0) return Infinity;
+    return ads/revg*100;
+  });
+  const salesNums=salesVals.filter(v=>v!=null);
+  const sMn=salesNums.length?Math.min(...salesNums):0, sMx=salesNums.length?Math.max(...salesNums):0;
+  const salesBg=v=>{ if(v==null||!salesNums.length)return ''; const t=(sMx===sMn)?0.5:(v-sMn)/(sMx-sMn); return `background:rgba(22,163,74,${(0.06+0.44*t).toFixed(2)});`; };
+  const stockNums=stockVals.filter(v=>v!=null);
+  const kMn=stockNums.length?Math.min(...stockNums):0, kMx=stockNums.length?Math.max(...stockNums):0;
+  const stockBg=v=>{ if(v==null||!stockNums.length)return ''; const t=(kMx===kMn)?0.5:(v-kMn)/(kMx-kMn); return `background:rgba(227,61,120,${(0.44-0.38*t).toFixed(2)});`; };
+  const mNums=marginVals.filter(v=>v!=null);
+  const mMn=mNums.length?Math.min(...mNums):0, mMx=mNums.length?Math.max(...mNums):1;
+  const marginBg=v=>{ if(v==null)return ''; if(v<0)return 'background:rgba(227,61,120,.18);'; const t=(mMx===mMn)?0.5:(v-mMn)/(mMx-mMn); return `background:rgba(22,163,74,${(0.06+0.44*t).toFixed(2)});`; };
+  const nowMs=new Date().getTime();
+  let h='<div class="pulsewrap"><table class="pulsetable"><thead><tr><th>Параметр</th>';
+  days.forEach(iso=>{
+    const prov=(nowMs-parseW(iso).getTime())<7*86400000;
+    h+=prov?`<th title="предварительно: начисления за этот день ещё доезжают (логистика, возвраты и отмены приходят с задержкой); значение уточнится само">${ddmm(iso)}*</th>`:`<th>${ddmm(iso)}</th>`;
+  });
+  h+='</tr></thead><tbody>';
+  const temps=await computeOrderTemps();
+  const trow=(temps[matrixOf(offer)]||[]).find(x=>x.offer===offer);
+  const rpDay=trow?trow.rp:null;
+  const rcDay=trow?trow.rc:null;
+  const todayISO=localISO(new Date());
+  h+='<tr><td class="pulsemetric">Заказы, шт</td>';
+  salesVals.forEach((v,idx)=>{
+    const iso=days[idx];
+    if(v!=null){ h+=`<td class="num" style="${salesBg(v)}">${fmt(v)}</td>`; return; }
+    if(iso>todayISO){
+      const p=BYID[pid];
+      const planDay=p?dayShare(p,iso,'sales'):null;
+      const inMonth=iso.slice(0,7)===MONTH;
+      const catchDay=(inMonth&&trow)?trow.rc*(isWeekend(iso)?0.7:1):null;
+      if(planDay==null&&catchDay==null){ h+=`<td class="num" style="${salesBg(v)}">—</td>`; return; }
+      const cell=planDay!=null?(catchDay!=null?`${fmt(planDay)}/${fmt(catchDay)}`:`${fmt(planDay)}`):`${fmt(catchDay)}`;
+      h+=`<td class="num factcell" title="Плановый темп / догоняющий темп дня, шт (выходные ×0,7)">${cell}</td>`;
+      return;
+    }
+    h+=`<td class="num" style="${salesBg(v)}">—</td>`;
+  });
+  h+='</tr>';
+  h+='<tr><td class="pulsemetric">Остатки, шт</td>';
+  stockVals.forEach(v=>{ h+=`<td class="num" style="${stockBg(v)}">${v==null?'—':fmt(v)}</td>`; });
+  h+='</tr>';
+  h+='<tr><td class="pulsemetric">Маржинальность, %</td>';
+  marginVals.forEach(v=>{ h+=`<td class="num" style="${marginBg(v)}">${v==null?'—':f1(v)}</td>`; });
+  h+='</tr>';
+  const DRR_TARGET=5, DRR_MAX_DIST=30;
+  const drrBg=v=>{
+    if(v==null)return '';
+    if(!isFinite(v))return 'background:rgba(227,61,120,0.45);';
+    const t=Math.min(Math.abs(v-DRR_TARGET),DRR_MAX_DIST)/DRR_MAX_DIST;
+    const ease=Math.pow(t,0.65);
+    const a=0.05+0.40*ease;
+    return `background:rgba(227,61,120,${a.toFixed(2)});`;
+  };
+  h+='<tr><td class="pulsemetric">ДРР, %</td>';
+  drrVals.forEach(v=>{ h+=`<td class="num" style="${drrBg(v)}">${v==null?'—':(isFinite(v)?f1(v):'∞')}</td>`; });
+  h+='</tr>';
+  h+='</tbody></table><div class="psub" style="margin-top:6px">* — предварительный день (последние 7 дней): маржинальность уточняется по мере доезда начислений. Дни старше 7 дней устойчивы; редкие поздние возвраты возможны и по ним — это нормальная ревизия.</div></div>';
+  if(box)box.innerHTML=h;
+}
+function arcPath(cx,cy,rO,rI,a0,a1){
+  const p=(r,a)=>[cx+r*Math.cos(a),cy+r*Math.sin(a)];
+  const [x0,y0]=p(rO,a0),[x1,y1]=p(rO,a1),[x2,y2]=p(rI,a1),[x3,y3]=p(rI,a0);
+  const large=(a1-a0)>Math.PI?1:0;
+  return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${rO} ${rO} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} L${x2.toFixed(2)} ${y2.toFixed(2)} A${rI} ${rI} 0 ${large} 0 ${x3.toFixed(2)} ${y3.toFixed(2)} Z`;
+}
+function drawPie(ids,buckets,total,get,fmtTotal,cap,fmtMain,fmtSide){
+  const svg=document.getElementById(ids.svg);
+  const pcVal=document.getElementById(ids.val), pcCap=document.getElementById(ids.cap);
+  const legend=document.getElementById(ids.legend), tip=document.getElementById('tip');
+  if(!svg)return;
+  const CX=110,CY=110,RO=100,RI=62,PAD=0.02;
+  let html='';
+  if(total<=0){ html=`<circle cx="${CX}" cy="${CY}" r="${(RO+RI)/2}" fill="none" stroke="#e2e8f0" stroke-width="${RO-RI}"/>`; }
+  else{
+    let a=-Math.PI/2;
+    buckets.forEach((b,i)=>{ const v=get(b); if(v<=0)return;
+      const ang=Math.min(v/total*Math.PI*2,Math.PI*2-0.0001);
+      const a0=a+PAD/2,a1=a+ang-PAD/2;
+      if(a1>a0) html+=`<path class="seg" data-i="${i}" d="${arcPath(CX,CY,RO,RI,a0,a1)}" fill="${b.color}"/>`;
+      a+=ang; });
+  }
+  svg.innerHTML=html;
+  const setCenter=i=>{ if(i==null){pcVal.textContent=fmtTotal(total);pcCap.textContent=cap;} else{const b=buckets[i];const share=total>0?Math.round(get(b)/total*100):0;pcVal.textContent=share+'%';pcCap.textContent=b.label+' • '+b.cnt+' поз.';} };
+  setCenter(null);
+  const paths=[...svg.querySelectorAll('.seg')];
+  const hl=(i,on)=>{ svg.classList.toggle('dim',on); paths.forEach(p=>p.classList.toggle('hl',on&&+p.dataset.i===i)); legend.querySelectorAll('.lrow').forEach(r=>r.classList.toggle('hl',on&&+r.dataset.i===i)); setCenter(on?i:null); };
+  const showTip=(i,e)=>{ const b=buckets[i];const v=get(b);const share=total>0?(v/total*100).toLocaleString('ru-RU',{maximumFractionDigits:1}):0; tip.innerHTML=`<b>${b.label}</b>: ${share}% • ${fmtMain(b)} • ${fmtSide(b)}`; tip.style.opacity=1; moveTip(e); };
+  const moveTip=e=>{ tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+14)+'px'; };
+  const hideTip=()=>{ tip.style.opacity=0; };
+  paths.forEach(p=>{ const i=+p.dataset.i; p.addEventListener('mouseenter',e=>{hl(i,true);showTip(i,e);}); p.addEventListener('mousemove',moveTip); p.addEventListener('mouseleave',()=>{hl(i,false);hideTip();}); });
+  legend.innerHTML=buckets.map((b,i)=>{ const v=get(b);const share=total>0?(v/total*100).toLocaleString('ru-RU',{maximumFractionDigits:1}):'0'; return `<div class="lrow" data-i="${i}"><span class="dot" style="background:${b.color}"></span>${b.label}<span class="lcnt">${fmtSide(b)}</span><span class="lval">${share}% • ${fmtMain(b)}</span></div>`; }).join('');
+  legend.querySelectorAll('.lrow').forEach(r=>{ const i=+r.dataset.i; r.addEventListener('mouseenter',()=>hl(i,true)); r.addEventListener('mouseleave',()=>hl(i,false)); });
+}
+function matrixStats(list){
+  const buckets=[{label:'до 5%',color:'#E33D78',rev:0,cnt:0},{label:'5–10%',color:'#d97706',rev:0,cnt:0},{label:'свыше 10%',color:'#16a34a',rev:0,cnt:0}];
+  let tRub=0,tMar=0,tFRev=0,tFMar=0,tOrd=0,tOrdRev=0;
+  let factRev=0,factMar=0,factCnt=0;
+  list.forEach(p=>{
+    const pl=PLAN[p.product_id]||{price:Number(p.price||0),plan_qty:0,margin_pct:0};
+    const rev=pl.plan_qty*pl.price, mar=pl.plan_qty*pl.price*pl.margin_pct/100;
+    tRub+=rev; tMar+=mar;
+    const pvRev=projVal(p,'revn'), pvMar=projVal(p,'mar');
+    if(pvRev.ffV!=null)tFRev+=pvRev.ffV;
+    if(pvMar.ffV!=null)tFMar+=pvMar.ffV;
+    const fRev=calcFactToDate(p,'revn'), fMar=calcFactToDate(p,'mar');
+    if(fRev!=null){ factRev+=fRev; factCnt++; }
+    if(fMar!=null) factMar+=fMar;
+    const b=pl.margin_pct<=5?buckets[0]:(pl.margin_pct<=10?buckets[1]:buckets[2]); b.rev+=rev; b.cnt+=1;
+  });
+  return {buckets,tRub,tMar,tFRev,tFMar,tOrd,tOrdRev,factRev,factMar,factCnt};
+}
+function hypStats(list){
+  let active=0,success=0,fail=0;
+  list.forEach(p=>{
+    const items=(PROTO[p.product_id]||[]).filter(it=>{
+      if(it.parent_id)return false;
+      return it.deadline?monthOfWeekISO(it.deadline)===MONTH:it.month===MONTH;
+    });
+    items.forEach(it=>{
+      if(it.fact_dev==null) active++;
+      else{
+        const v=verdict(it);
+        if(v==='success'||v==='partial') success++;
+        if(v==='fail') fail++;
+      }
+    });
+  });
+  return {active,success,fail};
+}
+function mxCard(id,title,list,gid,total){
+  const s=matrixStats(list);
+  const h=hypStats(list);
+  const wMar=s.tRub>0?s.tMar/s.tRub*100:0;
+  const wFMar=s.tFRev>0?s.tFMar/s.tFRev*100:0;
+  const ordOn=(ORDMODE[gid]==='orders');
+  const pieSwitch=`<span class="pieSwitch ${PIEMODE[gid]==='forecast'?'on':''}" title="Клик — переключить План/Прогноз" onclick="togglePieMode('${gid}')"><span class="psKnob"></span><span class="psLab ${PIEMODE[gid]==='plan'?'act':''}">План</span><span class="psLab ${PIEMODE[gid]==='forecast'?'act':''}">Прогноз</span></span>`;
+  const body=ordOn?`<div class="tempwrap" id="ordbody_${gid}"><div class="psub" style="padding:10px">загрузка…</div></div>`:`
+    <div class="panel panel-charts">
+      <div class="panelhead"><span class="paneltitle">Структура маржинальности</span>${pieSwitch}</div>
+      <div class="piesrow">
+        <div class="piecard"><div class="ptitle">Выручка по маржинальности</div><div class="piebox">
+          <div class="pieWrap"><svg class="pie" id="pieRev${id}" viewBox="0 0 220 220"></svg><div class="pieCenter"><div class="pcVal" id="pcValRev${id}"></div><div class="pcCap" id="pcCapRev${id}"></div></div></div>
+          <div class="legend" id="legendRev${id}"></div></div></div>
+        <div class="piecard"><div class="ptitle">Позиции по маржинальности</div><div class="piebox">
+          <div class="pieWrap"><svg class="pie" id="piePos${id}" viewBox="0 0 220 220"></svg><div class="pieCenter"><div class="pcVal" id="pcValPos${id}"></div><div class="pcCap" id="pcCapPos${id}"></div></div></div>
+          <div class="legend" id="legendPos${id}"></div></div></div>
+      </div>
+    </div>
+    <div class="panel panel-speedo">
+      <div class="speedo-wrap">
+<div class="speedo-item clickable" title="Заказы (PNL, capped), шт: вчера к плану (перевыполнение срезается) — клик: слайд темпов" onclick="setOrdMode('${gid}','orders')">
+  <div class="speedo-label">Заказы (PNL, capped), шт</div>
+  <svg class="speedo-svg" id="speedo_orders_${gid}" viewBox="0 0 80 50"></svg>
+  <div class="speedo-val n" id="speedoval_orders_${gid}">…</div>
+  <div class="speedo-sub" id="speedosub_orders_${gid}">расчёт…</div>
+</div>
+<div class="speedo-item" title="Выручка (PNL, uncapped), ₽: заказы вчера × цена, к плану (перевыполнение учитывается)">
+  <div class="speedo-label">Выручка (PNL, uncapped), ₽</div>
+  <svg class="speedo-svg" id="speedo_rev_${gid}" viewBox="0 0 80 50"></svg>
+  <div class="speedo-val n" id="speedoval_rev_${gid}">…</div>
+  <div class="speedo-sub" id="speedosub_rev_${gid}">расчёт…</div>
+</div>
+      </div>
+    </div>
+    <div class="panel panel-kpi">
+      <div class="panelhead"><span class="paneltitle">Ключевые показатели</span></div>
+      <div class="kpisrow">
+        <div class="kpicol">
+          <div class="kpititle">План (PNL)</div>
+          <div class="kpirow"><div class="klabel">Заказы, шт</div><div class="kval">${fmt(list.reduce((s,p)=>s+(PLAN[p.product_id]?.plan_qty||0),0))}</div></div>
+          <div class="kpirow"><div class="klabel">Выручка, ₽</div><div class="kval">${fmt(s.tRub)}</div></div>
+          <div class="kpirow"><div class="klabel">Маржа, ₽</div><div class="kval">${fmt(s.tMar)}</div></div>
+          <div class="kpirow"><div class="klabel">Маржин. ср.взвеш., %</div><div class="kval">${wMar.toLocaleString('ru-RU',{maximumFractionDigits:1})}</div></div>
+        </div>
+        <div class="kpicol sep">
+          <div class="kpititle">Прогноз (PNL)</div>
+          <div class="kpirow"><div class="klabel">Заказы, шт</div><div class="kval" id="kpipnlqty_${gid}">…</div></div>
+          <div class="kpirow"><div class="klabel">Выручка, ₽</div><div class="kval" id="kpipnl_${gid}">…</div></div>
+          <div class="kpirow"><div class="klabel">Маржа, ₽</div><div class="kval">—</div></div>
+          <div class="kpirow"><div class="klabel">Маржин. ср.взвеш., %</div><div class="kval">—</div></div>
+        </div>
+        <div class="kpicol sep">
+          <div class="kpititle">Факт (CF)</div>
+          <div class="kpirow"><div class="klabel">Заказы, шт</div><div class="kval">—</div></div>
+          <div class="kpirow"><div class="klabel">Выручка, ₽</div><div class="kval">${fmt(s.factRev)}<div class="ksub">прогноз: ${fmt(s.tFRev)}</div></div></div>
+          <div class="kpirow"><div class="klabel">Маржа, ₽</div><div class="kval">${fmt(s.factMar)}<div class="ksub">прогноз: ${fmt(s.tFMar)}</div></div></div>
+          <div class="kpirow"><div class="klabel">Маржин. ср.взвеш., %</div><div class="kval">${s.factRev>0?((s.factMar/s.factRev*100).toLocaleString('ru-RU',{maximumFractionDigits:1})):'—'}</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel panel-hypotheses">
+      <div class="panelhead"><span class="paneltitle">🎯 Гипотезы</span></div>
+      <div class="hypo-stats">
+        <div class="hypo-card hypo-active">
+          <div class="hypo-num">${h.active}</div>
+          <div class="hypo-label">Активных</div>
+          <div class="hypo-icon">⏳</div>
+        </div>
+        <div class="hypo-card hypo-success">
+          <div class="hypo-num">${h.success}</div>
+          <div class="hypo-label">Успешных</div>
+          <div class="hypo-icon">✅</div>
+        </div>
+        <div class="hypo-card hypo-fail">
+          <div class="hypo-num">${h.fail}</div>
+          <div class="hypo-label">Неудачных</div>
+          <div class="hypo-icon">❌</div>
+        </div>
+      </div>
+      ${h.success+h.fail>0?`<div class="hypo-rate">
+        <div class="hypo-rate-bar">
+          <div class="hypo-rate-fill" style="width:${h.success/(h.success+h.fail)*100}%"></div>
+        </div>
+        <div class="hypo-rate-text">Успешность: ${Math.round(h.success/(h.success+h.fail)*100)}%</div>
+      </div>`:''}
+    </div>`;
+  const stop=total?'event.stopPropagation();':'';
+  const pm=`<span class="pmwrap"><button class="pmbtn ${ordOn?'':'on'}" onclick="${stop}setOrdMode('${gid}','summary')">Сводка</button><button class="pmbtn ${ordOn?'on':''}" onclick="${stop}setOrdMode('${gid}','orders')">Заказы</button></span>`;
+  const head=total
+    ?`<div class="mxtitle totalhead" onclick="toggleTotal()"><span class="totalcaret" id="totalcaret">${TOTAL_OPEN?'▾':'▸'}</span>${title} • ${list.length} поз.</div>`
+    :`<div class="mxtitle">${title} • ${list.length} поз.${pm}</div>`;
+  const bodyHtml=total
+    ?`<div class="${TOTAL_OPEN?'':'hide'}" id="totalbody"><div style="margin-bottom:8px">${pm}</div><div class="mxbody">${body}</div></div>`
+    :`<div class="mxbody">${body}</div>`;
+  return `<div class="mxcard">${head}${bodyHtml}</div>`;
+}
+function render(){
+  const q=document.getElementById('q').value.toLowerCase();
+  const f=ROWS.filter(r=>(r.name||'').toLowerCase().includes(q)||(r.offer_id||'').toLowerCase().includes(q));
+  const m1=f.filter(r=>matrixOf(r.offer_id)==='m1');
+  const m2=f.filter(r=>matrixOf(r.offer_id)==='m2');
+  const listAll=m1.concat(m2);
+  document.getElementById('summary').innerHTML=mxCard('3','Итого',listAll,'t',true)+mxCard('1','Илья',m1,'m1')+mxCard('2','Ольга',m2,'m2');
+  ['m1','m2','t'].forEach(g=>{
+    if(ORDMODE[g]==='orders'){ renderOrderTemps(g); } else { renderSpeedo(g,'orders'); renderSpeedo(g,'rev'); }
+    renderKpiPnl(g);
+  });
+  const m1p=m1.filter(r=>((PLAN[r.product_id]||{}).plan_qty||0)>0);
+  const m2p=m2.filter(r=>((PLAN[r.product_id]||{}).plan_qty||0)>0);
+  const p1=PIEMODE.m1==='plan'?pieStats(m1p,'plan'):pieStats(m1,'forecast');
+  const p2=PIEMODE.m2==='plan'?pieStats(m2p,'plan'):pieStats(m2,'forecast');
+  const capR1=PIEMODE.m1==='plan'?'выручка плана':'выручка прогноза';
+  const capP1=PIEMODE.m1==='plan'?'позиции с планом':'позиции с прогнозом';
+  const capR2=PIEMODE.m2==='plan'?'выручка плана':'выручка прогноза';
+  const capP2=PIEMODE.m2==='plan'?'позиции с планом':'позиции с прогнозом';
+  drawPie({svg:'pieRev1',legend:'legendRev1',val:'pcValRev1',cap:'pcCapRev1'},p1.buckets,p1.total,b=>b.rev,v=>fmtM(v)+' ₽',capR1,b=>fmtM(b.rev)+' ₽',b=>b.cnt+' поз.');
+  drawPie({svg:'piePos1',legend:'legendPos1',val:'pcValPos1',cap:'pcCapPos1'},p1.buckets,p1.cnt,b=>b.cnt,v=>fmt(v)+' поз.',capP1,b=>fmt(b.cnt)+' поз.',b=>fmtM(b.rev)+' ₽');
+  drawPie({svg:'pieRev2',legend:'legendRev2',val:'pcValRev2',cap:'pcCapRev2'},p2.buckets,p2.total,b=>b.rev,v=>fmtM(v)+' ₽',capR2,b=>fmtM(b.rev)+' ₽',b=>b.cnt+' поз.');
+  drawPie({svg:'piePos2',legend:'legendPos2',val:'pcValPos2',cap:'pcCapPos2'},p2.buckets,p2.cnt,b=>b.cnt,v=>fmt(v)+' поз.',capP2,b=>fmt(b.cnt)+' поз.',b=>fmtM(b.rev)+' ₽');
+  const listAllT=listAll||m1.concat(m2);
+  const listAllP=listAllT.filter(r=>((PLAN[r.product_id]||{}).plan_qty||0)>0);
+  const pt=PIEMODE.t==='plan'?pieStats(listAllP,'plan'):pieStats(listAllT,'forecast');
+  const capRt=PIEMODE.t==='plan'?'выручка плана':'выручка прогноза';
+  const capPt=PIEMODE.t==='plan'?'позиции с планом':'позиции с прогнозом';
+  drawPie({svg:'pieRev3',legend:'legendRev3',val:'pcValRev3',cap:'pcCapRev3'},pt.buckets,pt.total,b=>b.rev,v=>fmtM(v)+' ₽',capRt,b=>fmtM(b.rev)+' ₽',b=>b.cnt+' поз.');
+  drawPie({svg:'piePos3',legend:'legendPos3',val:'pcValPos3',cap:'pcCapPos3'},pt.buckets,pt.cnt,b=>b.cnt,v=>fmt(v)+' поз.',capPt,b=>fmt(b.cnt)+' поз.',b=>fmtM(b.rev)+' ₽');
+  let totalCols=2;
+  METRICS.forEach(mt=>{ const single=(mt.key==='price'||mt.key==='pct'||mt.plan===false); totalCols+=3+(EXP[mt.key]?(single?WEEKS.length:WEEKS.length*2):0); });
+  let r1='<tr><th rowspan="3">Артикул</th><th rowspan="3">Дата</th>';
+  let r2='', r3='';
+  METRICS.forEach(mt=>{
+    const exp=EXP[mt.key];
+    const isPrice=(mt.key==='price'||mt.key==='pct'||mt.plan===false);
+    const span=3+(exp?(isPrice?WEEKS.length:WEEKS.length*2):0);
+    r1+=`<th colspan="${span}" class="mhead sep"><button class="mtoggle" onclick="toggleMetric('${mt.key}')">${exp?'▾':'▸'}</button>${mt.label}</th>`;
+    r2+=`<th rowspan="2" class="sub sep">План</th><th rowspan="2" class="sub wrap2">${COLLBL[mt.key].fc}</th><th rowspan="2" class="sub wrap2">${COLLBL[mt.key].dv}</th>`;
+    if(exp){ WEEKS.forEach(w=>{ r2+=`<th colspan="${isPrice?1:2}" class="whead">${wlabel(w)}</th>`; });
+             WEEKS.forEach(w=>{ r3+= isPrice?`<th class="wsub">Факт</th>`:`<th class="wsub">Прогноз</th><th class="wsub">Факт</th>`; }); }
+  });
+  document.getElementById('th').innerHTML=r1+'</tr><tr>'+r2+'</tr><tr>'+r3+'</tr></tr>';
+  const devOf=p=>{const d=projVal(p,'mar').dev;return d==null?0:d;};
+  const prodRow=p=>{
+    const pid=p.product_id;
+    const wd=(PPM[pid]&&PPM[pid].work_date)||'';
+    const pl=PLAN[pid]||{price:Number(p.price||0),plan_qty:0,margin_pct:0};
+    const zp=(pl.plan_qty||0)===0;
+    const hasActive=(PROTO[pid]||[]).some(it=>!it.parent_id&&it.deadline&&it.deadline>=localISO(new Date())&&it.fact_dev==null);
+    const dateLocked=hasActive;
+    let h=`<tr${zp?' class="zeroplan"':''}>
+      <td class="num okey" title="${esc(p.name)} — открыть протокол" onclick="toggleProto(${pid})">${esc(p.offer_id)}</td>`;
+    if(dateLocked){
+      h+=`<td><span class="datelocked" title="дата зафиксирована гипотезой">${wd?ddmm(wd):'—'}</span></td>`;
+    }else{
+      h+=`<td><span class="dateshort" title="Дата работы" onclick="openDate(${pid})">${wd?ddmm(wd):'—'}</span><input type="date" class="datehidden" id="dt_${pid}" value="${wd}" onchange="setWorkDate(${pid},this.value)"></td>`;
+    }
+    METRICS.forEach(mt=>{
+      const planV=monthlyPlan(p,mt.key);
+      let ffV=null, dev=null;
+      if(mt.key==='price'){ const ap=avgPriceFact(p); ffV=ap; dev=ap==null?null:ap-planV; }
+      else if(mt.key==='pct'){ const ap=avgPctFact(p); ffV=ap; dev=ap==null?null:ap-planV; }
+      else { const pv=projVal(p,mt.key); ffV=pv.ffV; dev=pv.dev; }
+      const dcls=dev==null?'n':(dev>0?'g':dev<0?'r':'n');
+      const editKey=mt.edit;
+      h+=`<td class="num sep ${editKey?'editable':''}" ${editKey?`title="Изменить план" onclick="editField(${pid},'${editKey}')"`:''}>${planV==null?'—':fmtFor(mt.key,planV)}</td>`;
+      h+=`<td class="num calc">${ffV==null?'—':fmtFor(mt.key,ffV)}</td>`;
+      h+=`<td class="num ${dcls}">${dev==null?'—':(dev>0?'+':'')+fmtFor(mt.key,dev)}</td>`;
+      if(EXP[mt.key]){
+        if(mt.key==='price'){
+          WEEKISO.forEach((w,i)=>{ const pf=priceFactForWeek(pid,w); h+=`<td class="num wcell factcell" title="Факт цены (PNL)">${pf==null?'—':fmt2(pf)}</td>`; });
+        }else if(mt.key==='pct'){
+          WEEKISO.forEach((w,i)=>{ const pf=pctFactForWeek(pid,w); h+=`<td class="num wcell factcell" title="Факт маржин. (PNL)">${pf==null?'—':fmt2(pf)}</td>`; });
+        }else if(mt.plan===false){
+          WEEKISO.forEach((w,i)=>{ const r=getRec(pid,WDKEY[mt.key],w); h+=`<td class="num wcell factcell" title="Факт (заказы)">${r.fact==null?'—':wfmt(mt.key,r.fact)}</td>`; });
+        }else{
+          const series=seriesFor(p,mt.key);
+          WEEKISO.forEach((w,i)=>{
+            const rec=getRec(pid,WDKEY[mt.key],w);
+            const s=series[i];
+            if(s.locked){ h+=`<td class="num wcell calc" title="Расчёт (факт+динамика)">${wfmt(mt.key,s.forecast)}</td>`; }
+            else{
+              const rst=s.manual?`<span class="resetbtn" title="Вернуть расчётное" onclick="resetWeek(event,${pid},'${w}','${WDKEY[mt.key]}')">↺</span>`:'';
+              h+=`<td class="num wcell wedit ${s.manual?'':'autocell'}" title="Прогноз" onclick="editWeek(${pid},'${w}','${WDKEY[mt.key]}')">${wfmt(mt.key,s.forecast)}<span class="editbtn">✎</span>${rst}</td>`;
+            }
+            h+=`<td class="num wcell factcell" title="Факт">${rec.fact==null?'—':wfmt(mt.key,rec.fact)}</td>`;
+          });
+        }
+      }
+    });
+    h+=`</tr>`;
+    if(openProto.has(pid)){
+      h+=`<tr class="protorow"><td colspan="${totalCols}"><div class="protowrap">${protoBlock(pid,p.offer_id)}</div></td></tr>`;
+    }
+    return h;
+  };
+  let html='';
+  const groups=[['m1','Илья',m1],['m2','Ольга',m2]];
+  groups.forEach(([gid,gname,list])=>{
+    html+=`<tr class="mgroup"><td colspan="${totalCols}"><button onclick="toggleGM('${gid}')">${GM[gid]?'▾':'▸'}</button>${gname} • ${list.length} поз.</td></tr>`;
+    if(!GM[gid])return;
+    const hasDate=list.some(p=>(PPM[p.product_id]&&PPM[p.product_id].work_date));
+    if(hasDate){
+      const byDate=new Map();
+      list.forEach(p=>{ const d=(PPM[p.product_id]&&PPM[p.product_id].work_date)||null; if(!byDate.has(d))byDate.set(d,[]); byDate.get(d).push(p); });
+      const dates=[...byDate.keys()].filter(x=>x).sort();
+      dates.forEach(d=>{
+        html+=`<tr class="dgroup"><td colspan="${totalCols}">${dateHead(d)}</td></tr>`;
+        html+=byDate.get(d).sort((a,b)=>devOf(a)-devOf(b)).map(prodRow).join('');
+      });
+      if(byDate.has(null)){
+        html+=`<tr class="dgroup"><td colspan="${totalCols}">Без даты</td></tr>`;
+        html+=byDate.get(null).sort((a,b)=>devOf(a)-devOf(b)).map(prodRow).join('');
+      }
+    }else{
+      html+=[...list].sort((a,b)=>devOf(a)-devOf(b)).map(prodRow).join('');
+    }
+  });
+  document.getElementById('tb').innerHTML=html||`<tr><td colspan="${totalCols}" style="color:#94a3b8">нет данных</td></tr>`;
+  openProto.forEach(pid=>{loadSmartBase(pid);});
+}
+</script>
+</body>
+</html>
