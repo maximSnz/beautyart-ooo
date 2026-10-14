@@ -139,13 +139,13 @@
       <summary>🗄 Архив (<span id="arcCount">0</span>)</summary>
       <div class="inner">
         <table><thead><tr>
-          <th>Артикул</th><th>Название</th><th>Поставщик</th><th>НДС</th><th>ЧЗ</th><th>Цена, ₽</th><th>Действия</th>
+          <th>Артикул</th><th>Название</th><th>Поставщик</th><th>НДС</th><th>ЧЗ</th><th>ШК</th><th title="Штук в коробе Ozon">В коробе, шт</th><th title="Коробов на паллете">На паллете, кор.</th><th>Цена, ₽</th><th>Действия</th>
         </tr></thead><tbody id="arcBody"></tbody></table>
       </div>
     </details>
 
     <table><thead><tr>
-      <th>Артикул</th><th>Название</th><th>Поставщик</th><th>НДС</th><th>ЧЗ</th><th>Цена, ₽</th><th>Действия</th>
+      <th>Артикул</th><th>Название</th><th>Поставщик</th><th>НДС</th><th>ЧЗ</th><th>ШК</th><th title="Штук в коробе Ozon">В коробе, шт</th><th title="Коробов на паллете">На паллете, кор.</th><th>Цена, ₽</th><th>Действия</th>
     </tr></thead><tbody id="tb"></tbody></table>
   </div>
 </div>
@@ -182,7 +182,7 @@ async function load(){
   for(let a=1;a<=3;a++){
     try{
       const [rp,rc,rm]=await Promise.all([
-        fetch(SUPABASE_URL+'/rest/v1/products?select=product_id,offer_id,name,supplier,vat,cz,archived,updated_at&order=name.asc&limit=1000',{headers:HD}),
+        fetch(SUPABASE_URL+'/rest/v1/products?select=product_id,offer_id,name,supplier,vat,cz,barcode,box_qty,boxes_per_pallet,archived,updated_at&order=name.asc&limit=1000',{headers:HD}),
         fetch(SUPABASE_URL+'/rest/v1/product_prices?select=product_id,cost,created_at,created_by&order=created_at.desc&limit=10000',{headers:HD}),
         fetch(SUPABASE_URL+'/rest/v1/product_meta_history?select=product_id,field,value,created_at,created_by&order=created_at.desc&limit=10000',{headers:HD})
       ]);
@@ -192,7 +192,8 @@ async function load(){
       META={}; mr.forEach(m=>{(META[m.product_id]=META[m.product_id]||[]).push(m);});
       const act=ROWS.filter(r=>!r.archived).length;
       const last=ROWS.reduce((m,x)=>x.updated_at&&x.updated_at>m?x.updated_at:m,'');
-      document.getElementById('meta').textContent=`Товаров в работе: ${act} • синхронизировано: ${last?new Date(last).toLocaleString('ru-RU'):''}`;
+      const noBox=ROWS.filter(r=>!r.archived&&!r.box_qty).length;
+      document.getElementById('meta').textContent=`Товаров в работе: ${act} • синхронизировано: ${last?new Date(last).toLocaleString('ru-RU'):''}`+(noBox?` • не заполнено «В коробе»: ${noBox} (без него заявка не считается)`:'');
       render(); return;
     }catch(e){ if(a<3){await sleep(800*a);continue;} err.textContent='Ошибка загрузки: '+e.message; }
   }
@@ -202,6 +203,9 @@ function cells(r,cur){
     <td class="editable" title="Изменить поставщика" onclick="editSup(${r.product_id})">${esc(r.supplier||'—')}</td>
     <td class="editable" title="Изменить НДС" onclick="editVat(${r.product_id})">${esc(r.vat||'—')}</td>
     <td><input type="checkbox" ${r.cz?'checked':''} onchange="setField(${r.product_id},'cz',this.checked)"></td>
+    <td class="editable" title="Изменить ШК" onclick="editText(${r.product_id},'barcode')">${esc(r.barcode||'—')}</td>
+    <td class="editable" title="Изменить: штук в коробе Ozon" onclick="editInt(${r.product_id},'box_qty')">${r.box_qty??'—'}</td>
+    <td class="editable" title="Изменить: коробов на паллете" onclick="editInt(${r.product_id},'boxes_per_pallet')">${r.boxes_per_pallet??'—'}</td>
     <td class="cost editable" title="Изменить цену" onclick="editCost(${r.product_id})">${cur?Number(cur.cost).toLocaleString('ru-RU'):'—'}</td>`;
 }
 function render(){
@@ -214,12 +218,12 @@ function render(){
     const cur=(PRICES[r.product_id]||[])[0];
     return `<tr id="row-${r.product_id}">${cells(r,cur)}
       <td class="acts"><button onclick="hist(${r.product_id})">🕘</button><button onclick="setArchived(${r.product_id},false)">↩</button></td></tr>`;
-  }).join('')||`<tr><td colspan="7" style="color:#94a3b8">Архив пуст</td></tr>`;
+  }).join('')||`<tr><td colspan="10" style="color:#94a3b8">Архив пуст</td></tr>`;
   const sorted=[...act].sort((a,b)=>(a.supplier||'—').localeCompare(b.supplier||'—','ru')||(a.name||'').localeCompare(b.name||'','ru'));
   let html='', lastSup=null;
   for(const r of sorted){
     const sup=r.supplier||'—';
-    if(sup!==lastSup){ html+=`<tr class="group"><td colspan="7">${esc(sup)}</td></tr>`; lastSup=sup; }
+    if(sup!==lastSup){ html+=`<tr class="group"><td colspan="10">${esc(sup)}</td></tr>`; lastSup=sup; }
     const cur=(PRICES[r.product_id]||[])[0];
     html+=`<tr id="row-${r.product_id}">${cells(r,cur)}
       <td class="acts"><button onclick="hist(${r.product_id})">🕘</button><button onclick="setArchived(${r.product_id},true)">🗄</button></td></tr>`;
@@ -248,6 +252,22 @@ async function editVat(pid){
   const val=prompt(`НДС для ${row.offer_id} (текущий: ${row.vat||'—'}):`, row.vat||'');
   if(val===null)return; const v=val.trim(); if(v===(row.vat||''))return;
   try{ await setField(pid,'vat',v); await saveMeta(pid,'vat',v); await load(); }catch(e){alert('Не сохранилось: '+e.message);}
+}
+const META_LABEL={supplier:'Поставщик',vat:'НДС',barcode:'ШК',box_qty:'В коробе, шт',boxes_per_pallet:'На паллете, кор.'};
+async function editText(pid,field){
+  const row=ROWS.find(x=>x.product_id===pid); if(!row)return;
+  const val=prompt(`${META_LABEL[field]} для ${row.offer_id} (текущее: ${row[field]||'—'}):`, row[field]||'');
+  if(val===null)return; const v=val.trim(); if(v===(row[field]||''))return;
+  try{ await setField(pid,field,v||null); await saveMeta(pid,field,v); await load(); }catch(e){alert('Не сохранилось: '+e.message);}
+}
+async function editInt(pid,field){
+  const row=ROWS.find(x=>x.product_id===pid); if(!row)return;
+  const val=prompt(`${META_LABEL[field]} для ${row.offer_id} (текущее: ${row[field]??'—'}):`, row[field]??'');
+  if(val===null)return; const t=val.trim();
+  const n=t===''?null:Number(t.replace(/\s/g,''));
+  if(n!==null&&(!Number.isInteger(n)||n<=0)){alert('Введите целое число больше 0');return;}
+  if(n===(row[field]??null))return;
+  try{ await setField(pid,field,n); await saveMeta(pid,field,n===null?'':String(n)); await load(); }catch(e){alert('Не сохранилось: '+e.message);}
 }
 async function setArchived(pid,val){
   try{
@@ -280,9 +300,9 @@ function hist(pid){
   const dayMap=new Map();
   const add=(d,html)=>{ const k=d.toDateString(); if(!dayMap.has(k))dayMap.set(k,{d:new Date(d.getFullYear(),d.getMonth(),d.getDate()),parts:[]}); dayMap.get(k).parts.push(html); };
   costs.forEach((p,i)=>{ add(new Date(p.created_at), `<span class="${i===0?'cur':''}">${Number(p.cost).toLocaleString('ru-RU')} ₽</span>${i===0?' (текущая)':''}`); });
-  (META[pid]||[]).forEach(m=>{ add(new Date(m.created_at), `${m.field==='supplier'?'Поставщик':'НДС'}: <b>${esc(m.value||'')}</b>`); });
+  (META[pid]||[]).forEach(m=>{ add(new Date(m.created_at), `${META_LABEL[m.field]||m.field}: <b>${esc(m.value||'')}</b>`); });
   const lines=[...dayMap.values()].sort((a,b)=>b.d-a.d).map(g=>`<div>${g.d.toLocaleDateString('ru-RU')} — ${g.parts.join(' • ')}</div>`).join('');
-  const html=`<tr class="histrow" id="hist-${pid}"><td colspan="7"><div class="hist">История изменений: `+(lines||'нет изменений')+`</div></td></tr>`;
+  const html=`<tr class="histrow" id="hist-${pid}"><td colspan="10"><div class="hist">История изменений: `+(lines||'нет изменений')+`</div></td></tr>`;
   const row=document.getElementById('row-'+pid); if(row) row.insertAdjacentHTML('afterend',html);
 }
 </script></body></html>
