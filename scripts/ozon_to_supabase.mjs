@@ -144,8 +144,7 @@ async function stocksOf(part){
     return [...await stocksOf(part.slice(0,h)), ...await stocksOf(part.slice(h))];
   }
 }
-for(let i=0;i<skus.length;i+=100){
-  (await stocksOf(skus.slice(i,i+100))).forEach(x=>{
+const addStock=x=>{
     const pid=skuPid.get(x.sku); if(pid==null||!x.cluster_name) return;
     const k=pid+'|'+x.cluster_name;
     const d=dem.get(k)||{product_id:pid,cluster:x.cluster_name,ads_cluster:0,available:0,transit:0,requested:0,days_without_sales:null};
@@ -153,9 +152,10 @@ for(let i=0;i<skus.length;i+=100){
     d.available+=x.available_stock_count||0; d.transit+=x.transit_stock_count||0; d.requested+=x.requested_stock_count||0;
     if(x.days_without_sales_cluster!=null) d.days_without_sales=x.days_without_sales_cluster;
     dem.set(k,d);
-  });
-  await sleep(500);
-}
+};
+for(let i=0;i<skus.length;i+=100){ (await stocksOf(skus.slice(i,i+100))).forEach(addStock); await sleep(500); }
+// вторая попытка для пропущенных SKU — разовые сбои Ozon обычно проходят
+if(badSkus.length){ await sleep(15000); const retry=badSkus.splice(0); (await stocksOf(retry)).forEach(addStock); }
 const runAt=new Date().toISOString();
 const demRows=[...dem.values()].map(d=>({...d,updated_at:runAt}));
 if(!demRows.length) throw new Error('analytics/stocks пуст — cluster_demand не обновлён');
@@ -166,8 +166,12 @@ for(let i=0;i<demRows.length;i+=500){
   });
   if(!up.ok) throw new Error(`supabase cluster_demand -> HTTP ${up.status}: ${await up.text()}`);
 }
-// пары, которых больше нет в выдаче Ozon
-await fetch(`${process.env.SUPABASE_URL}/rest/v1/cluster_demand?updated_at=lt.${encodeURIComponent(runAt)}`,{method:'DELETE',headers:SR});
+// пары, которых больше нет в выдаче Ozon; строки пропущенных SKU не трогаем — остаются вчерашние (видно по updated_at)
+const badPids=new Set(badSkus.map(s=>skuPid.get(s)));
+const okPids=[...new Set(demRows.map(d=>d.product_id))].filter(p=>!badPids.has(p));
+for(let i=0;i<okPids.length;i+=100){
+  await fetch(`${process.env.SUPABASE_URL}/rest/v1/cluster_demand?updated_at=lt.${encodeURIComponent(runAt)}&product_id=in.(${okPids.slice(i,i+100).join(',')})`,{method:'DELETE',headers:SR});
+}
 console.log('cluster_demand rows:',demRows.length,'| skus:',skus.length,'| skipped skus (Ozon error):',badSkus.join(', ')||'—');
 
 // === 9) Список кластеров Ozon: active в cluster_lead_times (сроки не трогаем) ===
