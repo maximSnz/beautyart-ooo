@@ -12,33 +12,14 @@ async function ozon(path,body){
 }
 const asArr=r=>Array.isArray(r?.result)?r.result:(r?.result?.items||[]);
 
-const WH={
- '1020000115166000':['Москва','ЖУКОВСКИЙ_РФЦ'],'23843917228000':['Москва','ПУШКИНО_1_РФЦ'],'15431806189000':['Москва','ХОРУГВИНО_РФЦ'],'23902289166000':['Москва','ПУШКИНО_2_РФЦ'],'1020001853819000':['Москва','ПЕТРОВСКОЕ_РФЦ'],'1020000759116000':['Москва','НОГИНСК_РФЦ'],'1020001853757000':['Москва','ДОМОДЕДОВО_РФЦ'],'1020000435290000':['Москва','ГРИВНО_РФЦ'],'1020000241710000':['Москва','СОФЬИНО_РФЦ'],
- '1020002006967000':['Ярославль','ЯРОСЛАВЛЬ_РФЦ'],
- '1020000267736000':['Краснодар','АДЫГЕЙСК_РФЦ'],'23601604393000':['Краснодар','НОВОРОССИЙСК_РФЦ'],'1020003111522000':['Краснодар','КРАСНОДАР_2_РФЦ'],
- '18044341087000':['Новосибирск','НОВОСИБИРСК_РФЦ_НОВЫЙ'],'1020005006583540':['Новосибирск','НОВОСИБИРСК_3_РФЦ'],'1020005006580020':['Новосибирск','КЕМЕРОВО_РФЦ'],
- '23599177351000':['Казань','НИЖНИЙ_НОВГОРОД_РФЦ'],'1020003105329000':['Казань','НИЖНИЙ_НОВГОРОД_2_РФЦ'],'18044494830000':['Казань','КАЗАНЬ_РФЦ_НОВЫЙ'],
- '1020002690706000':['Красноярск','КРАСНОЯРСК_СТАРЦЕВО_РФЦ'],'22296628035000':['Красноярск','КРАСНОЯРСК_МРФЦ'],
- '1020000310035000':['Саратов','ВОЛГОГРАД_РФЦ'],'1020001853897000':['Саратов','САРАТОВ_РФЦ'],
- '1020003110535000':['Ростов','РОСТОВ_НА_ДОНУ_2_РФЦ'],'17717042026000':['Ростов','РОСТОВ-НА-ДОНУ_РФЦ'],
- '23021125185000':['Тверь','ТВЕРЬ_РФЦ'],
- '1020000367015000':['Астана','АСТАНА_РФЦ'],
- '1020001351243000':['Невинномысск','НЕВИННОМЫССК_РФЦ'],
- '23402539267000':['Беларусь','МИНСК_МПСЦ'],
- '1020001835468000':['Омск','ОМСК_РФЦ'],
- '1020000890160000':['Дальний Восток','ХАБАРОВСК_2_РФЦ'],
- '22294782253000':['Калининград','КАЛИНИНГРАД_МРФЦ'],
- '1020001649180000':['Санкт-Петербург','СПБ_КОЛПИНО_РФЦ'],'1020002417800000':['Санкт-Петербург','СПБ_ПОРОШКИНО_РФЦ'],'18044249781000':['Санкт-Петербург','САНКТ-ПЕТЕРБУРГ_РФЦ'],'23903599483000':['Санкт-Петербург','СПБ_БУГРЫ_РФЦ'],'1020000613861000':['Санкт-Петербург','СПБ_ШУШАРЫ_РФЦ'],
- '23684735180000':['Воронеж','ВОРОНЕЖ_РФЦ'],'1020001007805000':['Воронеж','ВОРОНЕЖ_2_РФЦ'],
- '1020002007530000':['Тюмень','ТЮМЕНЬ_РФЦ'],
- '18044570445000':['Екатеринбург','ЕКАТЕРИНБУРГ_РФЦ_НОВЫЙ'],
- '23948599159000':['Пермь','ПЕРМЬ_РФЦ'],
- '1020001836298000':['Уфа','УФА_РФЦ'],
- '23128509046000':['Самара','САМАРА_РФЦ'],
- '1020001836200000':['Оренбург','ОРЕНБУРГ_РФЦ'],
- '1020000407473000':['Армения','ЕРЕВАН_МРФЦ'],
- '1020001854016000':['Алматы','АЛМАТЫ_2_РФЦ'],
-};
+// === 0) Склады → кластеры из Ozon (/v1/cluster/list), вместо ручного справочника ===
+const WH={}, OZON_CLUSTERS=new Set();
+for(const cluster_type of ['CLUSTER_TYPE_OZON','CLUSTER_TYPE_CIS']){
+  const r=await ozon('/v1/cluster/list',{cluster_type,cluster_ids:[]});
+  (r.clusters||[]).forEach(c=>{ OZON_CLUSTERS.add(c.name); (c.logistic_clusters||[]).forEach(l=>(l.warehouses||[]).forEach(w=>{ WH[String(w.warehouse_id)]=[c.name,w.name]; })); });
+}
+console.log('ozon clusters:',OZON_CLUSTERS.size,'| warehouses:',Object.keys(WH).length);
+if(!OZON_CLUSTERS.size) throw new Error('cluster/list пуст — прерываю, чтобы не затереть кластеры');
 
 // === 1) Все товары ===
 let items=[],last_id='';
@@ -142,3 +123,51 @@ for(let i=0;i<stale.length;i+=100){
   await fetch(`${process.env.SUPABASE_URL}/rest/v1/product_stocks?product_id=in.(${stale.slice(i,i+100).join(',')})`,{method:'DELETE',headers:SR});
 }
 console.log('stale stock products removed:', stale.length);
+
+// === 8) Спрос и остатки по кластерам (/v1/analytics/stocks) → cluster_demand ===
+// ads_cluster — среднесуточные продажи кластера за 28 дн (сверено с отчётом «Рекомендуемая поставка»);
+// ads по складам не суммировать — это не спрос.
+const skuPid=new Map();
+for(let i=0;i<items.length;i+=100){
+  const r=await ozon('/v3/product/info/list',{product_id:items.slice(i,i+100).map(x=>x.product_id)});
+  (r.items||[]).forEach(it=>[it.sku,...(it.sources||[]).map(s=>s.sku)].forEach(s=>{ if(s) skuPid.set(s,it.id); }));
+  await sleep(300);
+}
+const dem=new Map();
+const skus=[...skuPid.keys()];
+for(let i=0;i<skus.length;i+=100){
+  const r=await ozon('/v1/analytics/stocks',{skus:skus.slice(i,i+100)});
+  (r.items||[]).forEach(x=>{
+    const pid=skuPid.get(x.sku); if(pid==null||!x.cluster_name) return;
+    const k=pid+'|'+x.cluster_name;
+    const d=dem.get(k)||{product_id:pid,cluster:x.cluster_name,ads_cluster:0,available:0,transit:0,requested:0,days_without_sales:null};
+    d.ads_cluster=Math.max(d.ads_cluster,x.ads_cluster||0);
+    d.available+=x.available_stock_count||0; d.transit+=x.transit_stock_count||0; d.requested+=x.requested_stock_count||0;
+    if(x.days_without_sales_cluster!=null) d.days_without_sales=x.days_without_sales_cluster;
+    dem.set(k,d);
+  });
+  await sleep(500);
+}
+const runAt=new Date().toISOString();
+const demRows=[...dem.values()].map(d=>({...d,updated_at:runAt}));
+if(!demRows.length) throw new Error('analytics/stocks пуст — cluster_demand не обновлён');
+for(let i=0;i<demRows.length;i+=500){
+  const up=await fetch(`${process.env.SUPABASE_URL}/rest/v1/cluster_demand?on_conflict=product_id,cluster`,{
+    method:'POST', headers:{ ...SR, 'Content-Type':'application/json', Prefer:'resolution=merge-duplicates' },
+    body:JSON.stringify(demRows.slice(i,i+500))
+  });
+  if(!up.ok) throw new Error(`supabase cluster_demand -> HTTP ${up.status}: ${await up.text()}`);
+}
+// пары, которых больше нет в выдаче Ozon
+await fetch(`${process.env.SUPABASE_URL}/rest/v1/cluster_demand?updated_at=lt.${encodeURIComponent(runAt)}`,{method:'DELETE',headers:SR});
+console.log('cluster_demand rows:',demRows.length,'| skus:',skus.length);
+
+// === 9) Список кластеров Ozon: active в cluster_lead_times (сроки не трогаем) ===
+const lt=await (await fetch(`${process.env.SUPABASE_URL}/rest/v1/cluster_lead_times?select=cluster,active`,{headers:SR})).json();
+for(const c of lt){
+  const act=OZON_CLUSTERS.has(c.cluster);
+  if(act!==c.active) await fetch(`${process.env.SUPABASE_URL}/rest/v1/cluster_lead_times?cluster=eq.${encodeURIComponent(c.cluster)}`,{method:'PATCH',headers:{...SR,'Content-Type':'application/json'},body:JSON.stringify({active:act,updated_at:runAt})});
+}
+const known=new Set(lt.map(c=>c.cluster));
+console.log('clusters inactive:',lt.filter(c=>!OZON_CLUSTERS.has(c.cluster)).map(c=>c.cluster).join(', ')||'—',
+            '| new in Ozon (сроки не заданы):',[...OZON_CLUSTERS].filter(c=>!known.has(c)).join(', ')||'—');
