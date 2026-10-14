@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beauty Art — Заявка на закупку Ozon</title>
+<link href="https://fonts.googleapis.com/css2?family=Forum&display=swap" rel="stylesheet">
+<style>
+ body{font-family:'Forum',-apple-system,sans-serif;background:linear-gradient(135deg,#78A6C7,#E33D78,#7D3673);min-height:100vh;padding:20px;margin:0}
+ .login{max-width:1200px;margin:40px auto;background:#fff;border-radius:16px;padding:30px;box-shadow:0 10px 30px rgba(28,13,46,.3)}
+ .wrap{max-width:1200px;margin:0 auto 40px;background:#fff;border-radius:16px;padding:30px;box-shadow:0 10px 30px rgba(28,13,46,.3)}
+ h2{font-family:'Forum';color:#1C0D2E}
+ input,select{padding:6px 8px;border:2px solid rgba(84,66,115,.2);border-radius:8px;font-family:'Forum';font-size:.9em}
+ button{padding:6px 10px;border:none;border-radius:8px;background:linear-gradient(90deg,#78A6C7,#E33D78);color:#fff;font-family:'Forum';cursor:pointer}
+ table{width:100%;border-collapse:collapse;font-size:.88em}
+ th,td{padding:6px 8px;border-bottom:1px dashed #cbd5e1;text-align:left;vertical-align:middle}
+ th{color:#666}
+ .hide{display:none}
+ .meta{color:#94a3b8;font-size:.85em;margin:6px 0}
+ .err{color:#E33D78;font-size:.9em;margin:8px 0}
+ .cost{font-weight:700;color:#1C0D2E}
+ .acts{white-space:nowrap}
+ .acts button{margin-right:4px}
+ .histrow td{background:#f8f9fb}
+ .hist{font-size:.85em;color:#544273}
+ .cur{color:#22c55e;font-weight:700}
+ .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+ .toolbar input{flex:1;min-width:200px}
+ .legend{margin-left:auto;color:#94a3b8;font-size:.8em;white-space:nowrap}
+ details.arc{border:2px solid rgba(84,66,115,.15);border-radius:10px;background:#f8f9fb;margin:0 0 14px}
+ details.arc summary{cursor:pointer;padding:10px 14px;font-family:'Forum';color:#544273;user-select:none}
+ details.arc[open] summary{border-bottom:2px solid rgba(84,66,115,.1)}
+ details.arc .inner{padding:10px 14px}
+ tr.group td{background:linear-gradient(90deg,rgba(120,166,199,.18),transparent);font-weight:700;color:#544273;padding-top:16px;border-bottom:2px solid rgba(84,66,115,.2)}
+ .editable{cursor:pointer;white-space:nowrap}
+ .editable::after{content:" ✎";opacity:.3;font-size:.8em}
+ .editable:hover{color:#E33D78}
+ .editable:hover::after{opacity:1}
+
+ /* === ШАПКА (на градиенте) === */
+ .header {
+   max-width: 1200px; margin: 20px auto 20px;
+   display: flex; align-items: center; gap: 20px;
+   padding: 25px 30px; background: rgba(255, 255, 255, 0.15);
+   border-radius: 16px; border: 2px solid rgba(255, 255, 255, 0.3);
+   box-shadow: 0 8px 32px rgba(28, 13, 46, 0.2);
+   position: relative; z-index: 200;
+ }
+ .logo-link { display: inline-block; flex: 0 0 auto; }
+ .logo {
+   width: 80px; height: auto; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+   transition: transform .3s ease; display: block;
+ }
+ .logo-link:hover .logo { transform: scale(1.1); }
+ .company-name {
+   font-family: 'Forum', serif; font-size: 2.5em; font-weight: 400; color: white;
+   text-shadow: 0 2px 8px rgba(28, 13, 46, 0.4); letter-spacing: 2px;
+ }
+ .header-nav { margin-left: auto; display: flex; gap: 10px; }
+ .nav-item { position: relative; }
+ .nav-btn {
+   background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.3);
+   border-radius: 10px; color: #fff; padding: 10px 16px;
+   font-family: 'Forum', serif; font-size: 1em; cursor: pointer;
+   display: inline-flex; align-items: center; gap: 8px; transition: all .3s;
+   text-shadow: 0 1px 3px rgba(0,0,0,0.25);
+ }
+ .nav-btn:hover { background: rgba(255,255,255,0.25); transform: translateY(-1px); }
+ .nav-btn .caret { font-size: .72em; transition: transform .2s; }
+ .nav-item.open .nav-btn .caret { transform: rotate(180deg); }
+ .nav-menu {
+   position: absolute; top: calc(100% + 10px); right: 0; min-width: 250px;
+   background: rgba(255,255,255,0.18);
+   backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+   border: 1px solid rgba(255,255,255,0.35); border-radius: 12px;
+   padding: 8px; display: none; z-index: 300;
+   box-shadow: 0 10px 30px rgba(28,13,46,.25);
+ }
+ .nav-item.open .nav-menu { display: block; }
+ .nav-menu a {
+   display: block; padding: 10px 14px; border-radius: 8px; color: #fff;
+   text-decoration: none; font-family: 'Forum', serif; font-size: .95em;
+   transition: background .2s; text-shadow: 0 1px 3px rgba(0,0,0,.25);
+ }
+ .nav-menu a:hover { background: rgba(255,255,255,0.22); }
+
+ @media (max-width:640px){
+   body{padding:8px}
+   .login,.wrap{padding:16px;margin:16px auto;border-radius:12px}
+   h2{font-size:1.15em}
+   .toolbar{flex-direction:column;align-items:stretch}
+   button{padding:10px 14px;font-size:1em}
+   table{font-size:.78em}
+   th,td{padding:5px 6px}
+   .meta{font-size:.78em}
+   .header { flex-wrap: wrap; }
+   .header-nav { margin-left: 0; width: 100%; }
+ }
+
+ /* === Заявка на закупку === */
+ .wbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 10px}
+ .wbar .wlbl{font-size:1.25em;color:#1C0D2E;min-width:170px;text-align:center}
+ .btn2{background:#fff;color:#544273;border:2px solid rgba(84,66,115,.2)}
+ .btn2:hover{border-color:#E33D78;color:#E33D78}
+ .btn2.on{border-color:#E33D78;color:#E33D78}
+ .steps{display:flex;gap:6px;margin:4px 0 10px;flex-wrap:wrap}
+ .step{flex:1;min-width:150px;padding:8px 10px;border-radius:10px;background:#f8f9fb;border:2px solid rgba(84,66,115,.1);color:#94a3b8;font-size:.9em}
+ .step.on{border-color:#E33D78;color:#1C0D2E;background:linear-gradient(90deg,rgba(120,166,199,.15),rgba(227,61,120,.12))}
+ .step.done{color:#22c55e}
+ .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0 14px}
+ .card{background:#f8f9fb;border:2px solid rgba(84,66,115,.1);border-radius:12px;padding:10px 12px}
+ .card .l{color:#94a3b8;font-size:.82em}
+ .card .v{font-size:1.5em;color:#1C0D2E}
+ .sec{margin:18px 0 6px;color:#544273;font-size:1.15em}
+ td.n,th.n{text-align:right;white-space:nowrap}
+ .num{width:62px;text-align:right;padding:4px 6px}
+ tr.prow{cursor:pointer}
+ tr.prow:hover td{background:rgba(120,166,199,.08)}
+ tr.sub td{background:#f8f9fb;font-size:.92em}
+ .ok{color:#22c55e}.bad{color:#E33D78}.warn{color:#d97706}.mute{color:#94a3b8}
+ .pal{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
+ .pal .card .v{font-size:1.15em}
+ .lt input{width:46px;text-align:right;padding:3px 5px}
+ details.box{border:2px solid rgba(84,66,115,.15);border-radius:10px;background:#f8f9fb;margin:10px 0}
+ details.box summary{cursor:pointer;padding:10px 14px;color:#544273;user-select:none}
+ details.box .inner{padding:6px 14px 12px;overflow-x:auto}
+ .scroll{overflow-x:auto}
+ .note{font-size:.82em;color:#94a3b8;margin:4px 0}
+ .lock{font-size:.85em;color:#94a3b8;margin-left:6px}
+ @media (max-width:640px){ .wbar .wlbl{min-width:0;font-size:1.05em} .step{min-width:120px} }
+</style></head>
+<body>
+<div class="login" id="login">
+  <h2>Закрытый раздел</h2>
+  <input type="password" id="pwd" placeholder="Пароль" onkeypress="if(event.key==='Enter')go()">
+  <button onclick="go()">Войти</button>
+</div>
+<div class="hide" id="app">
+  <div class="header">
+    <a href="index.html" class="logo-link" title="На главную">
+      <img src="https://i.ibb.co/ZzbPQmQt/IMG-8031.png" alt="Beauty Art Logo" class="logo">
+    </a>
+    <div class="company-name">Beauty Art</div>
+    <nav class="header-nav">
+      <div class="nav-item">
+        <button class="nav-btn" onclick="toggleNav(this)">Управление продажами <span class="caret">▾</span></button>
+        <div class="nav-menu">
+          <a href="weekly.html">Управление остатками</a>
+          <a href="plan.html">Реализация плана продаж</a>
+          <a href="private.html">Сводный отчёт</a>
+        </div>
+      </div>
+      <div class="nav-item">
+        <button class="nav-btn" onclick="toggleNav(this)">Управление закупками <span class="caret">▾</span></button>
+        <div class="nav-menu">
+          <a href="products.html">База товаров</a>
+          <a href="purchase.html">Заявка на закупку</a>
+        </div>
+      </div>
+    </nav>
+  </div>
+  <div class="wrap">
+    <h2>🚚 Заявка на закупку Ozon · <span id="ent"></span></h2>
+    <div class="meta" id="meta">загрузка…</div>
+    <div class="err" id="err"></div>
+
+    <div class="wbar">
+      <button class="btn2" onclick="shiftWeek(-7)" title="Предыдущая неделя">◀</button>
+      <div class="wlbl" id="wlbl"></div>
+      <button class="btn2" onclick="shiftWeek(7)" title="Следующая неделя">▶</button>
+      <span class="mute" id="wnote"></span>
+      <span style="flex:1"></span>
+      <span id="actions"></span>
+    </div>
+    <div class="steps" id="steps"></div>
+
+    <div class="toolbar">
+      <button class="btn2" data-f="all" onclick="setF('all')">Все</button>
+      <button class="btn2" data-f="m1" onclick="setF('m1')">Илья</button>
+      <button class="btn2" data-f="m2" onclick="setF('m2')">Ольга</button>
+      <input id="q" placeholder="Поиск по артикулу / названию" oninput="render()">
+    </div>
+    <div class="cards" id="cards"></div>
+
+    <details class="box" id="ltBox">
+      <summary>⏱ Сроки недели по кластерам <span class="lock" id="ltLock"></span></summary>
+      <div class="inner" id="lt"></div>
+    </details>
+
+    <div class="sec" id="h1">Заявка менеджера</div>
+    <div class="note">Расчёт = (спрос × (покрытие + запас) − остаток − в пути) ÷ штук в коробе − заявки прошлых недель. Нажмите на товар, чтобы раскрыть кластеры.</div>
+    <div class="scroll"><table id="t1"></table></div>
+
+    <div class="sec">Потребность месяца</div>
+    <div class="scroll"><table id="tn"></table></div>
+
+    <div class="sec">Закупщик: на ФФ и согласование с поставщиком</div>
+    <div class="scroll"><table id="t2"></table></div>
+    <div class="cards" id="sup"></div>
+
+    <div class="sec">Паллеты по кластерам</div>
+    <div class="note">Норма — средняя загрузка 0,8–1,15 на паллету. Считается по всем товарам юрлица.</div>
+    <div class="pal" id="pal"></div>
+  </div>
+</div>
+<script>
+function toggleNav(btn) {
+  const item = btn.closest('.nav-item');
+  const wasOpen = item.classList.contains('open');
+  document.querySelectorAll('.nav-item.open').forEach(i => i.classList.remove('open'));
+  if (!wasOpen) item.classList.add('open');
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.nav-item')) {
+    document.querySelectorAll('.nav-item.open').forEach(i => i.classList.remove('open'));
+  }
+});
+
+const ENTITY='ООО';
+const PASSWORD_HASHES=['6dd81b2b2385ffaeae34bc09050f3258110c5c7f1db578c69bcbc30ad8a121e0','8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918'];
+const SUPABASE_URL='https://jaruwkpugxybwcsalhgr.supabase.co';
+const ANON='sb_publishable_09rFaH3adGXnEO3-cybX9A_eK_mCnW0';
+const HD={apikey:ANON,Authorization:'Bearer '+ANON};
+function matrixOf(offer){ return (/^(CAP|INS|FW|MS|ML|SE)-/.test(offer))?'m1':'m2'; } // ООО: Илья — CAP, INS, FW, MS, ML, SE; остальные — Ольга
+const MGR={m1:'Илья',m2:'Ольга'};
+const STAGES=[['draft','Заявка менеджера · пн'],['at_buyer','Закупщик: ФФ и согласование · до чт'],['distribution','Распределение по кластерам'],['closed','Закрыта']];
+const STAGE_BTN={draft:'Отправить закупщику',at_buyer:'Согласовано',distribution:'Подтвердить распределение'};
+const LT_F=['force_majeure_days','approval_days','supplier_to_ff_days','ff_assembly_days','ff_to_ozon_days','acceptance_days'];
+const LT_H=['Форс-мажор','Согласование','Поставщик → ФФ','Сборка на ФФ','ФФ → Ozon','Приёмка'];
+
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nf=new Intl.NumberFormat('ru-RU',{maximumFractionDigits:1});
+const rnd=x=>Math.sign(x)*Math.round(Math.abs(x));
+const pad=n=>String(n).padStart(2,'0');
+const localISO=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseISO=s=>{const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);};
+const addD=(s,n)=>{const d=parseISO(s);d.setDate(d.getDate()+n);return localISO(d);};
+const keyOfMonday=d=>{const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()-((x.getDay()+6)%7));return localISO(x);};
+const ddmm=s=>{const d=parseISO(s);return `${pad(d.getDate())}.${pad(d.getMonth()+1)}`;};
+const monthOfWeek=w=>addD(w,3).slice(0,7);
+function isoWeeksOfMonth(ym){const[y,m]=ym.split('-').map(Number);let w=keyOfMonday(new Date(y,m-1,1));if(monthOfWeek(w)!==ym)w=addD(w,7);const out=[];while(monthOfWeek(w)===ym){out.push(w);w=addD(w,7);}return out;}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function getAll(path){
+  let out=[],off=0;
+  for(;;){
+    const r=await fetch(SUPABASE_URL+path+(path.includes('?')?'&':'?')+`limit=1000&offset=${off}`,{headers:HD});
+    if(!r.ok) throw new Error(path.split('?')[0].replace('/rest/v1/','')+' HTTP '+r.status);
+    const j=await r.json(); out=out.concat(j); if(j.length<1000) break; off+=1000;
+  }
+  return out;
+}
+async function upsert(table,rows,conflict){
+  for(let i=0;i<rows.length;i+=500){
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=${conflict}`,{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows.slice(i,i+500))});
+    if(!r.ok) throw new Error(`${table} HTTP ${r.status}: ${await r.text()}`);
+  }
+}
+async function patchWeek(body){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/purchase_weeks?week=eq.${WEEK}`,{method:'PATCH',headers:{...HD,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify({...body,updated_at:new Date().toISOString()})});
+  if(!r.ok) throw new Error('purchase_weeks HTTP '+r.status);
+}
+
+// ===== состояние =====
+let PROD=[],NOBOX=[],DEM=new Map(),DEM_AT='',SEED={},ACTIVE=new Set(),WEEKS={};
+let WEEK=addD(keyOfMonday(new Date()),7),F='all',OPEN=null;
+let WLT={},LT_SRC='',LINES=new Map(),PREV=new Map(),SUP={},NEEDS={},MONTH_REQ={},MODEL=[];
+
+async function go(){
+  const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(document.getElementById('pwd').value));
+  const h=[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+  if(!PASSWORD_HASHES.includes(h)){alert('Неверный пароль');return;}
+  document.getElementById('login').classList.add('hide');
+  document.getElementById('app').classList.remove('hide');
+  init();
+}
+async function init(){
+  document.getElementById('ent').textContent=ENTITY;
+  try{ await loadBase(); await loadWeek(); }catch(e){ document.getElementById('err').textContent='Ошибка загрузки: '+e.message; }
+}
+async function loadBase(){
+  const [pr,dm,lt,wk]=await Promise.all([
+    getAll('/rest/v1/products?select=product_id,offer_id,name,supplier,box_qty,boxes_per_pallet,archived&order=product_id'),
+    getAll('/rest/v1/cluster_demand?select=product_id,cluster,ads_cluster,available,transit,days_without_sales,updated_at&order=product_id,cluster'),
+    getAll('/rest/v1/cluster_lead_times?select=*&order=cluster'),
+    getAll('/rest/v1/purchase_weeks?select=*&order=week')
+  ]);
+  const act=pr.filter(p=>!p.archived);
+  PROD=act.filter(p=>p.box_qty>0).map(p=>({...p,m:matrixOf(p.offer_id)}));
+  NOBOX=act.filter(p=>!(p.box_qty>0));
+  DEM=new Map(); DEM_AT='';
+  dm.forEach(d=>{ if(!DEM.has(d.product_id))DEM.set(d.product_id,new Map()); DEM.get(d.product_id).set(d.cluster,d); if(d.updated_at>DEM_AT)DEM_AT=d.updated_at; });
+  SEED={}; ACTIVE=new Set(); lt.forEach(c=>{ SEED[c.cluster]=c; if(c.active)ACTIVE.add(c.cluster); });
+  WEEKS={}; wk.forEach(w=>WEEKS[w.week]=w);
+}
+const ST=()=>WEEKS[WEEK]?.status||null;
+async function loadWeek(){
+  document.getElementById('err').textContent='';
+  const w=WEEKS[WEEK];
+  // сроки недели: свои, иначе — последней предыдущей недели, иначе — стартовые
+  let lt=w?await getAll(`/rest/v1/purchase_week_lead_times?select=*&week=eq.${WEEK}&order=cluster`):[];
+  LT_SRC=lt.length?'week':'';
+  if(!lt.length){
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/purchase_week_lead_times?select=week&week=lt.${WEEK}&order=week.desc&limit=1`,{headers:HD});
+    const j=r.ok?await r.json():[];
+    if(j.length){ lt=await getAll(`/rest/v1/purchase_week_lead_times?select=*&week=eq.${j[0].week}&order=cluster`); LT_SRC='copy:'+j[0].week; }
+    else { lt=Object.values(SEED); LT_SRC='seed'; }
+  }
+  WLT={}; lt.forEach(c=>{ WLT[c.cluster]={...c}; });
+  const maxPrev=Math.max(2,...Object.values(WLT).map(c=>c.prev_weeks||0));
+  const prevWeeks=[...Array(maxPrev)].map((_,i)=>addD(WEEK,-7*(i+1)));
+  const month=monthOfWeek(WEEK), mWeeks=isoWeeksOfMonth(month).filter(x=>x<WEEK);
+  const [ln,pv,sp,nd,mr]=await Promise.all([
+    w?getAll(`/rest/v1/purchase_lines?select=*&week=eq.${WEEK}&order=product_id,cluster`):[],
+    getAll(`/rest/v1/purchase_lines?select=week,product_id,cluster,requested_boxes,distributed_boxes&week=in.(${prevWeeks.join(',')})&order=week,product_id,cluster`),
+    w?getAll(`/rest/v1/purchase_supply?select=*&week=eq.${WEEK}&order=product_id`):[],
+    getAll(`/rest/v1/purchase_needs?select=product_id,need_boxes,agreed_boxes&month=eq.${month}&order=product_id`),
+    mWeeks.length?getAll(`/rest/v1/purchase_lines?select=week,product_id,requested_boxes&week=in.(${mWeeks.join(',')})&order=week,product_id,cluster`):[]
+  ]);
+  LINES=new Map(); ln.forEach(l=>LINES.set(l.product_id+'|'+l.cluster,l));
+  PREV=new Map(); pv.forEach(l=>{ const k=l.week+'|'+l.product_id+'|'+l.cluster; PREV.set(k,(l.distributed_boxes??l.requested_boxes)||0); });
+  SUP={}; sp.forEach(s=>SUP[s.product_id]=s);
+  NEEDS={}; nd.forEach(n=>NEEDS[n.product_id]=n.agreed_boxes??n.need_boxes);
+  MONTH_REQ={}; mr.forEach(l=>{ MONTH_REQ[l.product_id]=(MONTH_REQ[l.product_id]||0)+(l.requested_boxes||0); });
+  OPEN=null; build(); render();
+}
+
+// ===== расчёт =====
+const cov=c=>LT_F.reduce((s,f)=>s+(Number(c[f])||0),0);
+function build(){
+  const st=ST(), live=!st||st==='draft';
+  MODEL=PROD.map(p=>{
+    const dem=DEM.get(p.product_id)||new Map();
+    const names=new Set([...dem.keys()]);
+    LINES.forEach((l,k)=>{ if(l.product_id===p.product_id) names.add(l.cluster); });
+    const rows=[];
+    for(const c of names){
+      const lt=WLT[c], line=LINES.get(p.product_id+'|'+c), d=dem.get(c);
+      const src=live?{ads:Number(d?.ads_cluster)||0,av:d?.available||0,tr:d?.transit||0}:{ads:line?.ads==null?null:Number(line.ads),av:line?.available??null,tr:line?.transit??null};
+      const nPrev=lt?lt.prev_weeks:2;
+      let prev=0; for(let i=1;i<=nPrev;i++) prev+=PREV.get(addD(WEEK,-7*i)+'|'+p.product_id+'|'+c)||0;
+      if(!live&&line) prev=line.prev_boxes??prev;
+      const noLt=!lt, inactive=SEED[c]&&!ACTIVE.has(c);
+      let calc=null;
+      if(!noLt&&!inactive){ calc=Math.max(0,rnd((src.ads*(cov(lt)+(Number(lt.target_days)||0))-(src.av+src.tr))/p.box_qty)-prev); }
+      if(!live&&line) calc=line.calc_boxes;
+      const req=line?.requested_boxes??(live?(calc||0):0);
+      if(!(src.ads>0||src.av>0||src.tr>0||prev>0||req>0||line)) continue;
+      const noSnap=!live&&line&&line.ads==null;
+      rows.push({c,noSnap,ads:src.ads||0,av:src.av||0,tr:src.tr||0,prev,calc,req,dist:line?.distributed_boxes??null,noLt,inactive,dws:d?.days_without_sales});
+    }
+    rows.sort((a,b)=>b.ads-a.ads||a.c.localeCompare(b.c,'ru'));
+    const s=SUP[p.product_id]||{};
+    return {...p,rows,ff:s.ff_boxes||0,ag:s.agreed_boxes??null,comment:s.comment||''};
+  });
+}
+const S=(a,f)=>a.reduce((x,r)=>x+(f(r)||0),0);
+const reqOf=p=>S(p.rows,r=>r.req);
+const calcOf=p=>S(p.rows,r=>r.calc);
+const buyOf=p=>Math.max(reqOf(p)-p.ff,0);
+const vis=()=>{const q=document.getElementById('q').value.toLowerCase();return MODEL.filter(p=>(F==='all'||p.m===F)&&((p.offer_id||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q))).sort((a,b)=>reqOf(b)-reqOf(a)||calcOf(b)-calcOf(a)||a.offer_id.localeCompare(b.offer_id));};
+
+// ===== отрисовка =====
+function setF(f){F=f;render();}
+function render(){
+  const st=ST();
+  document.querySelectorAll('[data-f]').forEach(b=>b.classList.toggle('on',b.dataset.f===F));
+  document.getElementById('wlbl').textContent=`${ddmm(WEEK)}–${ddmm(addD(WEEK,6))}`;
+  const thisMon=keyOfMonday(new Date());
+  document.getElementById('wnote').textContent=WEEK===addD(thisMon,7)?'заявка этой недели':WEEK===thisMon?'на согласовании':'';
+  const stIdx=st?STAGES.findIndex(s=>s[0]===st):-1;
+  document.getElementById('steps').innerHTML=STAGES.map((s,i)=>`<div class="step ${i===stIdx?'on':i<stIdx?'done':''}">${i<stIdx?'✓ ':''}${s[1]}</div>`).join('');
+  const a=document.getElementById('actions');
+  if(!st) a.innerHTML=`<button onclick="createWeek()">Создать заявку на ${ddmm(WEEK)}</button>`;
+  else a.innerHTML=(STAGE_BTN[st]?`<button onclick="nextStage()">${STAGE_BTN[st]}</button> `:'<span class="ok">Неделя закрыта</span> ')+(stIdx>0?`<button class="btn2" onclick="prevStage()">↩ Вернуть на шаг</button>`:'');
+  const dAt=DEM_AT?new Date(DEM_AT):null, old=dAt&&(Date.now()-dAt)>36*3600e3;
+  document.getElementById('meta').innerHTML=`Спрос и остатки Ozon (API): ${dAt?dAt.toLocaleString('ru-RU'):'нет данных'}${old?' <span class="bad">— данные старше 36 ч</span>':''}`
+    +(st&&st!=='draft'?(MODEL.some(p=>p.rows.some(r=>r.noSnap))?' • <span class="warn">неделя перенесена из Google-таблицы: спроса и остатков на ту дату нет</span>':' • показан снимок на момент отправки'):'')
+    +` • товаров в расчёте: ${PROD.length}`+(NOBOX.length?` • <span class="warn">без «в коробе»: ${NOBOX.length}</span> (заполните в «Базе товаров»)`:'');
+  renderLT(); renderCards(); renderT1(); renderNeeds(); renderT2(); renderPal();
+}
+function renderCards(){
+  const v=vis(), q=S(v,reqOf), b=S(v,buyOf), ag=S(v,p=>p.ag), has=v.some(p=>p.ag!=null);
+  document.getElementById('cards').innerHTML=[['Расчёт, кор.',v.length&&v.every(p=>p.rows.every(r=>r.noSnap))?'—':nf.format(S(v,calcOf))],['Заявлено, кор.',nf.format(q)],['На ФФ, кор.',nf.format(S(v,p=>p.ff))],['К закупке, кор.',nf.format(b)],['Согласовано',has&&b?Math.round(ag/b*100)+'%':'—']]
+    .map(([l,x])=>`<div class="card"><div class="l">${l}</div><div class="v">${x}</div></div>`).join('');
+}
+function renderLT(){
+  const st=ST(), ed=st==='draft';
+  document.getElementById('ltLock').textContent=ed?'— можно менять, пока заявка в черновике':!st?'— заявка не создана: при создании скопируются сроки '+(LT_SRC.startsWith('copy')?'недели '+ddmm(LT_SRC.slice(5)):'по умолчанию'):'— только просмотр';
+  const used=new Set(); MODEL.forEach(p=>p.rows.forEach(r=>used.add(r.c)));
+  const names=[...new Set([...Object.keys(WLT),...used])].sort((a,b)=>a.localeCompare(b,'ru'));
+  let h=`<table class="lt"><tr><th>Кластер</th>${LT_H.map(x=>`<th class="n">${x}</th>`).join('')}<th class="n">Покрытие</th><th class="n">Запас</th><th class="n">Вычесть заявок</th></tr>`;
+  for(const c of names){
+    const r=WLT[c], inactive=SEED[c]&&!ACTIVE.has(c);
+    if(!r){ h+=`<tr><td>${esc(c)}</td><td colspan="9" class="bad">сроки не заданы — расчёт по кластеру не идёт ${ed?`<button class="btn2" onclick="addLT('${esc(c)}')">задать</button>`:''}</td></tr>`; continue; }
+    const inp=f=>ed?`<input class="num" type="number" min="0" step="1" value="${r[f]??0}" onchange="setLT('${esc(c)}','${f}',this.value)">`:(r[f]??0);
+    h+=`<tr><td>${esc(c)}${inactive?' <span class="mute">(нет у Ozon)</span>':''}</td>${LT_F.map(f=>`<td class="n">${inp(f)}</td>`).join('')}<td class="n"><b>${cov(r)}</b></td><td class="n">${inp('target_days')}</td><td class="n">${inp('prev_weeks')}</td></tr>`;
+  }
+  document.getElementById('lt').innerHTML=h+'</table>';
+}
+function palOf(p,boxes){return p.boxes_per_pallet>0?boxes/p.boxes_per_pallet:null;}
+function renderT1(){
+  const st=ST(), v=vis(), ed=st==='draft', dist=st==='distribution'||st==='closed', edD=st==='distribution';
+  document.getElementById('h1').textContent=dist?'Распределение обеспеченного по кластерам':'Заявка менеджера';
+  let h=`<tr><th>Товар</th><th class="n">Спрос, шт/дн</th><th class="n">Остаток + в пути</th><th class="n">Расчёт, кор.</th><th class="n">Заявлено, кор.</th><th class="n">${dist?'Распределено':'Паллет'}</th></tr>`;
+  if(!v.length) h+=`<tr><td colspan="6" class="mute">Нет товаров</td></tr>`;
+  for(const p of v){
+    const q=reqOf(p), pl=palOf(p,q);
+    h+=`<tr class="prow" onclick="toggle(${p.product_id})"><td>${OPEN===p.product_id?'▾':'▸'} <b>${esc(p.offer_id)}</b><div class="mute" style="font-size:.85em">${esc(p.name)} · ${MGR[p.m]} · ${p.box_qty} шт/кор.</div></td>
+      <td class="n">${p.rows.length&&p.rows.every(r=>r.noSnap)?'<span class="mute">—</span>':nf.format(S(p.rows,r=>r.ads))}</td><td class="n">${p.rows.length&&p.rows.every(r=>r.noSnap)?'<span class="mute">—</span>':nf.format(S(p.rows,r=>r.av+r.tr))}</td><td class="n">${p.rows.length&&p.rows.every(r=>r.noSnap)?'<span class="mute">—</span>':nf.format(calcOf(p))}</td><td class="n"><b>${q}</b></td>
+      <td class="n">${dist?S(p.rows,r=>r.dist):(pl==null?'<span class="mute">—</span>':pl.toFixed(2))}</td></tr>`;
+    if(OPEN!==p.product_id) continue;
+    h+=`<tr class="sub"><td colspan="6"><table><tr><th>Кластер</th><th class="n">Спрос/дн</th><th class="n">Остаток</th><th class="n">В пути</th><th class="n">Прошлые заявки</th><th class="n">Расчёт</th><th class="n">Заявлено</th>${dist?'<th class="n">Распределено</th>':''}</tr>`;
+    for(const r of p.rows){
+      const calcTxt=r.inactive?'<span class="mute">нет у Ozon</span>':r.noLt?'<span class="bad">нет сроков</span>':nf.format(r.calc);
+      const dash='<span class="mute">—</span>';
+      h+=`<tr><td>${esc(r.c)}</td><td class="n">${r.noSnap?dash:nf.format(r.ads)}</td><td class="n">${r.noSnap?dash:r.av}</td><td class="n">${r.noSnap?dash:r.tr}</td><td class="n">${r.noSnap&&!r.prev?dash:r.prev}</td><td class="n">${r.calc==null&&r.noSnap?dash:calcTxt}</td>
+        <td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${r.req}" onchange="setReq(${p.product_id},'${esc(r.c)}',this.value)">`:r.req}</td>
+        ${dist?`<td class="n">${edD?`<input class="num" type="number" min="0" step="1" value="${r.dist??0}" onchange="setDist(${p.product_id},'${esc(r.c)}',this.value)">`:(r.dist??0)}</td>`:''}</tr>`;
+    }
+    h+=`</table></td></tr>`;
+  }
+  document.getElementById('t1').innerHTML=h;
+}
+function toggle(pid){OPEN=OPEN===pid?null:pid;renderT1();}
+function renderNeeds(){
+  const v=vis(), ym=monthOfWeek(WEEK), weeks=isoWeeksOfMonth(ym), idx=weeks.indexOf(WEEK)+1, n=weeks.length;
+  const has=Object.keys(NEEDS).length;
+  let h=`<tr><th>Товар</th><th class="n">Потребность ${ym.slice(5)}.${ym.slice(0,4)}, кор.</th><th class="n">Заказано до этой недели</th><th class="n">Итого с этой неделей</th><th class="n">По плану к ${ddmm(WEEK)} (${idx}/${n})</th><th class="n">Отклонение</th></tr>`;
+  if(!has) h+=`<tr><td colspan="6" class="mute">Нет данных о потребности за месяц</td></tr>`;
+  else for(const p of v){
+    const need=NEEDS[p.product_id]; if(need==null) continue;
+    const was=MONTH_REQ[p.product_id]||0, now=was+reqOf(p), plan=need*idx/n, dv=plan?(now-plan)/plan*100:null;
+    h+=`<tr><td>${esc(p.offer_id)}</td><td class="n">${need}</td><td class="n">${was}</td><td class="n">${now}</td><td class="n">${nf.format(plan)}</td><td class="n ${dv==null?'mute':Math.abs(dv)<=10?'ok':dv>0?'warn':'bad'}">${dv==null?'—':(dv>0?'+':'')+Math.round(dv)+'%'}</td></tr>`;
+  }
+  document.getElementById('tn').innerHTML=h;
+}
+function renderT2(){
+  const st=ST(), v=vis().filter(p=>reqOf(p)>0||p.ff||p.ag!=null).sort((a,b)=>(a.supplier||'—').localeCompare(b.supplier||'—','ru')||a.offer_id.localeCompare(b.offer_id)), ed=st==='at_buyer';
+  let lastSup=null;
+  let h=`<tr><th>Товар</th><th>Поставщик</th><th class="n">Заявлено</th><th class="n">На ФФ</th><th class="n">К закупке</th><th class="n">Согласовано</th><th class="n">%</th><th>Комментарий</th></tr>`;
+  if(!v.length) h+=`<tr><td colspan="8" class="mute">Нет заявленных товаров</td></tr>`;
+  for(const p of v){
+    const b=buyOf(p);
+    if((p.supplier||'—')!==lastSup){ lastSup=p.supplier||'—'; const g=v.filter(x=>(x.supplier||'—')===lastSup), gb=S(g,buyOf), ga=S(g,x=>x.ag); h+=`<tr class="group"><td colspan="8">${esc(lastSup)} — к закупке ${gb} кор.${g.some(x=>x.ag!=null)&&gb?` · согласовано ${ga} (${Math.round(ga/gb*100)}%)`:''}</td></tr>`; }
+    h+=`<tr><td>${esc(p.offer_id)}</td><td>${esc(p.supplier||'—')}</td><td class="n">${reqOf(p)}</td>
+      <td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${p.ff}" onchange="setSup(${p.product_id},'ff_boxes',this.value)">`:p.ff}</td>
+      <td class="n"><b>${b}</b></td>
+      <td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${p.ag??''}" placeholder="—" onchange="setSup(${p.product_id},'agreed_boxes',this.value)">`:(p.ag??'—')}</td>
+      <td class="n">${p.ag!=null&&b?Math.round(p.ag/b*100)+'%':'—'}</td>
+      <td>${ed?`<input value="${esc(p.comment)}" style="width:160px" onchange="setSup(${p.product_id},'comment',this.value)">`:esc(p.comment)}</td></tr>`;
+  }
+  document.getElementById('t2').innerHTML=h;
+  const by={}; v.forEach(p=>{const s=p.supplier||'—',b=buyOf(p),o=by[s]||(by[s]={k:0,u:0});o.k+=b;o.u+=b*p.box_qty;});
+  document.getElementById('sup').innerHTML=Object.entries(by).sort((a,b)=>b[1].k-a[1].k).map(([s,o])=>`<div class="card"><div class="l">${esc(s)} · к закупке</div><div class="v">${nf.format(o.k)} кор.</div><div class="l">${nf.format(o.u)} шт</div></div>`).join('');
+}
+function palStatus(x){
+  if(x<=0) return ['—','mute'];
+  if(x<0.8) return ['менее одной паллеты','warn'];
+  const lo=Math.ceil(x/1.15-1e-6), hi=Math.floor(x/0.8+1e-6);
+  if(lo<=hi) return [`${lo} шт · по ${(x/lo).toFixed(2)}`,'ok'];
+  const n=Math.floor(x), m=Math.ceil(x);
+  return [`убрать ${(x-1.15*n).toFixed(2)} пал. или добавить ${(0.8*m-x).toFixed(2)} пал.`,'bad'];
+}
+function renderPal(){
+  const st=ST(), useDist=st==='distribution'||st==='closed', by={}, miss={};
+  MODEL.forEach(p=>p.rows.forEach(r=>{
+    const k=useDist?(r.dist||0):r.req; if(!k) return;
+    if(p.boxes_per_pallet>0) by[r.c]=(by[r.c]||0)+k/p.boxes_per_pallet; else miss[r.c]=(miss[r.c]||0)+1;
+  }));
+  const cs=[...new Set([...Object.keys(by),...Object.keys(miss)])].sort((a,b)=>(by[b]||0)-(by[a]||0));
+  document.getElementById('pal').innerHTML=cs.map(c=>{const x=by[c]||0,[t,cl]=palStatus(x);return `<div class="card"><div class="l">${esc(c)}</div><div class="v">${x.toFixed(2)} пал.</div><div class="${cl}" style="font-size:.85em">${t}</div>${miss[c]?`<div class="warn" style="font-size:.8em">без «на паллете»: ${miss[c]} тов.</div>`:''}</div>`;}).join('')||'<div class="mute">Нет заявленных коробов</div>';
+}
+
+// ===== действия =====
+function shiftWeek(n){WEEK=addD(WEEK,n);loadWeek().catch(e=>document.getElementById('err').textContent='Ошибка: '+e.message);}
+function fail(e){document.getElementById('err').textContent='Не сохранилось: '+e.message;}
+const toInt=v=>{const n=Math.round(Number(String(v).replace(',','.')));return Number.isFinite(n)&&n>=0?n:0;};
+function lineRow(p,r,extra){return {week:WEEK,product_id:p.product_id,cluster:r.c,ads:r.ads,available:r.av,transit:r.tr,prev_boxes:r.prev,box_qty:p.box_qty,calc_boxes:r.calc,requested_boxes:r.req,updated_at:new Date().toISOString(),...extra};}
+async function setReq(pid,c,v){
+  if(ST()!=='draft') return;
+  const p=MODEL.find(x=>x.product_id===pid), r=p.rows.find(x=>x.c===c); r.req=toInt(v);
+  try{ await upsert('purchase_lines',[lineRow(p,r)],'week,product_id,cluster'); LINES.set(pid+'|'+c,{...LINES.get(pid+'|'+c),requested_boxes:r.req}); }catch(e){fail(e);}
+  renderCards(); renderNeeds(); renderT2(); renderPal(); renderT1();
+}
+async function setDist(pid,c,v){
+  if(ST()!=='distribution') return;
+  const p=MODEL.find(x=>x.product_id===pid), r=p.rows.find(x=>x.c===c); r.dist=toInt(v);
+  try{ await upsert('purchase_lines',[{week:WEEK,product_id:pid,cluster:c,distributed_boxes:r.dist,updated_at:new Date().toISOString()}],'week,product_id,cluster'); }catch(e){fail(e);}
+  renderT1(); renderPal();
+}
+async function setSup(pid,f,v){
+  if(ST()!=='at_buyer') return;
+  const p=MODEL.find(x=>x.product_id===pid);
+  if(f==='comment') p.comment=v; else if(f==='ff_boxes') p.ff=toInt(v); else p.ag=String(v).trim()===''?null:toInt(v);
+  try{ await upsert('purchase_supply',[{week:WEEK,product_id:pid,ff_boxes:p.ff,agreed_boxes:p.ag,comment:p.comment||null,updated_at:new Date().toISOString()}],'week,product_id'); }catch(e){fail(e);}
+  renderCards(); renderT2();
+}
+async function setLT(c,f,v){
+  if(ST()!=='draft') return;
+  WLT[c][f]=toInt(v);
+  try{ const {week,updated_at,active,...rest}=WLT[c]; await upsert('purchase_week_lead_times',[{...rest,cluster:c,week:WEEK,updated_at:new Date().toISOString()}],'week,cluster'); }catch(e){fail(e);}
+  build(); render();
+}
+async function addLT(c){
+  WLT[c]={cluster:c,force_majeure_days:0,approval_days:0,supplier_to_ff_days:0,ff_assembly_days:0,ff_to_ozon_days:0,acceptance_days:0,target_days:0,prev_weeks:2};
+  await setLT(c,'prev_weeks',2);
+  document.getElementById('ltBox').open=true;
+}
+async function createWeek(){
+  if(!confirm(`Создать заявку на неделю ${ddmm(WEEK)}–${ddmm(addD(WEEK,6))}? Сроки скопируются ${LT_SRC.startsWith('copy')?'с недели '+ddmm(LT_SRC.slice(5)):'из значений по умолчанию'}.`)) return;
+  try{
+    await upsert('purchase_weeks',[{week:WEEK,status:'draft'}],'week');
+    const now=new Date().toISOString();
+    await upsert('purchase_week_lead_times',Object.values(WLT).map(c=>({week:WEEK,cluster:c.cluster,...Object.fromEntries([...LT_F,'target_days','prev_weeks'].map(f=>[f,Number(c[f])||0])),updated_at:now})),'week,cluster');
+    await loadBase(); await loadWeek();
+  }catch(e){fail(e);}
+}
+async function nextStage(){
+  const st=ST(), err=document.getElementById('err'); err.textContent='';
+  try{
+    if(st==='draft'){
+      if(!confirm('Отправить заявку закупщику? После этого «Заявлено» и сроки недели менять нельзя.')) return;
+      const now=new Date().toISOString(), rows=[];
+      MODEL.forEach(p=>p.rows.forEach(r=>rows.push(lineRow(p,r,{updated_at:now}))));
+      await upsert('purchase_lines',rows,'week,product_id,cluster');
+      await patchWeek({status:'at_buyer',submitted_at:now});
+    }else if(st==='at_buyer'){
+      const miss=MODEL.filter(p=>buyOf(p)>0&&p.ag==null);
+      if(miss.length){ err.textContent=`Заполните «Согласовано» по всем товарам к закупке (не заполнено: ${miss.length}, напр. ${miss.slice(0,3).map(p=>p.offer_id).join(', ')})`; return; }
+      if(!confirm('Отметить заявку согласованной? Обеспеченное (ФФ + согласовано) распределится по кластерам пропорционально заявленному.')) return;
+      const now=new Date().toISOString(), rows=[];
+      MODEL.forEach(p=>{ distribute(p); p.rows.forEach(r=>{ if(r.req>0||r.dist>0) rows.push({week:WEEK,product_id:p.product_id,cluster:r.c,distributed_boxes:r.dist||0,updated_at:now}); }); });
+      await upsert('purchase_lines',rows,'week,product_id,cluster');
+      await patchWeek({status:'distribution',agreed_at:now});
+    }else if(st==='distribution'){
+      if(!confirm('Подтвердить распределение и закрыть неделю?')) return;
+      await patchWeek({status:'closed',confirmed_at:new Date().toISOString()});
+    }
+    await loadBase(); await loadWeek();
+  }catch(e){fail(e);}
+}
+async function prevStage(){
+  const i=STAGES.findIndex(s=>s[0]===ST()); if(i<=0) return;
+  if(!confirm(`Вернуть неделю на шаг «${STAGES[i-1][1]}»?`)) return;
+  try{ await patchWeek({status:STAGES[i-1][0]}); await loadBase(); await loadWeek(); }catch(e){fail(e);}
+}
+// обеспечено = ФФ + согласовано → по кластерам пропорционально заявленному (в нём уже учтены остатки и транзит);
+// при 100% согласования каждый кластер получает ровно заявленное; остаток округления — по большей дробной части
+function distribute(p){
+  const tot=p.ff+(p.ag||0), w=p.rows.filter(r=>r.req>0);
+  p.rows.forEach(r=>r.dist=0); if(!tot||!w.length) return;
+  const base=S(w,r=>r.req), key=r=>r.req;
+  let used=0; const parts=w.map(r=>{const x=tot*key(r)/base,f=Math.floor(x);used+=f;return {r,f,rem:x-f};});
+  parts.sort((a,b)=>b.rem-a.rem||key(b.r)-key(a.r)||b.r.ads-a.r.ads);
+  for(let i=0;i<tot-used&&i<parts.length;i++) parts[i].f++;
+  parts.forEach(x=>x.r.dist=x.f);
+}
+</script></body></html>
