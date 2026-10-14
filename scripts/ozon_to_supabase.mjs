@@ -133,11 +133,19 @@ for(let i=0;i<items.length;i+=100){
   (r.items||[]).forEach(it=>[it.sku,...(it.sources||[]).map(s=>s.sku)].forEach(s=>{ if(s) skuPid.set(s,it.id); }));
   await sleep(300);
 }
-const dem=new Map();
+const dem=new Map(), badSkus=[];
 const skus=[...skuPid.keys()];
+// Ozon иногда отвечает 500 {"code":2} на всю пачку из-за отдельных SKU — делим пачку пополам до виновных
+async function stocksOf(part){
+  try{ return (await ozon('/v1/analytics/stocks',{skus:part})).items||[]; }
+  catch(e){
+    if(part.length===1){ badSkus.push(part[0]); return []; }
+    const h=Math.ceil(part.length/2);
+    return [...await stocksOf(part.slice(0,h)), ...await stocksOf(part.slice(h))];
+  }
+}
 for(let i=0;i<skus.length;i+=100){
-  const r=await ozon('/v1/analytics/stocks',{skus:skus.slice(i,i+100)});
-  (r.items||[]).forEach(x=>{
+  (await stocksOf(skus.slice(i,i+100))).forEach(x=>{
     const pid=skuPid.get(x.sku); if(pid==null||!x.cluster_name) return;
     const k=pid+'|'+x.cluster_name;
     const d=dem.get(k)||{product_id:pid,cluster:x.cluster_name,ads_cluster:0,available:0,transit:0,requested:0,days_without_sales:null};
@@ -160,7 +168,7 @@ for(let i=0;i<demRows.length;i+=500){
 }
 // пары, которых больше нет в выдаче Ozon
 await fetch(`${process.env.SUPABASE_URL}/rest/v1/cluster_demand?updated_at=lt.${encodeURIComponent(runAt)}`,{method:'DELETE',headers:SR});
-console.log('cluster_demand rows:',demRows.length,'| skus:',skus.length);
+console.log('cluster_demand rows:',demRows.length,'| skus:',skus.length,'| skipped skus (Ozon error):',badSkus.join(', ')||'—');
 
 // === 9) Список кластеров Ozon: active в cluster_lead_times (сроки не трогаем) ===
 const lt=await (await fetch(`${process.env.SUPABASE_URL}/rest/v1/cluster_lead_times?select=cluster,active`,{headers:SR})).json();
