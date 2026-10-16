@@ -126,8 +126,21 @@
  .scroll{overflow-x:auto}
  .note{font-size:.82em;color:#94a3b8;margin:4px 0}
  .lock{font-size:.85em;color:#94a3b8;margin-left:6px}
- #t1 td:first-child{min-width:230px}
- .pname{max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.85em}
+ .wrap{max-width:min(1700px,100%);box-sizing:border-box}
+ #t1{font-size:.8em;table-layout:fixed;width:100%}
+ #t1 th{white-space:normal;line-height:1.15;vertical-align:bottom}
+ #t1 th.mhead{background:linear-gradient(90deg,rgba(120,166,199,.18),transparent);color:#544273;font-size:.95em;text-align:center}
+ #t1 th.sub{background:rgba(120,166,199,.1)}
+ #t1 th.whead{background:rgba(227,61,120,.08);color:#7D3673;text-align:center}
+ #t1 th.wsub{background:rgba(227,61,120,.05)}
+ #t1 th.sep,#t1 td.sep{border-left:1px dashed rgba(84,66,115,.3)}
+ #t1 td{overflow-wrap:anywhere}
+ #t1 .num{width:100%;max-width:64px;box-sizing:border-box}
+ #t1 input:not(.num){width:100%;box-sizing:border-box}
+ #t1 tr.mgroup td{background:linear-gradient(90deg,rgba(125,54,115,.18),transparent);color:#7D3673;padding-top:10px;border-bottom:2px solid rgba(125,54,115,.25);cursor:pointer;user-select:none}
+ #t1 tr.mgroup .tg{display:inline-block;width:18px;text-align:center;border:1px solid rgba(125,54,115,.4);border-radius:5px;margin-right:6px;font-size:.85em}
+ .pname{font-size:.85em;color:#94a3b8;line-height:1.2;margin-top:2px}
+ @media (max-width:900px){ #t1{min-width:860px} }
  @media (max-width:640px){ .wbar .wlbl{min-width:0;font-size:1.05em} .step{min-width:120px} }
 </style></head>
 <body>
@@ -183,7 +196,7 @@
     </div>
     <div class="cards" id="cards"></div>
 
-    <details class="box" id="setBox">
+    <details class="box" id="setBox" open>
       <summary>⚙️ Параметры расчёта <span class="lock" id="setLock"></span></summary>
       <div class="inner" id="settings"></div>
     </details>
@@ -253,7 +266,7 @@ async function patchMonth(body){
 
 // ===== состояние =====
 let PROD=[],NOBOX=[],DEM={},DEM_AT='',COST={},MONTHS_DB={},REQ_WEEKS=[],REQ={};
-let MONTH=addMonth(ymOf(new Date()),1),F='all',PLAN={},NEEDS={},TURN=DEFAULT_TURNOVER,TURN_SRC='',MODEL=[];
+let MONTH=addMonth(ymOf(new Date()),1),F='all',PLAN={},NEEDS={},TURN=DEFAULT_TURNOVER,TURN_SRC='',MODEL=[],OPEN_SUP=new Set();
 
 async function go(){
   const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(document.getElementById('pwd').value));
@@ -354,8 +367,8 @@ function render(){
   renderSettings(); renderCards(); renderT1(); renderSup();
 }
 function renderSettings(){
-  const st=ST(), ed=st==='draft';
-  document.getElementById('setLock').textContent=ed?'— можно менять, пока потребность в черновике':!st?'— потребность не создана':'— только просмотр';
+  const st=ST(), ed=!st||st==='draft';
+  document.getElementById('setLock').textContent=st==='draft'?'— можно менять, пока потребность в черновике':!st?'— можно менять; при изменении потребность на месяц создастся':'— только просмотр';
   document.getElementById('settings').innerHTML=`<table class="lt">
     <tr><td>Дни оборачиваемости на конец месяца</td><td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${TURN}" onchange="setTurn(this.value)">`:TURN}</td>
       <td class="mute">${!st?(TURN_SRC.startsWith('copy')?'при создании скопируется из '+mLabel(TURN_SRC.slice(5)):'по умолчанию'):''}</td></tr>
@@ -370,28 +383,36 @@ function renderCards(){
   document.getElementById('cards').innerHTML=[['Расчёт, кор.',nf.format(S(v,p=>p.calc))],['Заказ, кор.',nf.format(need)],['Заказ, ₽',rub.format(sumNeed)],['Согласовано, кор.',has?nf.format(ag)+(need?` (${Math.round(ag/need*100)}%)`:''):'—'],['Согласовано, ₽',has?rub.format(sumAg):'—']]
     .map(([l,x])=>`<div class="card"><div class="l">${l}</div><div class="v">${x}</div></div>`).join('');
 }
+function toggleSup(i){const s=SUP_KEYS[i];OPEN_SUP.has(s)?OPEN_SUP.delete(s):OPEN_SUP.add(s);renderT1();}
+let SUP_KEYS=[];
 function renderT1(){
-  const st=ST(), edN=st==='draft', edA=st==='at_buyer';
+  const st=ST(), edN=st==='draft', edA=st==='at_buyer', q=document.getElementById('q').value.trim();
   const v=vis().sort((a,b)=>(a.supplier||'—').localeCompare(b.supplier||'—','ru')||(b.calc||0)-(a.calc||0)||a.offer_id.localeCompare(b.offer_id));
   const fmt=x=>x==null?'<span class="mute">—</span>':nf.format(x);
-  let h=`<tr><th>Товар</th><th class="n">План, шт</th><th class="n">Запас оборач., шт</th><th class="n">Остаток + в пути, шт</th><th class="n">Заявки в пути, шт</th><th class="n">Продадим до конца мес., шт</th><th class="n">Расчёт, кор.</th><th class="n">Заказ, кор.</th><th class="n">Согласовано, кор.</th><th class="n">Сумма заказа, ₽</th><th>Комментарий</th></tr>`;
-  if(!v.length) h+=`<tr><td colspan="11" class="mute">Нет товаров с планом на ${mLabel(MONTH)}</td></tr>`;
-  let last=null;
-  for(const p of v){
-    const sup=p.supplier||'—';
-    if(sup!==last){ last=sup; const g=v.filter(x=>(x.supplier||'—')===sup), gn=S(g,x=>x.need), ga=S(g,x=>x.ag), gr=S(g,x=>boxCost(x)==null?0:x.need*boxCost(x));
-      h+=`<tr class="group"><td colspan="11">${esc(sup)} — заказ ${gn} кор. · ${rub.format(gr)} ₽${g.some(x=>x.ag!=null)?` · согласовано ${ga} кор.${gn?` (${Math.round(ga/gn*100)}%)`:''}`:''}</td></tr>`; }
-    const bc=boxCost(p);
-    h+=`<tr><td><b>${esc(p.offer_id)}</b><div class="mute pname" title="${esc(p.name)}">${MGR[p.m]} · ${p.box_qty} шт/кор. · ${esc(p.name)}</div></td>
-      <td class="n">${p.plan==null?'<span class="mute">нет плана</span>':nf.format(p.plan)}</td><td class="n">${fmt(p.turnover)}</td><td class="n">${fmt(p.stock)}</td><td class="n">${fmt(p.reqQty)}</td>
-      <td class="n" title="${p.ads==null?'':nf.format(p.ads)+' шт/дн × '+p.dte+' дн.'}">${fmt(p.sell)}</td>
-      <td class="n">${p.calc==null?'<span class="mute">—</span>':nf2.format(p.calc)}</td>
-      <td class="n">${edN?`<input class="num" type="number" min="0" step="1" value="${p.need}" onchange="setNeed(${p.product_id},this.value)">`:`<b>${p.need}</b>`}</td>
-      <td class="n">${edA?`<input class="num" type="number" min="0" step="1" value="${p.ag??''}" placeholder="—" onchange="setAg(${p.product_id},this.value)">`:(p.ag??'—')}</td>
-      <td class="n">${bc==null?'<span class="warn" title="нет себестоимости в «Базе товаров»">—</span>':rub.format(p.need*bc)}</td>
-      <td>${edA?`<input value="${esc(p.comment)}" style="width:150px" onchange="setComment(${p.product_id},this.value)">`:esc(p.comment)}</td></tr>`;
-  }
-  document.getElementById('t1').innerHTML=h;
+  let h=`<colgroup><col style="width:19%"><col span="5" style="width:6.5%"><col span="3" style="width:6%"><col style="width:6%"><col style="width:9%"><col style="width:7.5%"></colgroup>
+    <thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="5" class="mhead sep">Расчёт потребности, шт</th><th colspan="3" class="mhead sep">Потребность</th><th colspan="2" class="whead sep">Закупщик</th><th rowspan="2" class="sub sep n">Сумма заказа, ₽</th></tr>
+    <tr><th class="sub sep n">План месяца</th><th class="sub n">Запас оборачи&shy;ваемости</th><th class="sub n">Остаток + в пути на Ozon</th><th class="sub n">Заявки в пути</th><th class="sub n">Продадим до конца месяца</th>
+      <th class="sub sep n">Расчёт, кор.</th><th class="sub n">Заказ, кор.</th><th class="sub n">Заказ, шт</th><th class="wsub sep n">Согласовано, кор.</th><th class="wsub">Комментарий</th></tr></thead><tbody>`;
+  if(!v.length) h+=`<tr><td colspan="12" class="mute">Нет товаров с планом на ${mLabel(MONTH)}</td></tr>`;
+  SUP_KEYS=[...new Set(v.map(p=>p.supplier||'—'))];
+  SUP_KEYS.forEach((sup,i)=>{
+    const g=v.filter(x=>(x.supplier||'—')===sup), gn=S(g,x=>x.need), ga=S(g,x=>x.ag), gr=S(g,x=>boxCost(x)==null?0:x.need*boxCost(x)), open=OPEN_SUP.has(sup)||!!q;
+    h+=`<tr class="mgroup" onclick="toggleSup(${i})"><td colspan="12"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,x=>x.calc))} кор. · заказ ${gn} кор. · ${rub.format(gr)} ₽${g.some(x=>x.ag!=null)?` · согласовано ${ga} кор.${gn?` (${Math.round(ga/gn*100)}%)`:''}`:''}</td></tr>`;
+    if(!open) return;
+    for(const p of g){
+      const bc=boxCost(p);
+      h+=`<tr><td><b>${esc(p.offer_id)}</b><div class="pname">${esc(p.name)}</div></td>
+        <td class="n sep">${p.plan==null?'<span class="mute">нет плана</span>':nf.format(p.plan)}</td><td class="n">${fmt(p.turnover)}</td><td class="n">${fmt(p.stock)}</td><td class="n">${fmt(p.reqQty)}</td>
+        <td class="n" title="${p.ads==null?'':nf.format(p.ads)+' шт/дн × '+p.dte+' дн.'}">${fmt(p.sell)}</td>
+        <td class="n sep">${p.calc==null?'<span class="mute">—</span>':nf2.format(p.calc)}</td>
+        <td class="n">${edN?`<input class="num" type="number" min="0" step="1" value="${p.need}" onchange="setNeed(${p.product_id},this.value)">`:`<b>${p.need}</b>`}</td>
+        <td class="n mute" title="${p.box_qty} шт в коробе">${nf.format(p.need*p.box_qty)}</td>
+        <td class="n sep">${edA?`<input class="num" type="number" min="0" step="1" value="${p.ag??''}" placeholder="—" onchange="setAg(${p.product_id},this.value)">`:(p.ag??'—')}</td>
+        <td>${edA?`<input value="${esc(p.comment)}" onchange="setComment(${p.product_id},this.value)">`:esc(p.comment)}</td>
+        <td class="n sep">${bc==null?'<span class="warn" title="нет себестоимости в «Базе товаров»">—</span>':rub.format(p.need*bc)}</td></tr>`;
+    }
+  });
+  document.getElementById('t1').innerHTML=h+'</tbody>';
 }
 function renderSup(){
   const by={}, weeks=(()=>{const[y,m]=MONTH.split('-').map(Number);let n=0;for(let d=1;d<=daysIn(MONTH);d++){if(new Date(y,m-1,d).getDay()===4)n++;}return n;})();
@@ -422,9 +443,12 @@ async function setComment(pid,v){
   try{ await upsert('purchase_needs',[{month:MONTH,product_id:pid,comment:v||null,updated_at:new Date().toISOString()}],'month,product_id'); }catch(e){fail(e);}
 }
 async function setTurn(v){
-  if(ST()!=='draft') return;
+  const st=ST(); if(st&&st!=='draft') return;
   TURN=toInt(v);
-  try{ await patchMonth({turnover_days:TURN}); MONTHS_DB[MONTH].turnover_days=TURN; }catch(e){fail(e);}
+  try{
+    if(!st){ await upsert('purchase_need_months',[{month:MONTH,status:'draft',turnover_days:TURN}],'month'); MONTHS_DB[MONTH]={month:MONTH,status:'draft',turnover_days:TURN}; }
+    else { await patchMonth({turnover_days:TURN}); MONTHS_DB[MONTH].turnover_days=TURN; }
+  }catch(e){fail(e);}
   build(); render();
 }
 async function createMonth(){

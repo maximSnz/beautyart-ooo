@@ -126,6 +126,22 @@
  .scroll{overflow-x:auto}
  .note{font-size:.82em;color:#94a3b8;margin:4px 0}
  .lock{font-size:.85em;color:#94a3b8;margin-left:6px}
+ .wrap{max-width:min(1700px,100%);box-sizing:border-box}
+ table.pt{font-size:.8em;table-layout:fixed;width:100%}
+ table.pt th{white-space:normal;line-height:1.15;vertical-align:bottom}
+ table.pt th.mhead{background:linear-gradient(90deg,rgba(120,166,199,.18),transparent);color:#544273;font-size:.95em;text-align:center}
+ table.pt th.sub{background:rgba(120,166,199,.1)}
+ table.pt th.whead{background:rgba(227,61,120,.08);color:#7D3673;text-align:center}
+ table.pt th.wsub{background:rgba(227,61,120,.05)}
+ table.pt th.sep,table.pt td.sep{border-left:1px dashed rgba(84,66,115,.3)}
+ table.pt td{overflow-wrap:anywhere}
+ table.pt .num{width:100%;max-width:64px;box-sizing:border-box}
+ table.pt input:not(.num){width:100%;box-sizing:border-box}
+ table.pt tr.mgroup td{background:linear-gradient(90deg,rgba(125,54,115,.18),transparent);color:#7D3673;padding-top:10px;border-bottom:2px solid rgba(125,54,115,.25);cursor:pointer;user-select:none}
+ table.pt tr.mgroup .tg{display:inline-block;width:18px;text-align:center;border:1px solid rgba(125,54,115,.4);border-radius:5px;margin-right:6px;font-size:.85em}
+ table.pt table.ct{font-size:1em;width:100%;table-layout:fixed}
+ .pname{font-size:.85em;color:#94a3b8;line-height:1.2;margin-top:2px}
+ @media (max-width:900px){ table.pt{min-width:860px} }
  @media (max-width:640px){ .wbar .wlbl{min-width:0;font-size:1.05em} .step{min-width:120px} }
 </style></head>
 <body>
@@ -189,13 +205,13 @@
 
     <div class="sec" id="h1">Заявка менеджера</div>
     <div class="note">Расчёт = (спрос × (покрытие + запас) − остаток − в пути) ÷ штук в коробе − заявки прошлых недель. Нажмите на товар, чтобы раскрыть кластеры.</div>
-    <div class="scroll"><table id="t1"></table></div>
+    <div class="scroll"><table id="t1" class="pt"></table></div>
 
     <div class="sec">Потребность месяца</div>
-    <div class="scroll"><table id="tn"></table></div>
+    <div class="scroll"><table id="tn" class="pt"></table></div>
 
     <div class="sec">Закупщик: на ФФ и согласование с поставщиком</div>
-    <div class="scroll"><table id="t2"></table></div>
+    <div class="scroll"><table id="t2" class="pt"></table></div>
     <div class="cards" id="sup"></div>
 
     <div class="sec">Паллеты по кластерам</div>
@@ -263,7 +279,7 @@ async function patchWeek(body){
 
 // ===== состояние =====
 let PROD=[],NOBOX=[],DEM=new Map(),DEM_AT='',SEED={},ACTIVE=new Set(),WEEKS={};
-let WEEK=addD(keyOfMonday(new Date()),7),F='all',OPEN=null;
+let WEEK=addD(keyOfMonday(new Date()),7),F='all',OPEN=null,OPEN1=new Set(),OPEN2=new Set(),K1=[],K2=[];
 let WLT={},LT_SRC='',LINES=new Map(),PREV=new Map(),SUP={},NEEDS={},MONTH_REQ={},MODEL=[];
 
 async function go(){
@@ -401,34 +417,44 @@ function renderLT(){
   document.getElementById('lt').innerHTML=h+'</table>';
 }
 function palOf(p,boxes){return p.boxes_per_pallet>0?boxes/p.boxes_per_pallet:null;}
+const supOf=p=>p.supplier||'—';
+function groupsOf(v,key){ const by=new Map(); v.forEach(p=>{const s=supOf(p); if(!by.has(s))by.set(s,[]); by.get(s).push(p);}); return [...by.entries()].sort((a,b)=>S(b[1],key)-S(a[1],key)||a[0].localeCompare(b[0],'ru')); }
+function toggleG(t,i){ const set=t===1?OPEN1:OPEN2, k=(t===1?K1:K2)[i]; set.has(k)?set.delete(k):set.add(k); t===1?renderT1():renderT2(); }
 function renderT1(){
-  const st=ST(), v=vis(), ed=st==='draft', dist=st==='distribution'||st==='closed', edD=st==='distribution';
+  const st=ST(), v=vis(), ed=st==='draft', dist=st==='distribution'||st==='closed', edD=st==='distribution', q=document.getElementById('q').value.trim();
   document.getElementById('h1').textContent=dist?'Распределение обеспеченного по кластерам':'Заявка менеджера';
-  let h=`<tr><th>Товар</th><th class="n">Спрос, шт/дн</th><th class="n">Остаток + в пути</th><th class="n">Расчёт, кор.</th><th class="n">Заявлено, кор.</th><th class="n">${dist?'Распределено':'Паллет'}</th></tr>`;
-  if(!v.length) h+=`<tr><td colspan="6" class="mute">Нет товаров</td></tr>`;
-  for(const p of v){
-    const q=reqOf(p), pl=palOf(p,q);
-    h+=`<tr class="prow" onclick="toggle(${p.product_id})"><td>${OPEN===p.product_id?'▾':'▸'} <b>${esc(p.offer_id)}</b><div class="mute" style="font-size:.85em">${esc(p.name)} · ${MGR[p.m]} · ${p.box_qty} шт/кор.</div></td>
-      <td class="n">${p.rows.length&&p.rows.every(r=>r.noSnap)?'<span class="mute">—</span>':nf.format(S(p.rows,r=>r.ads))}</td><td class="n">${p.rows.length&&p.rows.every(r=>r.noSnap)?'<span class="mute">—</span>':nf.format(S(p.rows,r=>r.av+r.tr))}</td><td class="n">${p.rows.length&&p.rows.every(r=>r.noSnap)?'<span class="mute">—</span>':nf.format(calcOf(p))}</td><td class="n"><b>${q}</b></td>
-      <td class="n">${dist?S(p.rows,r=>r.dist):(pl==null?'<span class="mute">—</span>':pl.toFixed(2))}</td></tr>`;
-    if(OPEN!==p.product_id) continue;
-    h+=`<tr class="sub"><td colspan="6"><table><tr><th>Кластер</th><th class="n">Спрос/дн</th><th class="n">Остаток</th><th class="n">В пути</th><th class="n">Прошлые заявки</th><th class="n">Расчёт</th><th class="n">Заявлено</th>${dist?'<th class="n">Распределено</th>':''}</tr>`;
-    for(const r of p.rows){
-      const calcTxt=r.inactive?'<span class="mute">нет у Ozon</span>':r.noLt?'<span class="bad">нет сроков</span>':nf.format(r.calc);
-      const dash='<span class="mute">—</span>';
-      h+=`<tr><td>${esc(r.c)}</td><td class="n">${r.noSnap?dash:nf.format(r.ads)}</td><td class="n">${r.noSnap?dash:r.av}</td><td class="n">${r.noSnap?dash:r.tr}</td><td class="n">${r.noSnap&&!r.prev?dash:r.prev}</td><td class="n">${r.calc==null&&r.noSnap?dash:calcTxt}</td>
-        <td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${r.req}" onchange="setReq(${p.product_id},'${esc(r.c)}',this.value)">`:r.req}</td>
-        ${dist?`<td class="n">${edD?`<input class="num" type="number" min="0" step="1" value="${r.dist??0}" onchange="setDist(${p.product_id},'${esc(r.c)}',this.value)">`:(r.dist??0)}</td>`:''}</tr>`;
+  const dash='<span class="mute">—</span>';
+  let h=`<colgroup><col style="width:30%"><col span="6"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="2" class="mhead sep">Ozon сейчас</th><th colspan="3" class="mhead sep">Заявка</th><th rowspan="2" class="sub sep n">${dist?'Распре&shy;делено, кор.':'Паллет'}</th></tr>
+    <tr><th class="sub sep n">Спрос, шт/дн</th><th class="sub n">Остаток + в пути, шт</th><th class="sub sep n">Расчёт, кор.</th><th class="sub n">Заявлено, кор.</th><th class="sub n">Заявлено, шт</th></tr></thead><tbody>`;
+  if(!v.length) h+=`<tr><td colspan="7" class="mute">Нет товаров</td></tr>`;
+  const G=groupsOf(v,reqOf); K1=G.map(g=>g[0]);
+  G.forEach(([sup,g],gi)=>{
+    const open=OPEN1.has(sup)||!!q, gq=S(g,reqOf);
+    h+=`<tr class="mgroup" onclick="toggleG(1,${gi})"><td colspan="7"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,calcOf))} кор. · заявлено ${nf.format(gq)} кор. · ${nf.format(S(g,p=>reqOf(p)*p.box_qty))} шт${dist?` · распределено ${nf.format(S(g,p=>S(p.rows,r=>r.dist)))} кор.`:''}</td></tr>`;
+    if(!open) return;
+    for(const p of g){
+      const qv=reqOf(p), pl=palOf(p,qv), ns=p.rows.length&&p.rows.every(r=>r.noSnap);
+      h+=`<tr class="prow" onclick="toggle(${p.product_id})"><td>${OPEN===p.product_id?'▾':'▸'} <b>${esc(p.offer_id)}</b><div class="pname">${esc(p.name)}</div></td>
+        <td class="n sep">${ns?dash:nf.format(S(p.rows,r=>r.ads))}</td><td class="n">${ns?dash:nf.format(S(p.rows,r=>r.av+r.tr))}</td><td class="n sep">${ns?dash:nf.format(calcOf(p))}</td><td class="n"><b>${qv}</b></td><td class="n mute" title="${p.box_qty} шт в коробе">${nf.format(qv*p.box_qty)}</td>
+        <td class="n sep">${dist?S(p.rows,r=>r.dist):(pl==null?dash:pl.toFixed(2))}</td></tr>`;
+      if(OPEN!==p.product_id) continue;
+      h+=`<tr class="sub"><td colspan="7"><table class="ct"><tr><th>Кластер</th><th class="n">Спрос/дн</th><th class="n">Остаток</th><th class="n">В пути</th><th class="n">Прошлые заявки</th><th class="n">Расчёт</th><th class="n">Заявлено</th>${dist?'<th class="n">Распределено</th>':''}</tr>`;
+      for(const r of p.rows){
+        const calcTxt=r.inactive?'<span class="mute">нет у Ozon</span>':r.noLt?'<span class="bad">нет сроков</span>':nf.format(r.calc);
+        h+=`<tr><td>${esc(r.c)}</td><td class="n">${r.noSnap?dash:nf.format(r.ads)}</td><td class="n">${r.noSnap?dash:r.av}</td><td class="n">${r.noSnap?dash:r.tr}</td><td class="n">${r.noSnap&&!r.prev?dash:r.prev}</td><td class="n">${r.calc==null&&r.noSnap?dash:calcTxt}</td>
+          <td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${r.req}" onchange="setReq(${p.product_id},'${esc(r.c)}',this.value)">`:r.req}</td>
+          ${dist?`<td class="n">${edD?`<input class="num" type="number" min="0" step="1" value="${r.dist??0}" onchange="setDist(${p.product_id},'${esc(r.c)}',this.value)">`:(r.dist??0)}</td>`:''}</tr>`;
+      }
+      h+=`</table></td></tr>`;
     }
-    h+=`</table></td></tr>`;
-  }
-  document.getElementById('t1').innerHTML=h;
+  });
+  document.getElementById('t1').innerHTML=h+'</tbody>';
 }
 function toggle(pid){OPEN=OPEN===pid?null:pid;renderT1();}
 function renderNeeds(){
   const v=vis(), ym=monthOfWeek(WEEK), weeks=isoWeeksOfMonth(ym), idx=weeks.indexOf(WEEK)+1, n=weeks.length;
   const has=Object.keys(NEEDS).length;
-  let h=`<tr><th>Товар</th><th class="n">Потребность ${ym.slice(5)}.${ym.slice(0,4)}, кор.</th><th class="n">Заказано до этой недели</th><th class="n">Итого с этой неделей</th><th class="n">По плану к ${ddmm(WEEK)} (${idx}/${n})</th><th class="n">Отклонение</th></tr>`;
+  let h=`<colgroup><col style="width:30%"><col span="5"></colgroup><thead><tr><th class="sub">Товар</th><th class="sub sep n">Потребность ${ym.slice(5)}.${ym.slice(0,4)}, кор.</th><th class="sub n">Заказано до этой недели</th><th class="sub n">Итого с этой неделей</th><th class="sub n">По плану к ${ddmm(WEEK)} (${idx}/${n})</th><th class="sub n">Отклонение</th></tr></thead>`;
   if(!has) h+=`<tr><td colspan="6" class="mute">Нет данных о потребности за месяц</td></tr>`;
   else for(const p of v){
     const need=NEEDS[p.product_id]; if(need==null) continue;
@@ -438,22 +464,27 @@ function renderNeeds(){
   document.getElementById('tn').innerHTML=h;
 }
 function renderT2(){
-  const st=ST(), v=vis().filter(p=>reqOf(p)>0||p.ff||p.ag!=null).sort((a,b)=>(a.supplier||'—').localeCompare(b.supplier||'—','ru')||a.offer_id.localeCompare(b.offer_id)), ed=st==='at_buyer';
-  let lastSup=null;
-  let h=`<tr><th>Товар</th><th>Поставщик</th><th class="n">Заявлено</th><th class="n">На ФФ</th><th class="n">К закупке</th><th class="n">Согласовано</th><th class="n">%</th><th>Комментарий</th></tr>`;
+  const st=ST(), v=vis().filter(p=>reqOf(p)>0||p.ff||p.ag!=null), ed=st==='at_buyer', q=document.getElementById('q').value.trim();
+  let h=`<colgroup><col style="width:26%"><col span="6"><col style="width:16%"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th class="mhead sep">Заявка</th><th colspan="6" class="whead sep">Закупщик</th></tr>
+    <tr><th class="sub sep n">Заявлено, кор.</th><th class="wsub sep n">На ФФ, кор.</th><th class="wsub n">К закупке, кор.</th><th class="wsub n">К закупке, шт</th><th class="wsub n">Согласовано, кор.</th><th class="wsub n">%</th><th class="wsub">Комментарий</th></tr></thead><tbody>`;
   if(!v.length) h+=`<tr><td colspan="8" class="mute">Нет заявленных товаров</td></tr>`;
-  for(const p of v){
-    const b=buyOf(p);
-    if((p.supplier||'—')!==lastSup){ lastSup=p.supplier||'—'; const g=v.filter(x=>(x.supplier||'—')===lastSup), gb=S(g,buyOf), ga=S(g,x=>x.ag); h+=`<tr class="group"><td colspan="8">${esc(lastSup)} — к закупке ${gb} кор.${g.some(x=>x.ag!=null)&&gb?` · согласовано ${ga} (${Math.round(ga/gb*100)}%)`:''}</td></tr>`; }
-    h+=`<tr><td>${esc(p.offer_id)}</td><td>${esc(p.supplier||'—')}</td><td class="n">${reqOf(p)}</td>
-      <td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${p.ff}" onchange="setSup(${p.product_id},'ff_boxes',this.value)">`:p.ff}</td>
-      <td class="n"><b>${b}</b></td>
-      <td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${p.ag??''}" placeholder="—" onchange="setSup(${p.product_id},'agreed_boxes',this.value)">`:(p.ag??'—')}</td>
-      <td class="n">${p.ag!=null&&b?Math.round(p.ag/b*100)+'%':'—'}</td>
-      <td>${ed?`<input value="${esc(p.comment)}" style="width:160px" onchange="setSup(${p.product_id},'comment',this.value)">`:esc(p.comment)}</td></tr>`;
-  }
-  document.getElementById('t2').innerHTML=h;
-  const by={}; v.forEach(p=>{const s=p.supplier||'—',b=buyOf(p),o=by[s]||(by[s]={k:0,u:0});o.k+=b;o.u+=b*p.box_qty;});
+  const G=groupsOf(v,buyOf); K2=G.map(g=>g[0]);
+  G.forEach(([sup,g],gi)=>{
+    const open=OPEN2.has(sup)||!!q, gb=S(g,buyOf), ga=S(g,x=>x.ag);
+    h+=`<tr class="mgroup" onclick="toggleG(2,${gi})"><td colspan="8"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · к закупке ${gb} кор. · ${nf.format(S(g,p=>buyOf(p)*p.box_qty))} шт${g.some(x=>x.ag!=null)&&gb?` · согласовано ${ga} кор. (${Math.round(ga/gb*100)}%)`:''}</td></tr>`;
+    if(!open) return;
+    for(const p of g.sort((a,b)=>buyOf(b)-buyOf(a)||a.offer_id.localeCompare(b.offer_id))){
+      const b=buyOf(p);
+      h+=`<tr><td><b>${esc(p.offer_id)}</b><div class="pname">${esc(p.name)}</div></td><td class="n sep">${reqOf(p)}</td>
+        <td class="n sep">${ed?`<input class="num" type="number" min="0" step="1" value="${p.ff}" onchange="setSup(${p.product_id},'ff_boxes',this.value)">`:p.ff}</td>
+        <td class="n"><b>${b}</b></td><td class="n mute" title="${p.box_qty} шт в коробе">${nf.format(b*p.box_qty)}</td>
+        <td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${p.ag??''}" placeholder="—" onchange="setSup(${p.product_id},'agreed_boxes',this.value)">`:(p.ag??'—')}</td>
+        <td class="n">${p.ag!=null&&b?Math.round(p.ag/b*100)+'%':'—'}</td>
+        <td>${ed?`<input value="${esc(p.comment)}" onchange="setSup(${p.product_id},'comment',this.value)">`:esc(p.comment)}</td></tr>`;
+    }
+  });
+  document.getElementById('t2').innerHTML=h+'</tbody>';
+  const by={}; v.forEach(p=>{const s=supOf(p),b=buyOf(p),o=by[s]||(by[s]={k:0,u:0});o.k+=b;o.u+=b*p.box_qty;});
   document.getElementById('sup').innerHTML=Object.entries(by).sort((a,b)=>b[1].k-a[1].k).map(([s,o])=>`<div class="card"><div class="l">${esc(s)} · к закупке</div><div class="v">${nf.format(o.k)} кор.</div><div class="l">${nf.format(o.u)} шт</div></div>`).join('');
 }
 function palStatus(x){
