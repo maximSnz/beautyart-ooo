@@ -140,6 +140,10 @@
  #t1 tr.mgroup td{background:linear-gradient(90deg,rgba(125,54,115,.18),transparent);color:#7D3673;padding-top:10px;border-bottom:2px solid rgba(125,54,115,.25);cursor:pointer;user-select:none}
  #t1 tr.mgroup .tg{display:inline-block;width:18px;text-align:center;border:1px solid rgba(125,54,115,.4);border-radius:5px;margin-right:6px;font-size:.85em}
  .pname{font-size:.85em;color:#94a3b8;line-height:1.2;margin-top:2px}
+ .card.hl{background:linear-gradient(135deg,#78A6C7,#E33D78);border-color:transparent}
+ .card.hl .l,.card.hl .v{color:#fff}
+ #sup .card{cursor:pointer;transition:border-color .2s}
+ #sup .card:hover{border-color:#E33D78}
  @media (max-width:900px){ #t1{min-width:860px} }
  @media (max-width:640px){ .wbar .wlbl{min-width:0;font-size:1.05em} .step{min-width:120px} }
 </style></head>
@@ -204,9 +208,11 @@
     <div class="note">Потребность = план месяца + план в день × дни оборачиваемости − (остаток FBO + в пути на Ozon) − две последние недельные заявки + продажи до конца текущего месяца. Всё в штуках, затем ÷ штук в коробе.</div>
     <div class="scroll"><table id="t1"></table></div>
     <div class="sec">По поставщикам</div>
+    <div class="note">Нажмите на поставщика, чтобы скачать Excel: артикул, наименование, штуки, короба. Количество — согласованное, а пока его нет — заказ.</div>
     <div class="cards" id="sup"></div>
   </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 function toggleNav(btn) {
   const item = btn.closest('.nav-item');
@@ -347,6 +353,9 @@ function build(){
 }
 const S=(a,f)=>a.reduce((x,r)=>x+(Number(f(r))||0),0);
 const boxCost=p=>p.cost==null?null:p.cost*p.box_qty;
+// количество для денег и выгрузки: согласованное закупщиком, а пока его нет — заказ менеджера
+const qtyOf=p=>p.ag??p.need;
+const sumOf=p=>boxCost(p)==null?0:qtyOf(p)*boxCost(p);
 const vis=()=>{const q=document.getElementById('q').value.toLowerCase();return MODEL.filter(p=>(F==='all'||p.m===F)&&((p.offer_id||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q)));};
 
 // ===== отрисовка =====
@@ -378,10 +387,16 @@ function renderSettings(){
   </table>`;
 }
 function renderCards(){
-  const v=vis(), need=S(v,p=>p.need), ag=S(v,p=>p.ag), has=v.some(p=>p.ag!=null);
-  const sumNeed=S(v,p=>boxCost(p)==null?0:p.need*boxCost(p)), sumAg=S(v,p=>boxCost(p)==null||p.ag==null?0:p.ag*boxCost(p));
-  document.getElementById('cards').innerHTML=[['Расчёт, кор.',nf.format(S(v,p=>p.calc))],['Заказ, кор.',nf.format(need)],['Заказ, ₽',rub.format(sumNeed)],['Согласовано, кор.',has?nf.format(ag)+(need?` (${Math.round(ag/need*100)}%)`:''):'—'],['Согласовано, ₽',has?rub.format(sumAg):'—']]
-    .map(([l,x])=>`<div class="card"><div class="l">${l}</div><div class="v">${x}</div></div>`).join('');
+  const v=vis(), need=S(v,p=>p.need), has=v.some(p=>p.ag!=null);
+  const calcR=S(v,p=>boxCost(p)==null||p.calc==null?0:p.calc*boxCost(p)), needR=S(v,p=>boxCost(p)==null?0:p.need*boxCost(p));
+  const agP=v.filter(p=>p.ag!=null), ag=S(agP,p=>p.ag), agR=S(agP,p=>boxCost(p)==null?0:p.ag*boxCost(p)), needAg=S(agP,p=>p.need);
+  const eff=has&&needAg?Math.round(ag/needAg*100)+'%':'—';
+  document.getElementById('cards').innerHTML=[
+    ['Расчёт, кор. / ₽',`${nf.format(S(v,p=>p.calc))} / ${rub.format(calcR)}`],
+    ['Заказ, кор. / ₽',`${nf.format(need)} / ${rub.format(needR)}`],
+    ['Согласовано, кор. / ₽',has?`${nf.format(ag)} / ${rub.format(agR)}`:'—'],
+    ['Эффективность согласования',eff,'hl',has?`согласовано ${nf.format(ag)} из ${nf.format(needAg)} кор. заказа`:'появится, когда закупщик внесёт согласованное']
+  ].map(([l,x,c,t])=>`<div class="card ${c||''}"${t?` title="${t}"`:''}><div class="l">${l}</div><div class="v">${x}</div></div>`).join('');
 }
 function toggleSup(i){const s=SUP_KEYS[i];OPEN_SUP.has(s)?OPEN_SUP.delete(s):OPEN_SUP.add(s);renderT1();}
 let SUP_KEYS=[];
@@ -390,13 +405,13 @@ function renderT1(){
   const v=vis().sort((a,b)=>(a.supplier||'—').localeCompare(b.supplier||'—','ru')||(b.calc||0)-(a.calc||0)||a.offer_id.localeCompare(b.offer_id));
   const fmt=x=>x==null?'<span class="mute">—</span>':nf.format(x);
   let h=`<colgroup><col style="width:19%"><col span="5" style="width:6.5%"><col span="3" style="width:6%"><col style="width:6%"><col style="width:9%"><col style="width:7.5%"></colgroup>
-    <thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="5" class="mhead sep">Расчёт потребности, шт</th><th colspan="3" class="mhead sep">Потребность</th><th colspan="2" class="whead sep">Закупщик</th><th rowspan="2" class="sub sep n">Сумма заказа, ₽</th></tr>
+    <thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="5" class="mhead sep">Расчёт потребности, шт</th><th colspan="3" class="mhead sep">Потребность</th><th colspan="2" class="whead sep">Закупщик</th><th rowspan="2" class="sub sep n" title="Согласованное × штук в коробе × себестоимость; пока согласованного нет — заказ">Сумма, ₽</th></tr>
     <tr><th class="sub sep n">План месяца</th><th class="sub n">Запас оборачи&shy;ваемости</th><th class="sub n">Остаток + в пути на Ozon</th><th class="sub n">Заявки в пути</th><th class="sub n">Продадим до конца месяца</th>
       <th class="sub sep n">Расчёт, кор.</th><th class="sub n">Заказ, кор.</th><th class="sub n">Заказ, шт</th><th class="wsub sep n">Согласовано, кор.</th><th class="wsub">Комментарий</th></tr></thead><tbody>`;
   if(!v.length) h+=`<tr><td colspan="12" class="mute">Нет товаров с планом на ${mLabel(MONTH)}</td></tr>`;
   SUP_KEYS=[...new Set(v.map(p=>p.supplier||'—'))];
   SUP_KEYS.forEach((sup,i)=>{
-    const g=v.filter(x=>(x.supplier||'—')===sup), gn=S(g,x=>x.need), ga=S(g,x=>x.ag), gr=S(g,x=>boxCost(x)==null?0:x.need*boxCost(x)), open=OPEN_SUP.has(sup)||!!q;
+    const g=v.filter(x=>(x.supplier||'—')===sup), gn=S(g,x=>x.need), ga=S(g,x=>x.ag), gr=S(g,sumOf), open=OPEN_SUP.has(sup)||!!q;
     h+=`<tr class="mgroup" onclick="toggleSup(${i})"><td colspan="12"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,x=>x.calc))} кор. · заказ ${gn} кор. · ${rub.format(gr)} ₽${g.some(x=>x.ag!=null)?` · согласовано ${ga} кор.${gn?` (${Math.round(ga/gn*100)}%)`:''}`:''}</td></tr>`;
     if(!open) return;
     for(const p of g){
@@ -409,15 +424,28 @@ function renderT1(){
         <td class="n mute" title="${p.box_qty} шт в коробе">${nf.format(p.need*p.box_qty)}</td>
         <td class="n sep">${edA?`<input class="num" type="number" min="0" step="1" value="${p.ag??''}" placeholder="—" onchange="setAg(${p.product_id},this.value)">`:(p.ag??'—')}</td>
         <td>${edA?`<input value="${esc(p.comment)}" onchange="setComment(${p.product_id},this.value)">`:esc(p.comment)}</td>
-        <td class="n sep">${bc==null?'<span class="warn" title="нет себестоимости в «Базе товаров»">—</span>':rub.format(p.need*bc)}</td></tr>`;
+        <td class="n sep">${bc==null?'<span class="warn" title="нет себестоимости в «Базе товаров»">—</span>':rub.format(qtyOf(p)*bc)}</td></tr>`;
     }
   });
   document.getElementById('t1').innerHTML=h+'</tbody>';
 }
+let SUP_LIST=[];
 function renderSup(){
   const by={}, weeks=(()=>{const[y,m]=MONTH.split('-').map(Number);let n=0;for(let d=1;d<=daysIn(MONTH);d++){if(new Date(y,m-1,d).getDay()===4)n++;}return n;})();
-  vis().forEach(p=>{const s=p.supplier||'—',o=by[s]||(by[s]={k:0,r:0,u:0});o.k+=p.need;o.u+=p.need*p.box_qty;const bc=boxCost(p);if(bc!=null)o.r+=p.need*bc;});
-  document.getElementById('sup').innerHTML=Object.entries(by).filter(([,o])=>o.k>0).sort((a,b)=>b[1].r-a[1].r).map(([s,o])=>`<div class="card"><div class="l">${esc(s)}</div><div class="v">${rub.format(o.r)} ₽</div><div class="l">${nf.format(o.k)} кор. · ${nf.format(o.u)} шт · в неделю ≈ ${rub.format(o.r/weeks)} ₽ (${weeks} нед.)</div></div>`).join('')||'<div class="mute">Нет заказа</div>';
+  // все товары юрлица (без фильтра менеджера и поиска) — поставщику уходит общий заказ
+  MODEL.forEach(p=>{const s=supOf(p),o=by[s]||(by[s]={k:0,r:0,u:0,ag:false});const q=qtyOf(p);o.k+=q;o.u+=q*p.box_qty;o.r+=sumOf(p);if(p.ag!=null)o.ag=true;});
+  SUP_LIST=Object.entries(by).filter(([,o])=>o.k>0).sort((a,b)=>b[1].r-a[1].r);
+  document.getElementById('sup').innerHTML=SUP_LIST.map(([s,o],i)=>`<div class="card" title="Скачать Excel" onclick="exportSup(${i})"><div class="l">${esc(s)} · ${o.ag?'согласовано':'заказ'} ⬇</div><div class="v">${rub.format(o.r)} ₽</div><div class="l">${nf.format(o.k)} кор. · ${nf.format(o.u)} шт · в неделю ≈ ${rub.format(o.r/weeks)} ₽ (${weeks} нед.)</div></div>`).join('')||'<div class="mute">Нет заказа</div>';
+}
+const supOf=p=>p.supplier||'—';
+function exportSup(i){
+  const [sup]=SUP_LIST[i]||[]; if(!sup) return;
+  if(!window.XLSX){ document.getElementById('err').textContent='Не загрузилась библиотека Excel — обновите страницу'; return; }
+  const rows=MODEL.filter(p=>supOf(p)===sup&&qtyOf(p)>0).sort((a,b)=>a.offer_id.localeCompare(b.offer_id)).map(p=>[p.offer_id,p.name||'',qtyOf(p)*p.box_qty,qtyOf(p)]);
+  const ws=XLSX.utils.aoa_to_sheet([['Артикул','Наименование','Штуки','Короба'],...rows]);
+  ws['!cols']=[{wch:28},{wch:60},{wch:10},{wch:10}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Заказ');
+  XLSX.writeFile(wb,`Потребность_${ENTITY}_${MONTH}_${sup.trim().replace(/[\\/:*?"<>|]+/g,'_')}.xlsx`);
 }
 
 // ===== действия =====
