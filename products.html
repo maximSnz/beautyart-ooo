@@ -103,38 +103,33 @@
  .company-name{font-size:1.8em;letter-spacing:2px}
  .wrap,.container,.protected-content{max-width:1700px;box-sizing:border-box}
  @media (max-width:640px){ body{padding:8px} }
+ /* вход — как в plan.html */
+ .login-box{max-width:400px;margin:100px auto;background:#fff;border-radius:16px;padding:40px;box-shadow:0 10px 40px rgba(28,13,46,.3);border:2px solid rgba(84,66,115,.2);text-align:center;box-sizing:border-box}
+ .login-logo{width:80px;height:auto;margin-bottom:15px}
+ .login-title{font-family:'Forum',serif;font-size:1.8em;color:#1C0D2E;margin-bottom:10px}
+ .login-subtitle{color:#666;font-size:.95em;margin-bottom:25px;font-family:'Forum',serif}
+ .password-input{width:100%;padding:14px 16px;border:2px solid rgba(84,66,115,.2);border-radius:10px;font-size:1em;font-family:'Forum',serif;margin-bottom:15px;box-sizing:border-box}
+ .password-input:focus{outline:none;border-color:#E33D78}
+ .login-btn{width:100%;padding:14px;background:linear-gradient(135deg,#78A6C7,#E33D78);color:#fff;border:none;border-radius:10px;font-size:1.05em;font-family:'Forum',serif;cursor:pointer;transition:all .3s}
+ .login-btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(227,61,120,.4)}
+ .error-message{display:none;color:#E33D78;font-size:.9em;margin-top:15px;font-family:'Forum',serif}
 </style>
 </head>
 <body>
-<div class="login" id="login">
-  <h2>Закрытый раздел</h2>
-  <input type="password" id="pwd" placeholder="Пароль" onkeypress="if(event.key==='Enter')go()">
-  <button onclick="go()">Войти</button>
+<div class="login-box" id="login">
+    <img src="https://i.ibb.co/ZzbPQmQt/IMG-8031.png" alt="Beauty Art Logo" class="login-logo">
+    <div class="login-title">Закрытый раздел</div>
+    <div class="login-subtitle">Введите пароль для доступа</div>
+    <input type="password" id="pwd" class="password-input" placeholder="Пароль" onkeypress="if(event.key==='Enter')go()">
+    <button class="login-btn" onclick="go()">Войти</button>
+    <div class="error-message" id="errorMessage">Неверный пароль. Попробуйте ещё раз.</div>
 </div>
 <div class="hide" id="app">
   <div class="header">
-    <a href="index.html" class="logo-link" title="На главную">
+    <a href="https://maximsnz.github.io/beautyart-home/index.html" class="logo-link" title="На главную">
       <img src="https://i.ibb.co/ZzbPQmQt/IMG-8031.png" alt="Beauty Art Logo" class="logo">
     </a>
     <div class="company-name">Beauty Art</div>
-    <nav class="header-nav">
-      <div class="nav-item">
-        <button class="nav-btn" onclick="toggleNav(this)">Управление продажами <span class="caret">▾</span></button>
-        <div class="nav-menu">
-          <a href="weekly.html">Управление остатками</a>
-          <a href="plan.html">Реализация плана продаж</a>
-          <a href="private.html">Сводный отчёт</a>
-        </div>
-      </div>
-      <div class="nav-item">
-        <button class="nav-btn" onclick="toggleNav(this)">Управление закупками <span class="caret">▾</span></button>
-        <div class="nav-menu">
-          <a href="products.html">База товаров</a>
-          <a href="purchase.html">Заявка на закупку</a>
-          <a href="need.html">Потребность на месяц</a>
-        </div>
-      </div>
-    </nav>
   </div>
   <div class="wrap">
     <h2>📦 База товаров Ozon</h2>
@@ -183,7 +178,7 @@ const esc=s=>(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','
 async function go(){
   const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(document.getElementById('pwd').value));
   const h=[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
-  if(h!==PASSWORD_HASH){alert('Неверный пароль');return;}
+  if(h!==PASSWORD_HASH){{const _e=document.getElementById('errorMessage');_e.style.display='block';_e.textContent=document.getElementById('pwd').value?'Неверный пароль. Попробуйте ещё раз.':'Введите пароль';return;}}
   document.getElementById('login').classList.add('hide');
   document.getElementById('app').classList.remove('hide');
   load();
