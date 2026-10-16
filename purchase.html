@@ -154,6 +154,7 @@
         <div class="nav-menu">
           <a href="products.html">База товаров</a>
           <a href="purchase.html">Заявка на закупку</a>
+          <a href="need.html">Потребность на месяц</a>
         </div>
       </div>
     </nav>
@@ -328,6 +329,8 @@ async function loadWeek(){
 const cov=c=>LT_F.reduce((s,f)=>s+(Number(c[f])||0),0);
 function build(){
   const st=ST(), live=!st||st==='draft';
+  // неделя перенесена из Google Sheets (строки без снимка): недостающие кластеры не дополняем расчётом
+  const imported=[...LINES.values()].some(l=>l.ads==null);
   MODEL=PROD.map(p=>{
     const dem=DEM.get(p.product_id)||new Map();
     const names=new Set([...dem.keys()]);
@@ -343,7 +346,7 @@ function build(){
       let calc=null;
       if(!noLt&&!inactive){ calc=Math.max(0,rnd((src.ads*(cov(lt)+(Number(lt.target_days)||0))-(src.av+src.tr))/p.box_qty)-prev); }
       if(!live&&line) calc=line.calc_boxes;
-      const req=line?.requested_boxes??(live?(calc||0):0);
+      const req=line?.requested_boxes??(live&&!imported?(calc||0):0);
       if(!(src.ads>0||src.av>0||src.tr>0||prev>0||req>0||line)) continue;
       const noSnap=!live&&(!line||line.ads==null);
       rows.push({c,noSnap,ads:src.ads||0,av:src.av||0,tr:src.tr||0,prev,calc,req,dist:line?.distributed_boxes??null,noLt,inactive,dws:d?.days_without_sales});
