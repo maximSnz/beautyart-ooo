@@ -347,7 +347,10 @@ function build(){
       const turnover=plan==null?null:plan/daysIn(MONTH)*TURN;
       const D=plan==null?null:plan+turnover-dem.stock-reqQty+sell;
       const calc=D==null?null:Math.round(Math.max(D,0)/p.box_qty*100)/100;
-      r={plan,turnover,stock:dem.stock,reqQty,ads:dem.ads,dte,sell,calc,need:n?.need_boxes??(calc==null?0:Math.round(calc)),cost:COST[p.product_id]??null};
+      // заказ в черновике идёт за расчётом; ручная правка — если сохранённый заказ ≠ округлённому расчёту на момент сохранения
+      const auto=calc==null?0:Math.round(calc);
+      const manual=n?.need_boxes!=null&&!(n.calc_boxes!=null&&n.need_boxes===Math.round(Number(n.calc_boxes)));
+      r={plan,turnover,stock:dem.stock,reqQty,ads:dem.ads,dte,sell,calc,manual,need:manual?n.need_boxes:auto,cost:COST[p.product_id]??null};
     }else{
       const plan=n?.plan_qty??null, turnover=plan==null?null:plan/daysIn(MONTH)*TURN, sell=(Number(n?.ads)||0)*(n?.days_to_eom||0);
       r={plan,turnover,stock:n?.stock_qty??null,reqQty:n?.requests_qty??null,ads:n?.ads??null,dte:n?.days_to_eom??null,sell,calc:n?.calc_boxes==null?null:Number(n.calc_boxes),need:n?.need_boxes??0,cost:n?.unit_cost==null?(COST[p.product_id]??null):Number(n.unit_cost)};
@@ -424,7 +427,7 @@ function renderT1(){
         <td class="n sep">${p.plan==null?'<span class="mute">нет плана</span>':nf.format(p.plan)}</td><td class="n">${fmt(p.turnover)}</td><td class="n">${fmt(p.stock)}</td><td class="n">${fmt(p.reqQty)}</td>
         <td class="n" title="${p.ads==null?'':nf.format(p.ads)+' шт/дн × '+p.dte+' дн.'}">${fmt(p.sell)}</td>
         <td class="n sep">${p.calc==null?'<span class="mute">—</span>':nf2.format(p.calc)}</td>
-        <td class="n">${edN?`<input class="num" type="number" min="0" step="1" value="${p.need}" onchange="setNeed(${p.product_id},this.value)">`:`<b>${p.need}</b>`}</td>
+        <td class="n">${edN?`<input class="num" type="number" min="0" step="1" value="${p.need}" title="${p.manual?'Изменено вручную; очистите поле, чтобы вернуть к расчёту':'Идёт за расчётом'}" onchange="setNeed(${p.product_id},this.value)">${p.manual?'<div class="mute" style="font-size:.75em">✎ вручную</div>':''}`:`<b>${p.need}</b>`}</td>
         <td class="n mute" title="${p.box_qty} шт в коробе">${nf.format(p.need*p.box_qty)}</td>
         <td class="n sep">${edA?`<input class="num" type="number" min="0" step="1" value="${p.ag??''}" placeholder="—" onchange="setAg(${p.product_id},this.value)">`:(p.ag??'—')}</td>
         <td>${edA?`<input value="${esc(p.comment)}" onchange="setComment(${p.product_id},this.value)">`:esc(p.comment)}</td>
@@ -459,8 +462,10 @@ const toInt=v=>{const n=Math.round(Number(String(v).replace(',','.')));return Nu
 function needRow(p,extra){return {month:MONTH,product_id:p.product_id,need_boxes:p.need,box_qty:p.box_qty,plan_qty:p.plan,stock_qty:p.stock,requests_qty:p.reqQty,ads:p.ads,days_to_eom:p.dte,calc_boxes:p.calc,unit_cost:p.cost,updated_at:new Date().toISOString(),...extra};}
 async function setNeed(pid,v){
   if(ST()!=='draft') return;
-  const p=MODEL.find(x=>x.product_id===pid); p.need=toInt(v);
-  try{ await upsert('purchase_needs',[needRow(p)],'month,product_id'); NEEDS[pid]={...(NEEDS[pid]||{}),need_boxes:p.need}; }catch(e){fail(e);}
+  const p=MODEL.find(x=>x.product_id===pid), auto=p.calc==null?0:Math.round(p.calc);
+  // пустое поле — вернуть к расчёту
+  p.need=String(v).trim()===''?auto:toInt(v); p.manual=p.need!==auto;
+  try{ await upsert('purchase_needs',[needRow(p)],'month,product_id'); NEEDS[pid]={...(NEEDS[pid]||{}),need_boxes:p.need,calc_boxes:p.calc}; }catch(e){fail(e);}
   renderCards(); renderT1(); renderSup();
 }
 async function setAg(pid,v){
