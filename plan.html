@@ -112,6 +112,12 @@
  tr.zeroplan td{opacity:.45}
  tr.rowdown td{background:rgba(227,61,120,.12)}
  tr.rowup td{background:rgba(22,163,74,.12)}
+ tr.anareq td{background:rgba(227,61,120,.6)!important;font-weight:700} /* запрос аналитики от РОПа — важнее подсветки роста/падения */
+ .anaflag{margin-right:3px}
+ tr.famrow td{font-weight:700;background:rgba(84,66,115,.06)}
+ tr.famrow td.okey{cursor:pointer}
+ .famcnt{font-weight:400;opacity:.6}
+ tr.famchild td.okey{padding-left:22px}
  tr.rowrestock td{font-weight:900;-webkit-text-stroke:.8px currentColor;paint-order:stroke fill;letter-spacing:.2px}
  tr.rowrestock td.okey::before{content:'▲ ';color:#16a34a;-webkit-text-stroke:0}
  .dateshort{cursor:pointer;color:#544273;font-size:.85em;border-bottom:1px dashed rgba(84,66,115,.4);white-space:nowrap}
@@ -477,7 +483,7 @@ const SUPABASE_URL='https://jaruwkpugxybwcsalhgr.supabase.co';
 const ANON='sb_publishable_09rFaH3adGXnEO3-cybX9A_eK_mCnW0';
 const HD={apikey:ANON,Authorization:'Bearer '+ANON};
 const TAX_RATE=0.03;
-let ROWS=[],PLAN={},BYID={},WD={},WEEKS=[],WEEKISO=[],PPM={},PROTO={},NOTES={},DEV={},OFFER_PID={},SKU_PID={};
+let ROWS=[],PLAN={},BYID={},WD={},WEEKS=[],WEEKISO=[],PPM={},PROTO={},NOTES={},DEV={},OFFER_PID={},SKU_PID={},ANAREQ={};
 let EXP={qty:false,rev:false,mar:false,price:false,pct:false};
 let GM={m1:false,m2:false};
 let PIEMODE={m1:'plan',m2:'plan',t:'plan'};
@@ -735,6 +741,26 @@ async function loadPPM(){
   PPM={};
   [...cur, ...added].forEach(x=>PPM[x.product_id]={weekday:x.weekday,protocol:x.protocol,work_date:x.work_date});
 }
+// управленческие ходы РОПа (главная → analytics_requests): ❗ — запрос аналитики, 📣 — корректировка рекламных расходов.
+// Открытые подсвечиваются розовым со своим значком; снимает РОП на главной. Нет колонки kind — всё считается аналитикой
+const ANA_KINDS={analytics:{icon:'❗',tip:'РОП запросил аналитику'},ads:{icon:'📣',tip:'РОП запросил корректировку рекламных расходов'}};
+async function loadAnaReq(){
+  ANAREQ={};
+  try{
+    const q=sel=>fetch(SUPABASE_URL+`/rest/v1/analytics_requests?closed_at=is.null&select=${sel}&order=created_at.asc&limit=1000`,{headers:HD});
+    let r=await q('product_id,created_at,kind');
+    if(!r.ok)r=await q('product_id,created_at');
+    if(!r.ok)return; // нет таблицы — страница работает без запросов
+    (await r.json()).forEach(x=>{(ANAREQ[x.product_id]=ANAREQ[x.product_id]||{})[x.kind||'analytics']=x;});
+  }catch(e){console.warn('analytics_requests:',e.message);}
+}
+// значки и подсказка управленческих ходов по списку товаров (у группы перчаток — если есть у любого размера)
+function anaMarks(pids){
+  const ks=Object.keys(ANA_KINDS).filter(k=>pids.some(pid=>ANAREQ[pid]&&ANAREQ[pid][k]));
+  const icons=ks.map(k=>`<span class="anaflag">${ANA_KINDS[k].icon}</span>`).join('');
+  const tip=ks.map(k=>{const d=pids.map(pid=>ANAREQ[pid]&&ANAREQ[pid][k]).filter(Boolean).map(x=>x.created_at).sort()[0];return ANA_KINDS[k].tip+' '+ddmm(localISO(new Date(d)));}).join('; ');
+  return {on:ks.length>0,icons,tip};
+}
 async function loadProto(){
   const [y,m]=MONTH.split('-').map(Number);
   const [wFrom,wTo]=weekBoundsOfMonth(y,m);
@@ -885,6 +911,22 @@ async function syncPnl(extraWeeks){
   for(let i=0;i<body.length;i+=500){
     const part=body.slice(i,i+500);
     await fetch(SUPABASE_URL+'/rest/v1/sales_plan_weeks?on_conflict=product_id,week,metric',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},body:JSON.stringify(part)});
+  }
+  // дневная маржа CF (для суточного графика главной) — та же формула, что у недели, по каждому дню с начислениями:
+  // mar = pnl − себестоимость × продажи − реклама дня − налог × выручка P; сумма дней недели = недельный факт
+  const dayBody=[];
+  day.forEach((m,pid)=>{
+    const am=adsMap.get(pid);
+    m.forEach((g,d)=>{
+      if(d<first||d>last)return;
+      const ci=costAt(pid,d),ads=am?(am.get(d)||0):0,cogs=ci.cost*g.sales;
+      const mar=g.pnl-cogs-ads-TAX_RATE*g.revP;
+      dayBody.push({product_id:pid,day:d,mar:Math.round(mar*100)/100,revn:Math.round(g.gmv*100)/100,sales:g.sales,cogs:Math.round(cogs*100)/100,cost_provisional:!!ci.prov,updated_at:new Date().toISOString()});
+    });
+  });
+  for(let i=0;i<dayBody.length;i+=500){
+    const r=await fetch(SUPABASE_URL+'/rest/v1/cf_daily?on_conflict=product_id,day',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},body:JSON.stringify(dayBody.slice(i,i+500))});
+    if(!r.ok){console.warn('cf_daily: HTTP',r.status,'— дневная маржа не сохранена (нет таблицы?)');break;}
   }
 }
 async function fixHypotheses(){
@@ -1392,7 +1434,7 @@ async function load(){
       BYID={}; ROWS.forEach(p=>BYID[p.product_id]=p);
       OFFER_PID={}; ROWS.forEach(p=>OFFER_PID[p.offer_id]=p.product_id);
       SKU_PID={}; ROWS.forEach(p=>{const sku=p.raw&&p.raw.sku!=null?String(p.raw.sku):'';if(sku)SKU_PID[sku]=p.product_id;});
-      await Promise.all([loadPlans(),loadWeeks(),loadPPM(),loadProto(),loadDev(),loadCosts(),loadCostHistory()]);
+      await Promise.all([loadPlans(),loadWeeks(),loadPPM(),loadProto(),loadDev(),loadCosts(),loadCostHistory(),loadAnaReq()]);
       const planCnt=ROWS.filter(r=>((PLAN[r.product_id]||{}).plan_qty||0)>0).length;
       document.getElementById('meta').textContent=`Период: ${MONTH} • позиций: ${ROWS.length} • в плане: ${planCnt} • обновлено: ${new Date().toLocaleString('ru-RU')}`;
       render(); backgroundFix(); return;
@@ -1410,6 +1452,16 @@ async function backgroundFix(){
 }
 function toggleMetric(k){ EXP[k]=!EXP[k]; render(); }
 function toggleGM(k){ GM[k]=!GM[k]; render(); }
+// группы перчаток (как в отчёте РОПа на главной): ключ — артикул до кода цвета включительно; раскрытые — только на время просмотра
+const GLV_COLORS=new Set(['BLK','BLU','PNK','GRY','YLW','PUR','CLR','WHT','GRN','RED','ORG','BRN','BEG']);
+function gloveFamily(offer){
+  const s=String(offer).split('-');
+  if(s[0]!=='GLV')return null;
+  for(let i=2;i<s.length;i++)if(GLV_COLORS.has(s[i]))return i<s.length-1?s.slice(0,i+1).join('-'):null;
+  return null;
+}
+let FAMOPEN=new Set();
+function toggleFam(k){ FAMOPEN.has(k)?FAMOPEN.delete(k):FAMOPEN.add(k); render(); }
 function toggleProto(pid){ if(openProto.has(pid))openProto.delete(pid); else openProto.add(pid); render(); }
 async function upsertPPM(pid,patch){
   const cur=PPM[pid]||{weekday:null,protocol:null,work_date:null};
@@ -2353,15 +2405,17 @@ renderKpiPnl(g);
   });
   document.getElementById('th').innerHTML=r1+'</tr><tr>'+r2+'</tr><tr>'+r3+'</tr></tr>';
   const devOf=p=>{const d=projVal(p,'mar').dev;return d==null?0:d;};
-  const prodRow=p=>{
+  const prodRow=(p,inFam)=>{
     const pid=p.product_id;
     const wd=(PPM[pid]&&PPM[pid].work_date)||'';
     const pl=PLAN[pid]||{price:Number(p.price||0),plan_qty:0,margin_pct:0};
     const zp=(pl.plan_qty||0)===0;
     const hasActive=(PROTO[pid]||[]).some(it=>!it.parent_id&&it.deadline&&it.deadline>=localISO(new Date())&&it.fact_dev==null);
     const dateLocked=hasActive;
-    let h=`<tr data-pid="${pid}"${zp?' class="zeroplan"':''}>
-      <td class="num okey" title="${esc(p.name)} — открыть протокол" onclick="toggleProto(${pid})">${esc(p.offer_id)}</td>`;
+    const ana=anaMarks([pid]);
+    const trc=[zp?'zeroplan':'',ana.on?'anareq':'',inFam?'famchild':''].filter(Boolean).join(' ');
+    let h=`<tr data-pid="${pid}"${trc?` class="${trc}"`:''}>
+      <td class="num okey" title="${esc(p.name)}${ana.on?' — '+ana.tip:''} — открыть протокол" onclick="toggleProto(${pid})">${ana.icons}${esc(p.offer_id)}</td>`;
     if(dateLocked){
       h+=`<td><span class="datelocked" title="дата зафиксирована гипотезой">${wd?ddmm(wd):'—'}</span></td>`;
     }else{
@@ -2406,26 +2460,67 @@ renderKpiPnl(g);
     }
     return h;
   };
+  // перчатки: группа = артикул до кода цвета (как в отчёте РОПа); строка группы — суммы, только чтение, раскрывается до размеров
+  const famRow=f=>{
+    const ms=f.members,S=fn=>ms.reduce((s,p)=>{const v=fn(p);return s+(v==null?0:v);},0),any=fn=>ms.some(p=>fn(p)!=null);
+    const open=FAMOPEN.has(f.key),ana=anaMarks(ms.map(p=>p.product_id));
+    const dates=ms.map(p=>PPM[p.product_id]&&PPM[p.product_id].work_date).filter(Boolean).sort();
+    const pv=k=>({plan:S(p=>monthlyPlan(p,k)),ff:any(p=>projVal(p,k).ffV)?S(p=>projVal(p,k).ffV):null,dev:any(p=>projVal(p,k).dev)?S(p=>projVal(p,k).dev):null});
+    const add={sales:pv('sales'),revn:pv('revn'),mar:pv('mar')};
+    const wsum=(key,w)=>{let t=0,a=false;ms.forEach(p=>{const r=getRec(p.product_id,key,w);if(r.fact!=null){t+=r.fact;a=true;}});return a?t:null;};
+    const ratio=(nk,dk,mul)=>{let N=0,Dn=0,a=false;ms.forEach(p=>WEEKISO.forEach(w=>{const n=getRec(p.product_id,nk,w),d=getRec(p.product_id,dk,w);if(n.fact!=null&&d.fact!=null&&d.fact!==0){N+=n.fact;Dn+=d.fact;a=true;}}));return a&&Dn!==0?N/Dn*mul:null;};
+    const wratio=(nk,dk,mul,w)=>{let N=0,Dn=0,a=false;ms.forEach(p=>{const n=getRec(p.product_id,nk,w),d=getRec(p.product_id,dk,w);if(n.fact!=null&&d.fact!=null&&d.fact!==0){N+=n.fact;Dn+=d.fact;a=true;}});return a&&Dn!==0?N/Dn*mul:null;};
+    let h=`<tr class="famrow${ana.on?' anareq':''}" data-fam="${f.key}"><td class="num okey" title="Группа перчаток: ${ms.length} поз. — раскрыть размеры${ana.on?' — '+ana.tip:''}" onclick="toggleFam('${f.key}')">${open?'▾':'▸'} ${ana.icons}${esc(f.key)}-* <span class="famcnt">(${ms.length})</span></td>`;
+    h+=`<td><span class="datelocked" title="ближайшая дата работы среди размеров">${dates[0]?ddmm(dates[0]):'—'}</span></td>`;
+    METRICS.forEach(mt=>{
+      let planV,ffV,dev;
+      if(add[mt.key]){planV=add[mt.key].plan;ffV=add[mt.key].ff;dev=add[mt.key].dev;}
+      else if(mt.key==='price'){planV=add.sales.plan>0?add.revn.plan/add.sales.plan:null;ffV=ratio('revg','ug',1);dev=ffV==null||planV==null?null:ffV-planV;}
+      else{planV=add.revn.plan!==0?add.mar.plan/add.revn.plan*100:null;ffV=ratio('mar','revn',100);dev=ffV==null||planV==null?null:ffV-planV;}
+      const dcls=dev==null?'n':(dev>0?'g':dev<0?'r':'n');
+      h+=`<td class="num sep">${planV==null?'—':fmtFor(mt.key,planV)}</td><td class="num calc">${ffV==null?'—':fmtFor(mt.key,ffV)}</td><td class="num ${dcls}">${dev==null?'—':(dev>0?'+':'')+fmtFor(mt.key,dev)}</td>`;
+      if(EXP[mt.key]){
+        if(mt.key==='price')WEEKISO.forEach(w=>{const v=wratio('revg','ug',1,w);h+=`<td class="num wcell factcell">${v==null?'—':fmt2(v)}</td>`;});
+        else if(mt.key==='pct')WEEKISO.forEach(w=>{const v=wratio('mar','revn',100,w);h+=`<td class="num wcell factcell">${v==null?'—':fmt2(v)}</td>`;});
+        else if(mt.plan===false)WEEKISO.forEach(w=>{const v=wsum(WDKEY[mt.key],w);h+=`<td class="num wcell factcell">${v==null?'—':wfmt(mt.key,v)}</td>`;});
+        else{const ser=ms.map(p=>seriesFor(p,mt.key));WEEKISO.forEach((w,i)=>{const fc=ser.reduce((s,x)=>s+(x[i].forecast||0),0),fa=wsum(WDKEY[mt.key],w);h+=`<td class="num wcell calc">${wfmt(mt.key,fc)}</td><td class="num wcell factcell">${fa==null?'—':wfmt(mt.key,fa)}</td>`;});}
+      }
+    });
+    h+='</tr>';
+    if(open)h+=ms.slice().sort((a,b)=>devOf(a)-devOf(b)).map(p=>prodRow(p,true)).join('');
+    return h;
+  };
+  // список менеджера → позиции: товары и группы перчаток (от 2 товаров); дата группы — ближайшая среди размеров
+  const toItems=list=>{
+    const fam=new Map(),out=[];
+    list.forEach(p=>{const k=gloveFamily(p.offer_id);if(!k){out.push({p});return;}if(!fam.has(k))fam.set(k,[]);fam.get(k).push(p);});
+    fam.forEach((ms,k)=>{if(ms.length<2){out.push({p:ms[0]});return;}out.push({f:{key:k,members:ms}});});
+    return out;
+  };
+  const itemDate=it=>it.p?((PPM[it.p.product_id]&&PPM[it.p.product_id].work_date)||null):(it.f.members.map(p=>PPM[p.product_id]&&PPM[p.product_id].work_date).filter(Boolean).sort()[0]||null);
+  const itemDev=it=>it.p?devOf(it.p):it.f.members.reduce((s,p)=>s+devOf(p),0);
+  const itemRow=it=>it.p?prodRow(it.p):famRow(it.f);
   let html='';
   const groups=[['m1','Илья',m1],['m2','Ольга',m2]];
   groups.forEach(([gid,gname,list])=>{
     html+=`<tr class="mgroup"><td colspan="${totalCols}"><button onclick="toggleGM('${gid}')">${GM[gid]?'▾':'▸'}</button>${gname} • ${list.length} поз.</td></tr>`;
     if(!GM[gid])return;
-    const hasDate=list.some(p=>(PPM[p.product_id]&&PPM[p.product_id].work_date));
+    const items=toItems(list);
+    const hasDate=items.some(it=>itemDate(it));
     if(hasDate){
       const byDate=new Map();
-      list.forEach(p=>{ const d=(PPM[p.product_id]&&PPM[p.product_id].work_date)||null; if(!byDate.has(d))byDate.set(d,[]); byDate.get(d).push(p); });
+      items.forEach(it=>{ const d=itemDate(it); if(!byDate.has(d))byDate.set(d,[]); byDate.get(d).push(it); });
       const dates=[...byDate.keys()].filter(x=>x).sort();
       dates.forEach(d=>{
         html+=`<tr class="dgroup"><td colspan="${totalCols}">${dateHead(d)}</td></tr>`;
-        html+=byDate.get(d).sort((a,b)=>devOf(a)-devOf(b)).map(prodRow).join('');
+        html+=byDate.get(d).sort((a,b)=>itemDev(a)-itemDev(b)).map(itemRow).join('');
       });
       if(byDate.has(null)){
         html+=`<tr class="dgroup"><td colspan="${totalCols}">Без даты</td></tr>`;
-        html+=byDate.get(null).sort((a,b)=>devOf(a)-devOf(b)).map(prodRow).join('');
+        html+=byDate.get(null).sort((a,b)=>itemDev(a)-itemDev(b)).map(itemRow).join('');
       }
     }else{
-      html+=[...list].sort((a,b)=>devOf(a)-devOf(b)).map(prodRow).join('');
+      html+=items.sort((a,b)=>itemDev(a)-itemDev(b)).map(itemRow).join('');
     }
   });
   document.getElementById('tb').innerHTML=html||`<tr><td colspan="${totalCols}" style="color:#94a3b8">нет данных</td></tr>`;
