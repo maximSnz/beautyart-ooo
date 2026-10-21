@@ -48,11 +48,12 @@ const st={};posts.forEach(p=>st[p.status]=(st[p.status]||0)+1);console.log('  с
 const db=await sbAll(`product_sales?sale_date=gte.${DAYS[0]}&sale_date=lte.${DAYS[DAYS.length-1]}&select=sale_date,offer_id,warehouse_name,qty,revenue&order=sale_date,offer_id,warehouse_name`);
 const dbC=new Map();db.forEach(x=>dbC.set(x.sale_date+'|'+x.offer_id+'|'+x.warehouse_name,{q:Number(x.qty||0),r:Number(x.revenue||0)}));
 const PRICES={'products.price.amount':(p,i)=>num(p.products[i]?.price),'financial_data.price':(p,i)=>Number(p.financial_data?.products?.[i]?.price),'financial_data.old_price':(p,i)=>Number(p.financial_data?.products?.[i]?.old_price)};
-for(const pk in PRICES){
+const VARIANTS=[['products.price.amount',false],['products.price.amount',true]];
+for(const [pk,withCancel] of VARIANTS){
   const apiC=new Map();
-  posts.forEach(p=>{ if(/cancel/i.test(p.status||''))return; const d=mskDay(p.in_process_at||p.created_at); if(!DAYS.includes(d))return;
+  posts.forEach(p=>{ if(!withCancel&&/cancel/i.test(p.status||''))return; const d=mskDay(p.in_process_at||p.created_at); if(!DAYS.includes(d))return;
     (p.products||[]).forEach((pr,i)=>{const k=d+'|'+pr.offer_id+'|'+(p.analytics_data?.warehouse_name||'');const c=apiC.get(k)||{q:0,r:0};const q=Number(pr.quantity||0);c.q+=q;c.r+=q*PRICES[pk](p,i);apiC.set(k,c);});});
-  console.log(`\n  цена = ${pk}:`);
+  console.log(`\n  цена = ${pk}, ${withCancel?'ВКЛЮЧАЯ отменённые':'без отменённых'}:`);
   DAYS.forEach(d=>{let qa=0,qb=0,ra=0,rb=0,same=0,diffQ=0,diffR=0,onlyA=0,onlyB=0;
     const keys=new Set([...apiC.keys(),...dbC.keys()].filter(k=>k.startsWith(d+'|')));
     keys.forEach(k=>{const a=apiC.get(k),b=dbC.get(k);if(a){qa+=a.q;ra+=a.r;}if(b){qb+=b.q;rb+=b.r;}
