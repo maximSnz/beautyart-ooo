@@ -38,10 +38,10 @@ const since=addDays(DAYS[0],-1)+'T21:00:00.000Z', to=DAYS[DAYS.length-1]+'T20:59
 console.log('\n===== 1. ЗАКАЗЫ: /v3/posting/fbo/list против product_sales =====');
 let posts=[],cursor='',pages=0;
 for(;;){
-  const r=await ozon('/v3/posting/fbo/list',{dir:'ASC',filter:{since,to},limit:1000,cursor,with:{analytics_data:true,financial_data:true}});
+  const r=await ozon('/v3/posting/fbo/list',{dir:'ASC',filter:{since,to},limit:100,cursor,with:{analytics_data:true,financial_data:true}});
   if(r.status!==200){console.log('  HTTP',msg(r));break;}
   posts=posts.concat(r.json.postings||[]); pages++; cursor=r.json.cursor||'';
-  if(!r.json.has_next||!cursor||pages>200)break;
+  if(!r.json.has_next||!cursor||pages>2000)break;
 }
 console.log(`  страниц ${pages}, отправлений ${posts.length}`);
 const st={};posts.forEach(p=>st[p.status]=(st[p.status]||0)+1);console.log('  статусы:',Object.keys(st).join(', '));
@@ -112,6 +112,13 @@ for(const d of DAYS){
   console.log(`  возвраты в API (sale_price<0): ${neg} из ${neg+pos} строк выручки`);
   Object.entries(byType).filter(([,v])=>v.bad).sort((x,y)=>Math.abs(y[1].a-y[1].b)-Math.abs(x[1].a-x[1].b)).slice(0,12)
     .forEach(([t,v])=>console.log(`    расходится: ${t} — ${pct(v.a,v.b)}, ячеек ${v.bad}`));
+  // разбор расхождений возвратов: что в базе на месте ячеек API «Возврат выручки» (только типы и счётчики)
+  const retA=rows.filter(r=>r.k==='Возвраты / Возврат выручки');
+  const retInfo={};retA.forEach(r=>{const inB=dbR.filter(x=>x.offer_id===r.o&&/Возврат выручки|Выручка/.test(x.charge_type));
+    const k=inB.length?inB.map(x=>x.charge_type+(Number(x.amount)<0?'(−)':'(+)')).sort().join('+'):'нет строк выручки в базе';retInfo[k]=(retInfo[k]||0)+1;});
+  if(retA.length)console.log('  возвраты API → в базе у того же артикула:',JSON.stringify(retInfo));
+  const negSales=dbR.filter(x=>x.charge_type==='Выручка'&&Number(x.amount)<0).length;
+  console.log(`  в базе «Выручка» с минусом: ${negSales}; «Возврат выручки» с плюсом: ${dbR.filter(x=>x.charge_type==='Возврат выручки'&&Number(x.amount)>0).length}`);
   // штуки и цена выручки: syncPnl берёт qty, price×qty (GMV) по «Выручка» и «Возврат выручки»
   for(const t of ['Продажи / Выручка','Возвраты / Возврат выручки']){
     const a=rows.filter(r=>r.k===t),b=dbR.filter(r=>r.group_name+' / '+r.charge_type===t);
