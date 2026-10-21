@@ -167,8 +167,9 @@
 <div class="login-box" id="login">
     <img src="https://i.ibb.co/ZzbPQmQt/IMG-8031.png" alt="Beauty Art Logo" class="login-logo">
     <div class="login-title">Закрытый раздел</div>
-    <div class="login-subtitle">Введите пароль для доступа</div>
-    <input type="password" id="pwd" class="password-input" placeholder="Пароль" onkeypress="if(event.key==='Enter')go()">
+    <div class="login-subtitle">Введите почту и пароль для доступа</div>
+    <input type="email" id="email" class="password-input" placeholder="Почта" autocomplete="username" onkeypress="if(event.key==='Enter')go()">
+    <input type="password" id="pwd" class="password-input" placeholder="Пароль" autocomplete="current-password" onkeypress="if(event.key==='Enter')go()">
     <button class="login-btn" onclick="go()">Войти</button>
     <div class="error-message" id="errorMessage">Неверный пароль. Попробуйте ещё раз.</div>
 </div>
@@ -223,6 +224,7 @@
     <div class="pal" id="pal"></div>
   </div>
 </div>
+<script src="../beautyart-home/auth.js?v=20261021"></script>
 <script>
 function toggleNav(btn) {
   const item = btn.closest('.nav-item');
@@ -237,7 +239,6 @@ document.addEventListener('click', (e) => {
 });
 
 const ENTITY='ООО';
-const PASSWORD_HASHES=['6dd81b2b2385ffaeae34bc09050f3258110c5c7f1db578c69bcbc30ad8a121e0'];
 const SUPABASE_URL='https://jaruwkpugxybwcsalhgr.supabase.co';
 const ANON='sb_publishable_09rFaH3adGXnEO3-cybX9A_eK_mCnW0';
 const HD={apikey:ANON,Authorization:'Bearer '+ANON};
@@ -287,9 +288,7 @@ let WEEK=addD(keyOfMonday(new Date()),7),F='all',OPEN=null,OPEN1=new Set(),OPEN2
 let WLT={},LT_SRC='',LINES=new Map(),PREV=new Map(),SUP={},NEEDS={},MONTH_REQ={},MODEL=[];
 
 async function go(){
-  const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(document.getElementById('pwd').value));
-  const h=[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
-  if(!PASSWORD_HASHES.includes(h)){{const _e=document.getElementById('errorMessage');_e.style.display='block';_e.textContent=document.getElementById('pwd').value?'Неверный пароль. Попробуйте ещё раз.':'Введите пароль';return;}}
+  if(!await BA_AUTH.login(SUPABASE_URL,HD))return;
   document.getElementById('login').classList.add('hide');
   document.getElementById('app').classList.remove('hide');
   init();
@@ -599,4 +598,5 @@ function distribute(p){
   for(let i=0;i<tot-used&&i<parts.length;i++) parts[i].f++;
   parts.forEach(x=>x.r.dist=x.f);
 }
+if(BA_AUTH.has(SUPABASE_URL))go();
 </script></body></html>

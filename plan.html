@@ -427,8 +427,9 @@
 <div class="login-box" id="login">
     <img src="https://i.ibb.co/ZzbPQmQt/IMG-8031.png" alt="Beauty Art Logo" class="login-logo">
     <div class="login-title">Закрытый раздел</div>
-    <div class="login-subtitle">Введите пароль для доступа</div>
-    <input type="password" id="pwd" class="password-input" placeholder="Пароль" onkeypress="if(event.key==='Enter')go()">
+    <div class="login-subtitle">Введите почту и пароль для доступа</div>
+    <input type="email" id="email" class="password-input" placeholder="Почта" autocomplete="username" onkeypress="if(event.key==='Enter')go()">
+    <input type="password" id="pwd" class="password-input" placeholder="Пароль" autocomplete="current-password" onkeypress="if(event.key==='Enter')go()">
     <button class="login-btn" onclick="go()">Войти</button>
     <div class="error-message" id="errorMessage">Неверный пароль. Попробуйте ещё раз.</div>
 </div>
@@ -474,11 +475,11 @@
   </div>
 </div>
  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="../beautyart-home/auth.js?v=20261021"></script>
 <script>
 function toggleNav(btn){const item=btn.closest('.nav-item');const wasOpen=item.classList.contains('open');document.querySelectorAll('.nav-item.open').forEach(i=>i.classList.remove('open'));if(!wasOpen)item.classList.add('open');}
 document.addEventListener('click',(e)=>{if(!e.target.closest('.nav-item')){document.querySelectorAll('.nav-item.open').forEach(i=>i.classList.remove('open'));}});
 document.addEventListener('click',(e)=>{if(!e.target.closest('.upwrap')){const m=document.getElementById('upmenu');if(m)m.classList.add('hide');}});
-const PASSWORD_HASH='6dd81b2b2385ffaeae34bc09050f3258110c5c7f1db578c69bcbc30ad8a121e0';
 const SUPABASE_URL='https://jaruwkpugxybwcsalhgr.supabase.co';
 const ANON='sb_publishable_09rFaH3adGXnEO3-cybX9A_eK_mCnW0';
 const HD={apikey:ANON,Authorization:'Bearer '+ANON};
@@ -616,23 +617,7 @@ function openDate(pid){
 }
 async function go(){
   const err = document.getElementById('errorMessage');
-  const input = document.getElementById('pwd').value;
-  
-  if(!input){
-    err.style.display = 'block';
-    err.textContent = 'Введите пароль';
-    return;
-  }
-  
-  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
-  const h = [...new Uint8Array(b)].map(x => x.toString(16).padStart(2,'0')).join('');
-  
-  if(h !== PASSWORD_HASH){
-    err.style.display = 'block';
-    err.textContent = 'Неверный пароль. Попробуйте ещё раз.';
-    document.getElementById('pwd').value = '';
-    return;
-  }
+  if(!await BA_AUTH.login(SUPABASE_URL,HD)){document.getElementById('pwd').value='';return;}
   
   err.style.display = 'none';
   document.getElementById('login').style.display = 'none';
@@ -2575,6 +2560,7 @@ async function applyRowMarks(){
     if(td){const base=(td.dataset.t0=td.dataset.t0||td.title);td.title=notes.length?base+'\n'+notes.join('\n'):base;}
   });
 }
+if(BA_AUTH.has(SUPABASE_URL))go();
 </script>
 </body>
 </html>

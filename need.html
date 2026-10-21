@@ -170,8 +170,9 @@
 <div class="login-box" id="login">
     <img src="https://i.ibb.co/ZzbPQmQt/IMG-8031.png" alt="Beauty Art Logo" class="login-logo">
     <div class="login-title">Закрытый раздел</div>
-    <div class="login-subtitle">Введите пароль для доступа</div>
-    <input type="password" id="pwd" class="password-input" placeholder="Пароль" onkeypress="if(event.key==='Enter')go()">
+    <div class="login-subtitle">Введите почту и пароль для доступа</div>
+    <input type="email" id="email" class="password-input" placeholder="Почта" autocomplete="username" onkeypress="if(event.key==='Enter')go()">
+    <input type="password" id="pwd" class="password-input" placeholder="Пароль" autocomplete="current-password" onkeypress="if(event.key==='Enter')go()">
     <button class="login-btn" onclick="go()">Войти</button>
     <div class="error-message" id="errorMessage">Неверный пароль. Попробуйте ещё раз.</div>
 </div>
@@ -217,6 +218,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="../beautyart-home/auth.js?v=20261021"></script>
 <script>
 function toggleNav(btn) {
   const item = btn.closest('.nav-item');
@@ -231,7 +233,6 @@ document.addEventListener('click', (e) => {
 });
 
 const ENTITY='ООО';
-const PASSWORD_HASHES=['6dd81b2b2385ffaeae34bc09050f3258110c5c7f1db578c69bcbc30ad8a121e0'];
 const SUPABASE_URL='https://jaruwkpugxybwcsalhgr.supabase.co';
 const ANON='sb_publishable_09rFaH3adGXnEO3-cybX9A_eK_mCnW0';
 const HD={apikey:ANON,Authorization:'Bearer '+ANON};
@@ -279,9 +280,7 @@ let PROD=[],NOBOX=[],DEM={},DEM_AT='',COST={},MONTHS_DB={},REQ_WEEKS=[],REQ={};
 let MONTH=addMonth(ymOf(new Date()),1),F='all',PLAN={},NEEDS={},TURN=DEFAULT_TURNOVER,TURN_SRC='',MODEL=[],OPEN_SUP=new Set();
 
 async function go(){
-  const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(document.getElementById('pwd').value));
-  const h=[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
-  if(!PASSWORD_HASHES.includes(h)){{const _e=document.getElementById('errorMessage');_e.style.display='block';_e.textContent=document.getElementById('pwd').value?'Неверный пароль. Попробуйте ещё раз.':'Введите пароль';return;}}
+  if(!await BA_AUTH.login(SUPABASE_URL,HD))return;
   document.getElementById('login').classList.add('hide');
   document.getElementById('app').classList.remove('hide');
   init();
@@ -515,4 +514,5 @@ async function prevStage(){
   if(!confirm(`Вернуть потребность на шаг «${STAGES[i-1][1]}»?`)) return;
   try{ await patchMonth({status:STAGES[i-1][0]}); await loadBase(); await loadMonth(); }catch(e){fail(e);}
 }
+if(BA_AUTH.has(SUPABASE_URL))go();
 </script></body></html>

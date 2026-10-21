@@ -184,8 +184,9 @@
 <div class="login-box" id="login">
     <img src="https://i.ibb.co/ZzbPQmQt/IMG-8031.png" alt="Beauty Art Logo" class="login-logo">
     <div class="login-title">Закрытый раздел</div>
-    <div class="login-subtitle">Введите пароль для доступа</div>
-    <input type="password" id="pwd" class="password-input" placeholder="Пароль" onkeypress="if(event.key==='Enter')go()">
+    <div class="login-subtitle">Введите почту и пароль для доступа</div>
+    <input type="email" id="email" class="password-input" placeholder="Почта" autocomplete="username" onkeypress="if(event.key==='Enter')go()">
+    <input type="password" id="pwd" class="password-input" placeholder="Пароль" autocomplete="current-password" onkeypress="if(event.key==='Enter')go()">
     <button class="login-btn" onclick="go()">Войти</button>
     <div class="error-message" id="errorMessage">Неверный пароль. Попробуйте ещё раз.</div>
 </div>
@@ -219,6 +220,7 @@
     <div class="tip" id="tip"></div>
   </div>
 </div>
+<script src="../beautyart-home/auth.js?v=20261021"></script>
 <script>
 function toggleNav(btn) {
   const item = btn.closest('.nav-item');
@@ -232,7 +234,6 @@ document.addEventListener('click', (e) => {
   }
 });
 
-const PASSWORD_HASH='6dd81b2b2385ffaeae34bc09050f3258110c5c7f1db578c69bcbc30ad8a121e0';
 const SUPABASE_URL='https://jaruwkpugxybwcsalhgr.supabase.co';
 const ANON='sb_publishable_09rFaH3adGXnEO3-cybX9A_eK_mCnW0';
 const HD={apikey:ANON,Authorization:'Bearer '+ANON};
@@ -304,14 +305,12 @@ async function fetchAll(path){
 }
 async function go(){
   try{
-    const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(document.getElementById('pwd').value));
-    const h=[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
-    if(h!==PASSWORD_HASH){{const _e=document.getElementById('errorMessage');_e.style.display='block';_e.textContent=document.getElementById('pwd').value?'Неверный пароль. Попробуйте ещё раз.':'Введите пароль';return;}}
+    if(!await BA_AUTH.login(SUPABASE_URL,HD))return;
     document.getElementById('login').classList.add('hide');
     document.getElementById('app').classList.remove('hide');
     load();
   }catch(e){
-    alert('Ошибка входа: '+(e.message||'Web Crypto недоступен. Откройте страницу по HTTPS или localhost.'));
+    alert('Ошибка входа: '+e.message);
   }
 }
 async function loadHistory(){
@@ -1123,4 +1122,5 @@ function render(){
     grandEl.innerHTML=`<span>ИТОГО по всем складам:</span><span>${fmt(tSum)} ₽ • ${fmt(tStock)} шт</span>`;
   }else{ grandEl.style.display='none'; grandEl.innerHTML=''; }
 }
+if(BA_AUTH.has(SUPABASE_URL))go();
 </script></body></html>
