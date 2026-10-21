@@ -1,0 +1,24 @@
+name: ozon-api-probe
+# Пробная сверка API Ozon (заказы, начисления) с данными CSV в базе. Только чтение, только ручной запуск.
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Дни через запятую (ГГГГ-ММ-ДД); пусто — 3 дня, начиная с позавчера'
+        required: false
+        default: ''
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Probe Ozon API vs Supabase (read-only)
+        run: node scripts/ozon_api_probe.mjs
+        env:
+          DAYS: ${{ github.event.inputs.days }}
+          OZON_CLIENT_ID: ${{ secrets.OZON_CLIENT_ID }}
+          OZON_API_KEY: ${{ secrets.OZON_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
