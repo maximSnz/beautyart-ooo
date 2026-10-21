@@ -208,7 +208,7 @@
     </details>
 
     <div class="sec" id="h1">Заявка менеджера</div>
-    <div class="note">Расчёт = (спрос × (покрытие + запас) − остаток − в пути) ÷ штук в коробе − заявки прошлых недель. Нажмите на товар, чтобы раскрыть кластеры.</div>
+    <div class="note">Расчёт = (спрос × (покрытие + запас) − остаток − в пути) ÷ штук в коробе, вверх до целого короба, − заявки прошлых недель. Нажмите на товар, чтобы раскрыть кластеры.</div>
     <div class="scroll"><table id="t1" class="pt"></table></div>
 
     <div class="sec">Потребность месяца</div>
@@ -364,12 +364,16 @@ function build(){
       if(!live&&line) prev=line.prev_boxes??prev;
       const noLt=!lt, inactive=SEED[c]&&!ACTIVE.has(c);
       let calc=null;
-      if(!noLt&&!inactive){ calc=Math.max(0,rnd((src.ads*(cov(lt)+(Number(lt.target_days)||0))-(src.av+src.tr))/p.box_qty)-prev); }
+      // коробы округляются ВВЕРХ (решение 21.10.2026): к приёмке в кластере — не меньше целевого запаса
+      if(!noLt&&!inactive){ calc=Math.max(0,Math.ceil((src.ads*(cov(lt)+(Number(lt.target_days)||0))-(src.av+src.tr))/p.box_qty-1e-9)-prev); }
       if(!live&&line) calc=line.calc_boxes;
-      const req=line?.requested_boxes??(live&&!imported?(calc||0):0);
+      // черновик: «заявлено» идёт за расчётом; ручная правка — сохранённое ≠ расчёту на момент сохранения (решение 21.10.2026)
+      const sc=line?.calc_boxes==null?null:Number(line.calc_boxes);
+      const manual=!!line&&line.requested_boxes!=null&&!(sc!=null&&line.requested_boxes===sc);
+      const req=live&&!imported?(manual?line.requested_boxes:(calc||0)):(line?.requested_boxes??0);
       if(!(src.ads>0||src.av>0||src.tr>0||prev>0||req>0||line)) continue;
       const noSnap=!live&&(!line||line.ads==null);
-      rows.push({c,noSnap,ads:src.ads||0,av:src.av||0,tr:src.tr||0,prev,calc,req,dist:line?.distributed_boxes??null,noLt,inactive,dws:d?.days_without_sales});
+      rows.push({c,noSnap,manual:live&&!imported&&manual,ads:src.ads||0,av:src.av||0,tr:src.tr||0,prev,calc,req,dist:line?.distributed_boxes??null,noLt,inactive,dws:d?.days_without_sales});
     }
     rows.sort((a,b)=>b.ads-a.ads||a.c.localeCompare(b.c,'ru'));
     const s=SUP[p.product_id]||{};
@@ -446,7 +450,7 @@ function renderT1(){
       for(const r of p.rows){
         const calcTxt=r.inactive?'<span class="mute">нет у Ozon</span>':r.noLt?'<span class="bad">нет сроков</span>':nf.format(r.calc);
         h+=`<tr><td>${esc(r.c)}</td><td class="n">${r.noSnap?dash:nf.format(r.ads)}</td><td class="n">${r.noSnap?dash:r.av}</td><td class="n">${r.noSnap?dash:r.tr}</td><td class="n">${r.noSnap&&!r.prev?dash:r.prev}</td><td class="n">${r.calc==null&&r.noSnap?dash:calcTxt}</td>
-          <td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${r.req}" onchange="setReq(${p.product_id},'${esc(r.c)}',this.value)">`:r.req}</td>
+          <td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${r.req}" title="${r.manual?'Изменено вручную; очистите поле, чтобы вернуть к расчёту':'Идёт за расчётом'}" onchange="setReq(${p.product_id},'${esc(r.c)}',this.value)">${r.manual?'<div class="mute" style="font-size:.75em">✎ вручную</div>':''}`:r.req}</td>
           ${dist?`<td class="n">${edD?`<input class="num" type="number" min="0" step="1" value="${r.dist??0}" onchange="setDist(${p.product_id},'${esc(r.c)}',this.value)">`:(r.dist??0)}</td>`:''}</tr>`;
       }
       h+=`</table></td></tr>`;
@@ -516,7 +520,9 @@ const toInt=v=>{const n=Math.round(Number(String(v).replace(',','.')));return Nu
 function lineRow(p,r,extra){return {week:WEEK,product_id:p.product_id,cluster:r.c,ads:r.ads,available:r.av,transit:r.tr,prev_boxes:r.prev,box_qty:p.box_qty,calc_boxes:r.calc,requested_boxes:r.req,updated_at:new Date().toISOString(),...extra};}
 async function setReq(pid,c,v){
   if(ST()!=='draft') return;
-  const p=MODEL.find(x=>x.product_id===pid), r=p.rows.find(x=>x.c===c); r.req=toInt(v);
+  const p=MODEL.find(x=>x.product_id===pid), r=p.rows.find(x=>x.c===c);
+  // пустое поле — вернуть к расчёту
+  r.req=String(v).trim()===''?(r.calc||0):toInt(v); r.manual=r.req!==(r.calc||0);
   try{ await upsert('purchase_lines',[lineRow(p,r)],'week,product_id,cluster'); LINES.set(pid+'|'+c,{...LINES.get(pid+'|'+c),requested_boxes:r.req}); }catch(e){fail(e);}
   renderCards(); renderNeeds(); renderT2(); renderPal(); renderT1();
 }
