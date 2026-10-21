@@ -1,9 +1,9 @@
 // Пробная сверка API Ozon с данными из CSV в базе (этап 3, «загрузка через API вместо CSV»). ТОЛЬКО ЧТЕНИЕ: в базу ничего не пишет.
-// Репозиторий публичный — в лог идут только устройство ответов (поля и типы, без значений), названия колонок и типов
-// и доли/расхождения в процентах; рублей, штук и артикулов в логе нет.
+// Репозиторий публичный — в лог идут только расхождения в процентах, счётчики и названия полей/типов;
+// рублей, штук и артикулов в логе нет.
 // Запуск: workflow ozon-api-probe (вручную), вход DAYS — дни через запятую (по умолчанию 3 дня, начиная с позавчера).
-// Проход 2 (21.10.2026): /v2/posting/fbo/list и /v3/finance/transaction/list отключены — ищем замену заказам
-// (новые списки отправлений, отчёт «Заказы» через /v1/report/postings/create) и полное устройство /v1/finance/accrual/by-day.
+// Проход 3 (21.10.2026): заказы — /v3/posting/fbo/list (v2 отключён, отчёт postings без склада);
+// начисления — /v1/finance/accrual/by-day, строки как у импорта CSV (только привязанные к товару) против ozon_charges.
 const OZON='https://api-seller.ozon.ru';
 const H={'Client-Id':process.env.OZON_CLIENT_ID,'Api-Key':process.env.OZON_API_KEY,'Content-Type':'application/json'};
 const SB=process.env.SUPABASE_URL, SR={apikey:process.env.SUPABASE_SERVICE_ROLE_KEY,Authorization:`Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`};
@@ -24,106 +24,100 @@ async function sbAll(path){ // постранично, с сортировкой
     const j=await r.json(); out=out.concat(j); if(j.length<1000)break; off+=1000;}
   return out;
 }
-// устройство: путь → типы (объединение по всем элементам массивов), значения не печатаются
-function shape(o,p='',acc=new Map()){
-  const add=(k,t)=>{const s=acc.get(k)||new Set();s.add(t);acc.set(k,s);};
-  if(Array.isArray(o)){add(p+'[]','array'); o.forEach(x=>shape(x,p+'[]',acc));}
-  else if(o&&typeof o==='object'){for(const k of Object.keys(o))shape(o[k],p?p+'.'+k:k,acc);}
-  else add(p,o===null?'null':typeof o);
-  return acc;
-}
-const printShape=(title,acc)=>{console.log(title);[...acc.keys()].sort().forEach(k=>console.log('  '+k+': '+[...acc.get(k)].join('|')));};
-const pct=(a,b)=>b===0?(a===0?'0%':'∞'):((a-b)/Math.abs(b)*100).toFixed(2)+'%';
-const share=(a,b)=>b===0?'—':(a/b*100).toFixed(1)+'%';
+const pct=(a,b)=>b===0?(a===0?'0%':'∞'):((a-b)/Math.abs(b)*100).toFixed(3)+'%';
 const mskDay=iso=>{const d=new Date(new Date(iso).getTime()+3*3600e3);return d.toISOString().slice(0,10);};
 const addDays=(iso,n)=>{const d=new Date(iso+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};
+const num=v=>Number(v?.amount??v??0);
 const today=mskDay(new Date().toISOString());
 const DAYS=(process.env.DAYS||'').split(',').map(s=>s.trim()).filter(Boolean);
 if(!DAYS.length)for(let i=4;i>=2;i--)DAYS.push(addDays(today,-i));
 console.log('Дни сверки:',DAYS.join(', '));
 const since=addDays(DAYS[0],-1)+'T21:00:00.000Z', to=DAYS[DAYS.length-1]+'T20:59:59.999Z'; // границы суток по Москве
 
-// ===== 1. Заказы: какие методы живы =====
-console.log('\n===== 1. ЗАКАЗЫ: поиск рабочего метода =====');
-const tries=[
-  ['/v3/posting/fbo/list',{dir:'ASC',filter:{since,to,status:''},limit:10,offset:0,with:{analytics_data:true,financial_data:true}}],
-  ['/v3/posting/fbo/list',{dir:'ASC',filter:{since,to},limit:10,cursor:''}],
-  ['/v1/posting/fbo/list',{dir:'ASC',filter:{since,to},limit:10,offset:0}],
-  ['/v4/posting/fbo/list',{filter:{since,to},limit:10}],
-  ['/v3/posting/fbs/list',{dir:'ASC',filter:{since,to},limit:10,offset:0}],
-  ['/v4/posting/fbs/list',{filter:{since,to},limit:10}],
-];
-for(const [p,b] of tries){const r=await ozon(p,b);console.log(`  ${p}: HTTP ${msg(r)}`);
-  if(r.status===200&&r.json)printShape('    устройство:',shape(r.json));}
-
-// Отчёт «Заказы» через API: тот же CSV, что в кабинете (ожидание до ~3 минут)
-console.log('\nОтчёт об отправлениях /v1/report/postings/create (FBO):');
-const rc=await ozon('/v1/report/postings/create',{filter:{processed_at_from:since,processed_at_to:to,delivery_schema:['fbo'],sku:[],cancel_reason_id:[],offer_id:'',status_alias:[],statuses:[],title:''},language:'DEFAULT'});
-console.log('  create: HTTP',msg(rc)); const code=rc.json?.result?.code;
-let fileUrl=null;
-if(code){for(let i=0;i<36&&!fileUrl;i++){await sleep(5000);const ri=await ozon('/v1/report/info',{code});const st=ri.json?.result?.status;
-  if(st==='success')fileUrl=ri.json.result.file; else if(st==='failed'){console.log('  отчёт: failed',ri.json?.result?.error||'');break;}}
-  console.log('  отчёт:',fileUrl?'готов':'не готов за 3 минуты');}
-if(fileUrl){
-  const csv=await (await fetch(fileUrl)).text();
-  const sep=(csv.slice(0,3000).match(/;/g)||[]).length>(csv.slice(0,3000).match(/,/g)||[]).length?';':',';
-  const parse=t=>{const rows=[];let row=[],cur='',q=false;for(let i=0;i<t.length;i++){const c=t[i];if(q){if(c=='"'){if(t[i+1]=='"'){cur+='"';i++;}else q=false;}else cur+=c;}else{if(c=='"')q=true;else if(c===sep){row.push(cur);cur='';}else if(c=='\n'){row.push(cur);rows.push(row);row=[];cur='';}else if(c!='\r')cur+=c;}}if(cur!==''||row.length){row.push(cur);rows.push(row);}return rows;};
-  const rows=parse(csv.replace(/^﻿/,'')); const hdr=rows[0].map(s=>s.trim());
-  console.log('  колонки:',hdr.map((h,i)=>i+':'+h).join(' | '));
-  const ix=n=>hdr.findIndex(h=>h===n);
-  const iD=ix('Принят в обработку'),iS=ix('Статус'),iO=ix('Артикул'),iP=ix('Предельная цена'),iQ=ix('Количество'),iW=ix('Склад отгрузки');
-  console.log('  нужные колонки найдены:',[iD,iS,iO,iP,iQ,iW].every(i=>i>=0)?'все':'НЕ ВСЕ ('+[iD,iS,iO,iP,iQ,iW].join(',')+')');
-  if([iD,iS,iO,iP,iQ,iW].every(i=>i>=0)){
-    const api={};
-    rows.slice(1).forEach(r=>{ if(/отмен/i.test(r[iS]||''))return; const d=(r[iD]||'').trim().slice(0,10); if(!DAYS.includes(d))return;
-      const o=(r[iO]||'').trim(),w=(r[iW]||'').trim(),q=Number(r[iQ]||0),p=Number(r[iP]||0); if(!o||!w||!isFinite(q))return;
-      const a=api[d]||(api[d]={q:0,r:0,keys:new Set()}); a.q+=q;a.r+=q*p;a.keys.add(o+'|'+w);});
-    const db=await sbAll(`product_sales?sale_date=gte.${DAYS[0]}&sale_date=lte.${DAYS[DAYS.length-1]}&select=sale_date,offer_id,warehouse_name,qty,revenue&order=sale_date,offer_id,warehouse_name`);
-    const dbDay={};db.forEach(x=>{const d=dbDay[x.sale_date]||(dbDay[x.sale_date]={q:0,r:0,keys:new Set()});d.q+=Number(x.qty||0);d.r+=Number(x.revenue||0);d.keys.add(x.offer_id+'|'+x.warehouse_name);});
-    DAYS.forEach(d=>{const a=api[d],b=dbDay[d]; if(!a||!b){console.log(`  ${d}: ${!b?'в базе нет данных':'в отчёте нет строк'}`);return;}
-      const miss=[...b.keys].filter(k=>!a.keys.has(k)).length, extra=[...a.keys].filter(k=>!b.keys.has(k)).length;
-      console.log(`  ${d}: штуки ${pct(a.q,b.q)}, выручка ${pct(a.r,b.r)}; пары артикул+склад: нет в отчёте ${miss}, лишние ${extra} (из ${b.keys.size})`);});
-  }
+// ===== 1. Заказы: /v3/posting/fbo/list против product_sales =====
+console.log('\n===== 1. ЗАКАЗЫ: /v3/posting/fbo/list против product_sales =====');
+let posts=[],cursor='',pages=0;
+for(;;){
+  const r=await ozon('/v3/posting/fbo/list',{dir:'ASC',filter:{since,to},limit:1000,cursor,with:{analytics_data:true,financial_data:true}});
+  if(r.status!==200){console.log('  HTTP',msg(r));break;}
+  posts=posts.concat(r.json.postings||[]); pages++; cursor=r.json.cursor||'';
+  if(!r.json.has_next||!cursor||pages>200)break;
 }
+console.log(`  страниц ${pages}, отправлений ${posts.length}`);
+const st={};posts.forEach(p=>st[p.status]=(st[p.status]||0)+1);console.log('  статусы:',Object.keys(st).join(', '));
+const db=await sbAll(`product_sales?sale_date=gte.${DAYS[0]}&sale_date=lte.${DAYS[DAYS.length-1]}&select=sale_date,offer_id,warehouse_name,qty,revenue&order=sale_date,offer_id,warehouse_name`);
+const dbC=new Map();db.forEach(x=>dbC.set(x.sale_date+'|'+x.offer_id+'|'+x.warehouse_name,{q:Number(x.qty||0),r:Number(x.revenue||0)}));
+const PRICES={'products.price.amount':(p,i)=>num(p.products[i]?.price),'financial_data.price':(p,i)=>Number(p.financial_data?.products?.[i]?.price),'financial_data.old_price':(p,i)=>Number(p.financial_data?.products?.[i]?.old_price)};
+for(const pk in PRICES){
+  const apiC=new Map();
+  posts.forEach(p=>{ if(/cancel/i.test(p.status||''))return; const d=mskDay(p.in_process_at||p.created_at); if(!DAYS.includes(d))return;
+    (p.products||[]).forEach((pr,i)=>{const k=d+'|'+pr.offer_id+'|'+(p.analytics_data?.warehouse_name||'');const c=apiC.get(k)||{q:0,r:0};const q=Number(pr.quantity||0);c.q+=q;c.r+=q*PRICES[pk](p,i);apiC.set(k,c);});});
+  console.log(`\n  цена = ${pk}:`);
+  DAYS.forEach(d=>{let qa=0,qb=0,ra=0,rb=0,same=0,diffQ=0,diffR=0,onlyA=0,onlyB=0;
+    const keys=new Set([...apiC.keys(),...dbC.keys()].filter(k=>k.startsWith(d+'|')));
+    keys.forEach(k=>{const a=apiC.get(k),b=dbC.get(k);if(a){qa+=a.q;ra+=a.r;}if(b){qb+=b.q;rb+=b.r;}
+      if(!a){onlyB++;return;}if(!b){onlyA++;return;}
+      if(a.q!==b.q)diffQ++;else if(Math.abs(Math.round(a.r*100)/100-b.r)>0.01)diffR++;else same++;});
+    console.log(`    ${d}: штуки ${pct(qa,qb)}, выручка ${pct(ra,rb)}; ячеек артикул+склад: совпали ${same}, другие штуки ${diffQ}, другая выручка ${diffR}, только в API ${onlyA}, только в базе ${onlyB}`);});
+}
+// склады: совпадают ли названия
+const whA=new Set(posts.map(p=>p.analytics_data?.warehouse_name).filter(Boolean)), whB=new Set(db.map(x=>x.warehouse_name));
+console.log(`\n  склады: в API ${whA.size}, в базе ${whB.size}, общих ${[...whA].filter(w=>whB.has(w)).length}`);
 
-// ===== 2. Начисления: полное устройство и раскладка итога =====
-console.log('\n===== 2. НАЧИСЛЕНИЯ =====');
+// ===== 2. Начисления: строки как у импорта CSV против ozon_charges =====
+console.log('\n===== 2. НАЧИСЛЕНИЯ: строки как у импорта против ozon_charges =====');
 const ty=await ozon('/v1/finance/accrual/types',{});
-const TYPES=new Map((ty.json?.accrual_types||[]).map(x=>[String(x.id),x.name]));
-const DESC=new Map((ty.json?.accrual_types||[]).map(x=>[String(x.id),x.description]));
-const num=v=>Number(v?.amount??v??0);
+const TYPES=new Map((ty.json?.accrual_types||[]).map(x=>[x.id,{code:x.name,ru:x.description}]));
+// группа отчёта «Начисления» по коду типа услуги (как в кабинете)
+const GROUP={Logistic:'Услуги доставки',DeliveryToHandoverPlaceByOzon:'Услуги доставки',ReturnFlowLogistic:'Услуги доставки',
+  LastMileCourier:'Услуги партнёров',Acquiring:'Услуги партнёров',PickUpPointReturnAcceptance:'Услуги партнёров',PackingFee:'Услуги партнёров',TemporaryPlacementsAgent:'Услуги партнёров',
+  PackageCost:'Другие услуги и штрафы',Disposal:'Другие услуги и штрафы',BrandCommission:'Продвижение и реклама',Promotion:'Продвижение и реклама',PayPerClick:'Продвижение и реклама',LabelBrandVerified:'Продвижение и реклама'};
+const prod=await sbAll('products?select=offer_id,raw->sku&order=product_id');
+const SKU_OFFER=new Map(prod.filter(p=>p.sku!=null).map(p=>[String(p.sku),p.offer_id]));
 for(const d of DAYS){
-  let acc=[],last_id='',pages=0,err=null;
+  let acc=[],last_id='',pg=0,err=null;
   do{const r=await ozon('/v1/finance/accrual/by-day',last_id?{date:d,last_id}:{date:d});
     if(r.status!==200){err='HTTP '+msg(r);break;}
-    acc=acc.concat(r.json.accruals||[]); last_id=r.json.last_id||''; pages++;}while(last_id&&pages<500);
-  console.log(`\n${d}: начислений ${acc.length}${err?' — '+err:''}`); if(err)continue;
-  if(d===DAYS[0]){
-    printShape('Полное устройство начисления (по всем за день):',shape(acc));
-    const dates={};acc.forEach(a=>{const k=String(a.date).length>10?'дата со временем':String(a.date)===d?'= запрошенному дню':'другой день';dates[k]=(dates[k]||0)+1;});
-    console.log('Поле date:',JSON.stringify(dates));
-    const used=new Set();const walkT=o=>{if(Array.isArray(o))return o.forEach(walkT);if(!o||typeof o!=='object')return;if(o.type_id!=null)used.add(String(o.type_id));Object.values(o).forEach(walkT);};acc.forEach(walkT);
-    console.log('Встретившиеся типы (id — код — описание):');[...used].sort((a,b)=>a-b).forEach(id=>console.log(`  ${id} — ${TYPES.get(id)} — ${DESC.get(id)||''}`));
+    acc=acc.concat(r.json.accruals||[]); last_id=r.json.last_id||''; pg++;}while(last_id&&pg<500);
+  if(err){console.log(`\n${d}: ${err}`);continue;}
+  const rows=[];let noOffer=0,skipped={};
+  const push=(sku,grp,type,amt,qty,price)=>{const o=SKU_OFFER.get(String(sku));if(!o){noOffer++;return;}rows.push({o,k:grp+' / '+type,amt,qty,price});};
+  let neg=0,pos=0,qtyNeg=0;
+  acc.forEach(a=>{
+    if(a.accrued_category==='POSTING')(a.posting?.products||[]).forEach(pr=>{
+      const c=pr.commission,q=Number(pr.quantity||0);
+      if(c){const sp=num(c.sale_price),ret=sp<0; if(ret)neg++;else pos++;
+        const unit=q?num(c.seller_price)/q:0;
+        push(pr.sku,ret?'Возвраты':'Продажи',ret?'Возврат выручки':'Выручка',sp,q,unit);
+        if(num(c.bonus))push(pr.sku,ret?'Возвраты':'Продажи','Баллы за скидки',num(c.bonus),q,0);
+        if(num(c.coinvestment))push(pr.sku,ret?'Возвраты':'Продажи','Программы партнёров',num(c.coinvestment),q,0);
+        const sc=num(c.sale_commission);if(sc)push(pr.sku,'Вознаграждение Ozon',sc>0?'Возврат вознаграждения':'Вознаграждение за продажу',sc,q,0);}
+      (pr.delivery?.services||[]).forEach(s=>{const t=TYPES.get(s.type_id)||{code:'?'+s.type_id,ru:'?'+s.type_id};const v=num(s.accrued);
+        push(pr.sku,GROUP[t.code]||'?',t.ru+(v>0&&/Logistic|LastMile|Delivery/.test(t.code)?' - отмена начисления':''),v,q,0);});
+    });
+    else if(a.accrued_category==='ITEM')(a.item_fees?.fees||[]).forEach(f=>(f.fees||[]).forEach(s=>{const t=TYPES.get(s.type_id)||{code:'?'+s.type_id,ru:'?'+s.type_id};
+        push(f.sku,GROUP[t.code]||'?',t.ru,num(s.accrued),Number(f.quantity||0),0);}));
+    else skipped[a.accrued_category]=(skipped[a.accrued_category]||0)+1;
+  });
+  const dbR=await sbAll(`ozon_charges?charge_date=eq.${d}&select=offer_id,group_name,charge_type,amount,qty,price&order=row_key`);
+  const cell=(m,o,k,amt)=>{const key=o+'|'+k;m.set(key,(m.get(key)||0)+amt);};
+  const A=new Map(),B=new Map();rows.forEach(r=>cell(A,r.o,r.k,r.amt));dbR.forEach(r=>cell(B,r.offer_id,r.group_name+' / '+r.charge_type,Number(r.amount||0)));
+  let same=0,diff=0,onlyA=0,onlyB=0;const byType={};
+  new Set([...A.keys(),...B.keys()]).forEach(key=>{const a=A.get(key),b=B.get(key),t=key.slice(key.indexOf('|')+1);
+    const bt=byType[t]||(byType[t]={a:0,b:0,bad:0});bt.a+=a||0;bt.b+=b||0;
+    if(a==null){onlyB++;bt.bad++;}else if(b==null){onlyA++;bt.bad++;}else if(Math.abs(a-b)>0.011){diff++;bt.bad++;}else same++;});
+  const sa=rows.reduce((s,r)=>s+r.amt,0),sb=dbR.reduce((s,r)=>s+Number(r.amount||0),0);
+  console.log(`\n${d}: начислений API ${acc.length} (пропущены без товара: ${JSON.stringify(skipped)}; SKU без артикула в базе: ${noOffer})`);
+  console.log(`  итог по товарам: ${pct(sa,sb)}; ячеек артикул×тип: совпали до копейки ${same}, другая сумма ${diff}, только в API ${onlyA}, только в базе ${onlyB}`);
+  console.log(`  возвраты в API (sale_price<0): ${neg} из ${neg+pos} строк выручки`);
+  Object.entries(byType).filter(([,v])=>v.bad).sort((x,y)=>Math.abs(y[1].a-y[1].b)-Math.abs(x[1].a-x[1].b)).slice(0,12)
+    .forEach(([t,v])=>console.log(`    расходится: ${t} — ${pct(v.a,v.b)}, ячеек ${v.bad}`));
+  // штуки и цена выручки: syncPnl берёт qty, price×qty (GMV) по «Выручка» и «Возврат выручки»
+  for(const t of ['Продажи / Выручка','Возвраты / Возврат выручки']){
+    const a=rows.filter(r=>r.k===t),b=dbR.filter(r=>r.group_name+' / '+r.charge_type===t);
+    const qa=a.reduce((s,r)=>s+r.qty,0),qb=b.reduce((s,r)=>s+Number(r.qty||0),0);
+    const ga=a.reduce((s,r)=>s+r.qty*r.price,0),gb=b.reduce((s,r)=>s+Number(r.qty||0)*Number(r.price||0),0);
+    console.log(`  ${t}: строк API ${a.length} / база ${b.length}; штуки ${pct(qa,qb)}; Σ цена×штуки (seller_price) ${pct(ga,gb)}`);
   }
-  const db=await sbAll(`ozon_charges?charge_date=eq.${d}&select=group_name,charge_type,amount,event_date&order=row_key`);
-  const dbSum=db.reduce((s,x)=>s+Number(x.amount||0),0), dbAbs=db.reduce((s,x)=>s+Math.abs(Number(x.amount||0)),0);
-  const apiSum=acc.reduce((s,a)=>s+num(a.total_amount),0);
-  console.log(`  итог дня: API ${pct(apiSum,dbSum)} к базе`);
-  const cat={};acc.forEach(a=>{const c=a.accrued_category;cat[c]=(cat[c]||0)+num(a.total_amount);});
-  console.log('  API по категориям (доля от |итого базы|):',Object.entries(cat).map(([k,v])=>k+' '+share(v,dbAbs)).join(', '));
-  const grp={};db.forEach(x=>{const k=x.group_name+' / '+x.charge_type;grp[k]=(grp[k]||0)+Number(x.amount||0);});
-  console.log('  база по «группа / тип» (доля от |итого базы|):');Object.entries(grp).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).forEach(([k,v])=>console.log(`    ${k}: ${share(v,dbAbs)}`));
-  // все суммы API по коду типа и по «прочим» денежным полям (commission, seller_price, …) — доля от |итого базы|
-  const sums={};
-  const walk=(o,p)=>{if(Array.isArray(o))return o.forEach(x=>walk(x,p+'[]'));if(!o||typeof o!=='object')return;
-    if(o.type_id!=null&&o.accrued){const k='тип '+TYPES.get(String(o.type_id));sums[k]=(sums[k]||0)+num(o.accrued);return;}
-    for(const [k,v] of Object.entries(o)){const pp=p?p+'.'+k:k;
-      if(v&&typeof v==='object'&&!Array.isArray(v)&&'amount' in v&&'currency' in v){if(!/total_amount$|total_accrued$/.test(pp))sums['поле '+pp.replace(/\[\]/g,'')]=(sums['поле '+pp.replace(/\[\]/g,'')]||0)+num(v);}
-      else walk(v,pp);}};
-  acc.forEach(a=>walk(a,''));
-  console.log('  API: суммы по типам и денежным полям (доля от |итого базы|):');Object.entries(sums).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).forEach(([k,v])=>console.log(`    ${k}: ${share(v,dbAbs)}`));
-  // события базы: на какие дни заказов приходятся начисления дня (event_date) — сравнение «дата начисления» vs «дата события»
-  const ev={};db.forEach(x=>{const k=!x.event_date?'нет':x.event_date===d?'тот же день':x.event_date<d?'раньше':'позже';ev[k]=(ev[k]||0)+1;});
-  console.log('  база: event_date относительно дня начисления:',JSON.stringify(ev));
 }
 console.log('\nГотово. В базу ничего не записано.');
