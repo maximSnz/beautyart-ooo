@@ -428,21 +428,21 @@ function renderT1(){
   const st=ST(), v=vis(), ed=st==='draft', dist=st==='distribution'||st==='closed', edD=st==='distribution', q=document.getElementById('q').value.trim();
   document.getElementById('h1').textContent=dist?'Распределение обеспеченного по кластерам':'Заявка менеджера';
   const dash='<span class="mute">—</span>';
-  let h=`<colgroup><col style="width:30%"><col span="6"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="2" class="mhead sep">Ozon сейчас</th><th colspan="3" class="mhead sep">Заявка</th><th rowspan="2" class="sub sep n">${dist?'Распре&shy;делено, кор.':'Паллет'}</th></tr>
-    <tr><th class="sub sep n">Спрос, шт/дн</th><th class="sub n">Остаток + в пути, шт</th><th class="sub sep n">Расчёт, кор.</th><th class="sub n">Заявлено, кор.</th><th class="sub n">Заявлено, шт</th></tr></thead><tbody>`;
-  if(!v.length) h+=`<tr><td colspan="7" class="mute">Нет товаров</td></tr>`;
+  let h=`<colgroup><col style="width:28%"><col span="7"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="3" class="mhead sep">Ozon сейчас</th><th colspan="3" class="mhead sep">Заявка</th><th rowspan="2" class="sub sep n">${dist?'Распре&shy;делено, кор.':'Паллет'}</th></tr>
+    <tr><th class="sub sep n">Спрос, шт/дн</th><th class="sub n">Остаток + в пути, шт</th><th class="sub n" title="Сумма двух прошлых недельных заявок (вычитаются из расчёта), в штуках">Прошлые заявки, шт</th><th class="sub sep n">Расчёт, кор.</th><th class="sub n">Заявлено, кор.</th><th class="sub n">Заявлено, шт</th></tr></thead><tbody>`;
+  if(!v.length) h+=`<tr><td colspan="8" class="mute">Нет товаров</td></tr>`;
   const G=groupsOf(v,reqOf); K1=G.map(g=>g[0]);
   G.forEach(([sup,g],gi)=>{
     const open=OPEN1.has(sup)||!!q, gq=S(g,reqOf);
-    h+=`<tr class="mgroup" onclick="toggleG(1,${gi})"><td colspan="7"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,calcOf))} кор. · заявлено ${nf.format(gq)} кор. · ${nf.format(S(g,p=>reqOf(p)*p.box_qty))} шт${dist?` · распределено ${nf.format(S(g,p=>S(p.rows,r=>r.dist)))} кор.`:''}</td></tr>`;
+    h+=`<tr class="mgroup" onclick="toggleG(1,${gi})"><td colspan="8"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,calcOf))} кор. · заявлено ${nf.format(gq)} кор. · ${nf.format(S(g,p=>reqOf(p)*p.box_qty))} шт${dist?` · распределено ${nf.format(S(g,p=>S(p.rows,r=>r.dist)))} кор.`:''}</td></tr>`;
     if(!open) return;
     for(const p of g){
       const qv=reqOf(p), pl=palOf(p,qv), ns=p.rows.length&&p.rows.every(r=>r.noSnap);
       h+=`<tr class="prow" onclick="toggle(${p.product_id})"><td>${OPEN===p.product_id?'▾':'▸'} <b>${esc(p.offer_id)}</b><div class="pname">${esc(p.name)}</div></td>
-        <td class="n sep">${ns?dash:nf.format(S(p.rows,r=>r.ads))}</td><td class="n">${ns?dash:nf.format(S(p.rows,r=>r.av+r.tr))}</td><td class="n sep">${ns?dash:nf.format(calcOf(p))}</td><td class="n"><b>${qv}</b></td><td class="n mute" title="${p.box_qty} шт в коробе">${nf.format(qv*p.box_qty)}</td>
+        <td class="n sep">${ns?dash:nf.format(S(p.rows,r=>r.ads))}</td><td class="n">${ns?dash:nf.format(S(p.rows,r=>r.av+r.tr))}</td><td class="n" title="${nf.format(S(p.rows,r=>r.prev))} кор. × ${p.box_qty} шт">${nf.format(S(p.rows,r=>r.prev)*p.box_qty)}</td><td class="n sep">${ns?dash:nf.format(calcOf(p))}</td><td class="n"><b>${qv}</b></td><td class="n mute" title="${p.box_qty} шт в коробе">${nf.format(qv*p.box_qty)}</td>
         <td class="n sep">${dist?S(p.rows,r=>r.dist):(pl==null?dash:pl.toFixed(2))}</td></tr>`;
       if(OPEN!==p.product_id) continue;
-      h+=`<tr class="sub"><td colspan="7"><table class="ct"><tr><th>Кластер</th><th class="n">Спрос/дн</th><th class="n">Остаток</th><th class="n">В пути</th><th class="n">Прошлые заявки</th><th class="n">Расчёт</th><th class="n">Заявлено</th>${dist?'<th class="n">Распределено</th>':''}</tr>`;
+      h+=`<tr class="sub"><td colspan="8"><table class="ct"><tr><th>Кластер</th><th class="n">Спрос/дн</th><th class="n">Остаток</th><th class="n">В пути</th><th class="n">Прошлые заявки, кор.</th><th class="n">Расчёт</th><th class="n">Заявлено</th>${dist?'<th class="n">Распределено</th>':''}</tr>`;
       for(const r of p.rows){
         const calcTxt=r.inactive?'<span class="mute">нет у Ozon</span>':r.noLt?'<span class="bad">нет сроков</span>':nf.format(r.calc);
         h+=`<tr><td>${esc(r.c)}</td><td class="n">${r.noSnap?dash:nf.format(r.ads)}</td><td class="n">${r.noSnap?dash:r.av}</td><td class="n">${r.noSnap?dash:r.tr}</td><td class="n">${r.noSnap&&!r.prev?dash:r.prev}</td><td class="n">${r.calc==null&&r.noSnap?dash:calcTxt}</td>
