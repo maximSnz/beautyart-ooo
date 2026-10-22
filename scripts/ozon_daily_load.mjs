@@ -27,7 +27,8 @@ function isoWeeksOfMonth(ym){const [y,m]=ym.split('-').map(Number);const out=[];
 const TODAY=mskDay(new Date().toISOString());
 const T0=Date.now(), el=()=>`[${Math.round((Date.now()-T0)/1000)} с]`;
 const D=process.env.DAY||addDays(TODAY,-1);
-console.log(`Ночная загрузка: день ${D}, режим ${WRITE?'ЗАПИСЬ':'ПРОВЕРКА (в базу ничего не пишется)'}`);
+const SNAPSHOT=D===addDays(TODAY,-1);                                              // остатки «на сейчас» верны только для вчера
+console.log(`Ночная загрузка: день ${D}, режим ${WRITE?'ЗАПИСЬ':'ПРОВЕРКА (в базу ничего не пишется)'}${SNAPSHOT?'':' — день не вчерашний: снимок остатков и отклонения пропускаются'}`);
 
 // ===== Ozon и Supabase =====
 async function ozon(path,body){
@@ -116,7 +117,7 @@ active.forEach(p=>{if(!seen.has(p.offer_id))stockRows.push({report_date:D,offer_
 const dbStock=await sbAll(`stock_history?report_date=eq.${D}&select=offer_id,warehouse_name,stock&order=offer_id,warehouse_name`);
 if(dbStock.length)cmp('остатки (сверка со снимком CSV-дня; он снят позже — утром)',sumBy(stockRows,r=>r.offer_id+'|'+r.warehouse_name,r=>r.stock),sumBy(dbStock,r=>r.offer_id+'|'+r.warehouse_name,r=>Number(r.stock)),0.5);
 else console.log('  снимка за день в базе нет');
-await sbWrite('DELETE',`stock_history?report_date=eq.${D}`);await sbWrite('POST','stock_history?on_conflict=report_date,offer_id,warehouse_name',stockRows);
+if(SNAPSHOT){await sbWrite('DELETE',`stock_history?report_date=eq.${D}`);await sbWrite('POST','stock_history?on_conflict=report_date,offer_id,warehouse_name',stockRows);}
 
 // ===== 3. Отклонения остатков → deviation_history (computeDay из weekly.html, 1:1) =====
 console.log('\n3. Отклонения остатков',el());
@@ -176,7 +177,7 @@ const devRows=computeDay(D,STOCK_NOW);
 const dbDev=await sbAll(`deviation_history?report_date=eq.${D}&fire=eq.false&select=entity_type,entity_key,deviation&order=entity_type,entity_key`);
 if(dbDev.length)cmp('отклонения (сверка с CSV-днём)',sumBy(devRows,r=>r.entity_type+'|'+r.entity_key,r=>r.deviation),sumBy(dbDev,r=>r.entity_type+'|'+r.entity_key,r=>Number(r.deviation)),0.001);
 else console.log('  отклонений за день в базе нет');
-await sbWrite('POST','deviation_history?on_conflict=entity_type,entity_key,report_date,fire',devRows);
+if(SNAPSHOT)await sbWrite('POST','deviation_history?on_conflict=entity_type,entity_key,report_date,fire',devRows);
 
 // ===== 4. Недельные факты заказов → sales_plan_weeks qty/rev (syncWeekFacts из weekly.html) =====
 console.log('\n4. Недельные факты заказов',el());
