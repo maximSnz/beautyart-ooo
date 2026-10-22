@@ -377,17 +377,19 @@ console.log('  гипотезы без зафиксированного факт
 if(!WRITE){ // проверка переноса: пересчитать уже зафиксированные браузером гипотезы и сравнить с записанным фактом
   const done=await sbAll('product_protocol?parent_id=is.null&deadline=not.is.null&fact_ctx=not.is.null&select=id,product_id,deadline,metric,baseline_ctx,created_at,fact_ctx&order=id');
   const chk={заказы:{совпало:0,другое:0},маржа:{совпало:0,другое:0},пропущено:0};
+  const why={};const tag=(m,ok,fc,it,nw,old)=>{if(ok)return;const lag=fc.fix_date?Math.round((new Date(fc.fix_date)-new Date(it.deadline))/864e5):'?';const k=`${m}: фиксация через ${lag} дн, новое ${nw==null?'нет данных':nw>old?'больше':'меньше'}`;why[k]=(why[k]||0)+1;};
   for(const it of done.slice(-80)){
     try{const fc=JSON.parse(it.fact_ctx),base=it.baseline_ctx?JSON.parse(it.baseline_ctx):null;if(!base||!('orders' in base)){chk.пропущено++;continue;}
       if((it.metric||'orders')==='orders'){if(fc.orders==null){chk.пропущено++;continue;}
         const f=await ordersAvgWeekdays(it.product_id,addDays(mskDay(it.created_at),1),it.deadline);
-        chk.заказы[f!=null&&Math.abs(f-Number(fc.orders))<0.005?'совпало':'другое']++;}
+        const ok=f!=null&&Math.abs(f-Number(fc.orders))<0.005;chk.заказы[ok?'совпало':'другое']++;tag('заказы',ok,fc,it,f,Number(fc.orders));}
       else{if(fc.pct==null){chk.пропущено++;continue;}
         const f=await marginAggPeriod(it.product_id,addDays(it.deadline,-2),it.deadline);
-        chk.маржа[f&&Math.abs(f.pct-Number(fc.pct))<0.015?'совпало':'другое']++;}
+        const ok=f&&Math.abs(f.pct-Number(fc.pct))<0.015;chk.маржа[ok?'совпало':'другое']++;tag('маржа',ok,fc,it,f?f.pct:null,Number(fc.pct));}
     }catch(e){chk.пропущено++;}
   }
   console.log(`  ПЕРЕНОС ФОРМУЛ гипотез (последние ${Math.min(80,done.length)} из ${done.length} зафиксированных браузером):`,JSON.stringify(chk));
+  Object.entries(why).sort().forEach(([k,v])=>console.log(`    расхождение — ${k}: ${v}`));
 }
 
 if(!WRITE){console.log('\nРежим проверки — в базу НЕ записано. Было бы выполнено:');PLANNED.forEach(x=>console.log('  '+x));}
