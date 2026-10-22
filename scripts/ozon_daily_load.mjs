@@ -257,7 +257,12 @@ console.log('\n6. Пересчёт CF',el());
 const prov=[...new Set((await sbAll('sales_plan_weeks?cost_provisional=eq.true&select=week&order=week')).map(x=>x.week))];
 const weeks=[...new Set([...isoWeeksOfMonth(monthOfWeek(weekStartOf(TODAY))),...isoWeeksOfMonth(monthOfWeek(W0)),W0,...prov])].sort();
 const first=weeks[0],last=addDays(weeks[weeks.length-1],6);
-const dbCharges=await sbAll(`ozon_charges?charge_date=gte.${first}&charge_date=lte.${last}&select=offer_id,charge_date,charge_type,amount,qty,price&order=charge_date,source_id,row_key`);
+// начисления периода — по дням, 8 дней параллельно (одним запросом на ~1 млн строк ИП база отдаёт страницы слишком медленно)
+const chDays=[];for(let d=first;d<=last;d=addDays(d,1))chDays.push(d);
+const chByDay=new Map();
+for(let i=0;i<chDays.length;i+=8)await Promise.all(chDays.slice(i,i+8).map(async d=>chByDay.set(d,await sbAll(`ozon_charges?charge_date=eq.${d}&select=offer_id,charge_date,charge_type,amount,qty,price&order=row_key`))));
+const dbCharges=chDays.flatMap(d=>chByDay.get(d)||[]);
+console.log('  начисления периода прочитаны',el());
 const ads=await sbAll(`ozon_ad_spend?spend_date=gte.${first}&spend_date=lte.${last}&select=offer_id,spend_date,amount&order=spend_date,offer_id`);
 const adsMap=new Map();ads.forEach(x=>{const pid=SKU_PID.get(String(x.offer_id))||OFFER_PID.get(x.offer_id);if(!pid)return;let m=adsMap.get(pid);if(!m){m=new Map();adsMap.set(pid,m);}m.set(x.spend_date,(m.get(x.spend_date)||0)+Number(x.amount||0));});
 function syncPnl(rows){
