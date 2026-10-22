@@ -2,7 +2,7 @@
 // Делает за вчерашний день (по Москве) то же, что кнопки CSV:
 //   weekly.html «Заказы»: product_sales, снимок stock_history, deviation_history (computeDay), недельные факты qty/rev;
 //   plan.html «Начисления»: ozon_charges и пересчёт CF (syncPnl → sales_plan_weeks, cf_daily).
-// fixHypotheses пока остаётся в plan.html (срабатывает при открытии страницы).
+//   plan.html fixHypotheses: фиксация факта SMART-гипотез после дедлайна (product_protocol) — с 22.10.2026 только здесь.
 // Режимы: WRITE=1 — запись в базу; иначе ПРОВЕРКА: всё считается и сверяется с базой, в базу ничего не пишется.
 // Репозиторий публичный — в лог только счётчики и расхождения в процентах; рублей, штук и артикулов в логе нет.
 const M1=/^(CAP|INS|FW|MS|ML|SE)-/;       // matrixOf ООО (как в weekly.html / plan.html этого репозитория)
@@ -51,6 +51,11 @@ async function sbAll(path){ // постранично, с сортировкой
   return out;
 }
 const PLANNED=[];                                                   // что было бы записано в режиме проверки
+async function sbPatch(path,obj){
+  if(!WRITE){PLANNED.push(`PATCH ${path.split('?')[0]} — 1 строка`);return;}
+  const r=await fetch(`${SB}/rest/v1/${path}`,{method:'PATCH',headers:{...SR,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify(obj)});
+  if(!r.ok)throw new Error(`Supabase PATCH ${path.split('?')[0]}: HTTP ${r.status} ${(await r.text()).slice(0,200)}`);
+}
 async function sbWrite(method,path,rows){
   if(!WRITE){PLANNED.push(`${method} ${path.split('?')[0]}${rows?` — строк ${rows.length}`:''}`);return;}
   const chunks=rows?Array.from({length:Math.ceil(rows.length/500)},(_,i)=>rows.slice(i*500,i*500+500)):[null];
@@ -320,6 +325,55 @@ const res=syncPnl(withApi);
 cmp(`маржа CF дня ${D}: API против CSV`,dy(res.dayBody.filter(r=>r.day===D)),dy(dbDays.filter(r=>r.day===D)));
 await sbWrite('POST','sales_plan_weeks?on_conflict=product_id,week,metric',res.body);
 await sbWrite('POST','cf_daily?on_conflict=product_id,day',res.dayBody);
+
+// ===== 7. Фиксация SMART-гипотез (fixHypotheses из plan.html, 1:1) =====
+// Отличие одно: гипотеза по марже ждёт, пока в базе появится реклама за день дедлайна (её CSV грузят утром, после ночной загрузки).
+console.log('\n7. Фиксация гипотез',el());
+const isWeekend=iso=>{const w=dow(iso);return w===0||w===6;};
+const proto=await sbAll('product_protocol?parent_id=is.null&deadline=not.is.null&fact_ctx=is.null&fact_dev=is.null&select=id,product_id,deadline,metric,baseline_ctx,created_at&order=id');
+async function salesMap(pid,from,to){const m=new Map();const o=PID_OFFER.get(pid);if(!o)return m;
+  (await sbAll(`product_sales?offer_id=eq.${encodeURIComponent(o)}&sale_date=gte.${from}&sale_date=lte.${to}&select=sale_date,qty&order=sale_date,warehouse_name`)).forEach(x=>m.set(x.sale_date,(m.get(x.sale_date)||0)+Number(x.qty||0)));return m;}
+async function ordersAvgWeekdays(pid,from,to){const m=await salesMap(pid,from,to);let sum=0,cnt=0,d=from;
+  while(d<=to){if(!isWeekend(d)){sum+=(m.get(d)||0);cnt++;}d=addDays(d,1);}return cnt?Math.round(sum/cnt*100)/100:null;}
+async function marginAggPeriod(pid,from,to){
+  const o=PID_OFFER.get(pid);const map=new Map();
+  if(o)(await sbAll(`ozon_charges?offer_id=eq.${encodeURIComponent(o)}&event_date=gte.${from}&event_date=lte.${to}&select=event_date,charge_type,amount,qty,price&order=row_key`)).forEach(c=>{
+    const d=c.event_date;if(!d)return;let g=map.get(d);if(!g){g={pnl:0,gmv:0,sales:0,revP:0};map.set(d,g);}
+    const amt=Number(c.amount||0),qty=Number(c.qty||0),price=Number(c.price||0);g.pnl+=amt;
+    if(c.charge_type==='Выручка'){g.gmv+=price*qty;g.sales+=qty;g.revP+=amt;}else if(c.charge_type==='Возврат выручки'){g.gmv+=price*qty;g.sales-=qty;g.revP+=amt;}});
+  const ad=new Map();(await sbAll(`ozon_ad_spend?spend_date=gte.${from}&spend_date=lte.${to}&select=offer_id,spend_date,amount&order=spend_date,offer_id`)).forEach(x=>{
+    if((SKU_PID.get(String(x.offer_id))||OFFER_PID.get(x.offer_id))===pid)ad.set(x.spend_date,(ad.get(x.spend_date)||0)+Number(x.amount||0));});
+  let pnl=0,gmv=0,sales=0,revP=0,cnt=0,ads=0,d=from;
+  while(d<=to){const g=map.get(d);if(g&&g.gmv>0){pnl+=g.pnl;gmv+=g.gmv;sales+=g.sales;revP+=g.revP||0;cnt++;}ads+=ad.get(d)||0;d=addDays(d,1);}
+  if(!cnt||gmv<=0)return null;
+  const cost=COST[pid]||0, tax=TAX_RATE*revP;
+  return {pct:Math.round(((pnl-cost*sales-ads-tax)/gmv*100)*100)/100,from,to,days:cnt};
+}
+const adsDay=new Map();
+const hasAds=async d=>{if(!adsDay.has(d))adsDay.set(d,(await sbAll(`ozon_ad_spend?spend_date=eq.${d}&select=spend_date&order=offer_id`)).length>0);return adsDay.get(d);};
+const hyp={всего:proto.length,заказы:0,маржа:0,'ждут дедлайна':0,'ждут рекламу':0,'нет данных':0,ошибки:0};
+for(const it of proto){
+  try{
+    const base=it.baseline_ctx?JSON.parse(it.baseline_ctx):null;
+    if(!base||!('orders' in base))continue;
+    const metric=it.metric||'orders', created=mskDay(it.created_at);
+    let payload=null;
+    if(metric==='orders'){
+      if(TODAY<=it.deadline){hyp['ждут дедлайна']++;continue;}
+      const f=await ordersAvgWeekdays(it.product_id,addDays(created,1),it.deadline);
+      if(f==null){hyp['нет данных']++;continue;}
+      payload={fact_ctx:JSON.stringify({orders:f,orders_from:addDays(created,1),orders_to:it.deadline,pct:null,pct_date:null,fix_date:TODAY}),fact_dev:1,fact_date:TODAY};hyp.заказы++;
+    }else{
+      if(TODAY<addDays(it.deadline,1)){hyp['ждут дедлайна']++;continue;}
+      if(!await hasAds(it.deadline)){hyp['ждут рекламу']++;continue;}
+      const f=await marginAggPeriod(it.product_id,addDays(it.deadline,-2),it.deadline);
+      if(f==null){hyp['нет данных']++;continue;}
+      payload={fact_ctx:JSON.stringify({orders:null,orders_from:null,orders_to:null,pct:f.pct,pct_from:f.from,pct_to:f.to,pct_days:f.days,fix_date:TODAY}),fact_dev:1,fact_date:TODAY};hyp.маржа++;
+    }
+    await sbPatch(`product_protocol?id=eq.${it.id}`,payload);
+  }catch(e){hyp.ошибки++;console.log('  гипотеза: ошибка',e.message.slice(0,120));}
+}
+console.log('  гипотезы без зафиксированного факта:',JSON.stringify(hyp));
 
 if(!WRITE){console.log('\nРежим проверки — в базу НЕ записано. Было бы выполнено:');PLANNED.forEach(x=>console.log('  '+x));}
 console.log('\nГотово.');
