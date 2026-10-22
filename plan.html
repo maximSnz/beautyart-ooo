@@ -786,7 +786,7 @@ async function loadChargesFor(pid){
   const first=WEEKISO[0], last=localISO(weekEnd(parseW(WEEKISO[WEEKISO.length-1])));
   let rows=[],off=0;
   while(true){
-    const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_charges?offer_id=eq.${encodeURIComponent(offer)}&charge_date=gte.${first}&charge_date=lte.${last}&select=charge_type,amount,qty,price&limit=1000&offset=${off}`,{headers:HD});
+    const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_charges?offer_id=eq.${encodeURIComponent(offer)}&charge_date=gte.${first}&charge_date=lte.${last}&select=charge_type,amount,qty,price&order=row_key&limit=1000&offset=${off}`,{headers:HD});
     if(!r.ok)break;
     const j=await r.json(); rows=rows.concat(j); if(j.length<1000)break; off+=1000;
   }
@@ -843,7 +843,7 @@ async function syncPnl(extraWeeks){
     while(true){
       let j=null;
       for(let a=0;a<4;a++){
-        const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_charges?charge_date=eq.${dcur}&order=source_id.asc&select=offer_id,charge_date,charge_type,amount,qty,price&limit=1000&offset=${off}`,{headers:HD});
+        const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_charges?charge_date=eq.${dcur}&order=row_key&select=offer_id,charge_date,charge_type,amount,qty,price&limit=1000&offset=${off}`,{headers:HD});
         if(r.ok){j=await r.json();break;}
         await sleep(700*(a+1));
       }
@@ -1015,7 +1015,7 @@ async function loadAdSpend(from,to){
   if(ADS_MEMO.has(key))return ADS_MEMO.get(key);
   const map=new Map();let off=0;
   while(true){
-    const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_ad_spend?spend_date=gte.${from}&spend_date=lte.${to}&select=offer_id,spend_date,amount&limit=1000&offset=${off}`,{headers:HD});
+    const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_ad_spend?spend_date=gte.${from}&spend_date=lte.${to}&select=offer_id,spend_date,amount&order=spend_date,offer_id&limit=1000&offset=${off}`,{headers:HD});
     if(!r.ok)break;
     const j=await r.json();
     j.forEach(x=>{const pid=SKU_PID[x.offer_id]||OFFER_PID[x.offer_id];if(!pid)return;let m=map.get(pid);if(!m){m=new Map();map.set(pid,m);}m.set(x.spend_date,(m.get(x.spend_date)||0)+Number(x.amount||0));});
@@ -1747,7 +1747,7 @@ async function fetchSalesMap(pid,from,to){
   while(true){
     let j=null;
     for(let a=0;a<3;a++){
-      const r=await fetch(SUPABASE_URL+`/rest/v1/product_sales?offer_id=eq.${encodeURIComponent(offer)}&sale_date=gte.${from}&sale_date=lte.${to}&select=sale_date,qty&limit=1000&offset=${off}`,{headers:HD});
+      const r=await fetch(SUPABASE_URL+`/rest/v1/product_sales?offer_id=eq.${encodeURIComponent(offer)}&sale_date=gte.${from}&sale_date=lte.${to}&select=sale_date,qty&order=sale_date,warehouse_name&limit=1000&offset=${off}`,{headers:HD});
       if(r.ok){j=await r.json();break;}
       await sleep(700*(a+1));
     }
@@ -1762,7 +1762,7 @@ async function fetchChargesMap(pid,from,to){
   while(true){
     let j=null;
     for(let a=0;a<3;a++){
-      const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_charges?offer_id=eq.${encodeURIComponent(offer)}&event_date=gte.${from}&event_date=lte.${to}&select=event_date,charge_type,amount,qty,price&limit=1000&offset=${off}`,{headers:HD});
+      const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_charges?offer_id=eq.${encodeURIComponent(offer)}&event_date=gte.${from}&event_date=lte.${to}&select=event_date,charge_type,amount,qty,price&order=row_key&limit=1000&offset=${off}`,{headers:HD});
       if(r.ok){j=await r.json();break;}
       await sleep(700*(a+1));
     }
@@ -2064,7 +2064,7 @@ async function loadPulse(pid){
   const first=localISO(start), last=localISO(end);
   let salesRows=[],off=0;
   while(true){
-    const r=await fetch(SUPABASE_URL+`/rest/v1/product_sales?offer_id=eq.${encodeURIComponent(offer)}&sale_date=gte.${first}&sale_date=lte.${last}&select=sale_date,qty&order=sale_date.asc&limit=1000&offset=${off}`,{headers:HD});
+    const r=await fetch(SUPABASE_URL+`/rest/v1/product_sales?offer_id=eq.${encodeURIComponent(offer)}&sale_date=gte.${first}&sale_date=lte.${last}&select=sale_date,qty&order=sale_date.asc,warehouse_name.asc&limit=1000&offset=${off}`,{headers:HD});
     if(!r.ok)break;
     const j=await r.json(); salesRows=salesRows.concat(j); if(j.length<1000)break; off+=1000;
   }
@@ -2080,7 +2080,7 @@ async function loadPulse(pid){
   stockRows.forEach(r=>{ rawStock.set(r.report_date,(rawStock.get(r.report_date)||0)+Number(r.stock||0)); });
   let chargeRows=[],off3=0;
   while(true){
-    const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_charges?offer_id=eq.${encodeURIComponent(offer)}&event_date=gte.${first}&event_date=lte.${last}&select=event_date,charge_type,amount,qty,price&limit=1000&offset=${off3}`,{headers:HD});
+    const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_charges?offer_id=eq.${encodeURIComponent(offer)}&event_date=gte.${first}&event_date=lte.${last}&select=event_date,charge_type,amount,qty,price&order=row_key&limit=1000&offset=${off3}`,{headers:HD});
     if(!r.ok)break;
     const j=await r.json(); chargeRows=chargeRows.concat(j); if(j.length<1000)break; off3+=1000;
   }
