@@ -25,14 +25,17 @@ const monthOfWeek=w=>addDays(w,3).slice(0,7);                      // месяц
 function isoWeeksOfMonth(ym){const [y,m]=ym.split('-').map(Number);const out=[];let w=weekStartOf(`${ym}-01`);
   for(let i=0;i<6;i++){if(monthOfWeek(w)===ym)out.push(w);w=addDays(w,7);}return out;}
 const TODAY=mskDay(new Date().toISOString());
+const T0=Date.now(), el=()=>`[${Math.round((Date.now()-T0)/1000)} с]`;
 const D=process.env.DAY||addDays(TODAY,-1);
 console.log(`Ночная загрузка: день ${D}, режим ${WRITE?'ЗАПИСЬ':'ПРОВЕРКА (в базу ничего не пишется)'}`);
 
 // ===== Ozon и Supabase =====
 async function ozon(path,body){
   for(let a=0;a<5;a++){
-    const r=await fetch(OZON+path,{method:'POST',headers:H,body:JSON.stringify(body)});
-    const t=await r.text(); let j=null; try{j=JSON.parse(t);}catch(e){}
+    let r,t;
+    try{r=await fetch(OZON+path,{method:'POST',headers:H,body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});t=await r.text();}
+    catch(e){await sleep(1500*(a+1));continue;}                                     // таймаут 30 с или обрыв — повтор
+    let j=null; try{j=JSON.parse(t);}catch(e){}
     if(r.status===429||r.status>=500){await sleep(1500*(a+1));continue;}
     if(r.status!==200)throw new Error(`Ozon ${path}: HTTP ${r.status} ${j?.message||t.slice(0,150)}`);
     return j;
@@ -41,8 +44,8 @@ async function ozon(path,body){
 }
 async function sbAll(path){ // постранично, с сортировкой (PostgREST отдаёт не больше 1000 строк)
   let out=[],off=0;
-  for(;;){let r=null;for(let a=0;a<4;a++){r=await fetch(`${SB}/rest/v1/${path}&limit=1000&offset=${off}`,{headers:SR});if(r.ok)break;await sleep(700*(a+1));}
-    if(!r.ok)throw new Error('Supabase HTTP '+r.status+' '+path.split('?')[0]);
+  for(;;){let r=null;for(let a=0;a<4;a++){try{r=await fetch(`${SB}/rest/v1/${path}&limit=1000&offset=${off}`,{headers:SR,signal:AbortSignal.timeout(60000)});if(r.ok)break;}catch(e){r=null;}await sleep(700*(a+1));}
+    if(!r||!r.ok)throw new Error('Supabase HTTP '+(r?r.status:'таймаут')+' '+path.split('?')[0]);
     const j=await r.json(); out=out.concat(j); if(j.length<1000)break; off+=1000;}
   return out;
 }
@@ -80,7 +83,7 @@ function costAt(pid,dISO){const arr=COST_HIST[pid];if(!arr||!arr.length)return {
 const stocks=await sbAll('product_stocks?select=product_id,warehouse_id,warehouse_name,cluster,present&order=product_id,warehouse_id');
 
 // ===== 1. Заказы за D: /v3/posting/fbo/list → product_sales (снимок: без уже отменённых) =====
-console.log('\n1. Заказы');
+console.log('\n1. Заказы',el());
 let posts=[],cursor='';
 for(let pg=0;pg<3000;pg++){
   const j=await ozon('/v3/posting/fbo/list',{dir:'ASC',filter:{since:addDays(D,-2)+'T21:00:00.000Z',to:D+'T20:59:59.999Z'},limit:100,cursor,with:{analytics_data:true,financial_data:false}});
@@ -102,7 +105,7 @@ else console.log('  в базе за день данных нет — сверя
 if(salesRows.length){await sbWrite('DELETE',`product_sales?sale_date=eq.${D}`);await sbWrite('POST','product_sales?on_conflict=sale_date,offer_id,warehouse_name',salesRows);}
 
 // ===== 2. Снимок остатков → stock_history (как saveStockDay в weekly.html) =====
-console.log('\n2. Снимок остатков');
+console.log('\n2. Снимок остатков',el());
 const STOCK_NOW={},WHCLUSTER={};
 stocks.forEach(s=>{const o=PID_OFFER.get(s.product_id);if(!o)return;(STOCK_NOW[o]=STOCK_NOW[o]||{});STOCK_NOW[o][s.warehouse_name]=(STOCK_NOW[o][s.warehouse_name]||0)+(s.present||0);
   if(!WHCLUSTER[s.warehouse_name])WHCLUSTER[s.warehouse_name]=s.cluster||'Прочее';});
@@ -116,7 +119,7 @@ else console.log('  снимка за день в базе нет');
 await sbWrite('DELETE',`stock_history?report_date=eq.${D}`);await sbWrite('POST','stock_history?on_conflict=report_date,offer_id,warehouse_name',stockRows);
 
 // ===== 3. Отклонения остатков → deviation_history (computeDay из weekly.html, 1:1) =====
-console.log('\n3. Отклонения остатков');
+console.log('\n3. Отклонения остатков',el());
 const SALES={};salesRows.forEach(x=>{((SALES[x.offer_id]=SALES[x.offer_id]||{})[x.warehouse_name]=SALES[x.offer_id][x.warehouse_name]||{});SALES[x.offer_id][x.warehouse_name][D]=(SALES[x.offer_id][x.warehouse_name][D]||0)+x.qty;});
 const COST_LAST={};[...prices].reverse().forEach(p=>{if(COST_LAST[p.product_id]==null)COST_LAST[p.product_id]=Number(p.cost||0);});
 function computeDay(tISO,stockMap){
@@ -176,7 +179,7 @@ else console.log('  отклонений за день в базе нет');
 await sbWrite('POST','deviation_history?on_conflict=entity_type,entity_key,report_date,fire',devRows);
 
 // ===== 4. Недельные факты заказов → sales_plan_weeks qty/rev (syncWeekFacts из weekly.html) =====
-console.log('\n4. Недельные факты заказов');
+console.log('\n4. Недельные факты заказов',el());
 const W0=weekStartOf(D),W1=addDays(W0,6);
 const weekSales=(await sbAll(`product_sales?sale_date=gte.${W0}&sale_date=lte.${W1}&select=sale_date,offer_id,warehouse_name,qty,revenue&order=sale_date,offer_id,warehouse_name`))
   .filter(x=>x.sale_date!==D).concat(salesRows);                                  // день D — из API
@@ -187,7 +190,7 @@ cmp(`факты недели ${W0} qty+rev`,sumBy(factRows,r=>r.product_id+'|'+r
 await sbWrite('POST','sales_plan_weeks?on_conflict=product_id,week,metric',factRows);
 
 // ===== 5. Начисления за D: /v1/finance/accrual/by-day → ozon_charges (как импорт отчёта «Начисления») =====
-console.log('\n5. Начисления');
+console.log('\n5. Начисления',el());
 const types=await ozon('/v1/finance/accrual/types',{});
 const TYPES=new Map((types.accrual_types||[]).map(x=>[x.id,{code:x.name,ru:x.description}]));
 const GROUP={Logistic:'Услуги доставки',DeliveryToHandoverPlaceByOzon:'Услуги доставки',ReturnFlowLogistic:'Услуги доставки',
@@ -212,6 +215,7 @@ for(let i=0;i<need.length&&cacheTable;i+=150){
 const miss=units.filter(u=>!POSTING_DAY.has(u)&&!ORDER_DAY.has(u));
 const fetched=[];let t0=Date.now();
 for(let i=0;i<miss.length;i+=8){
+  if(i&&i%800===0)console.log(`    …запрошено ${i} из ${miss.length}`,el());
   await Promise.all(miss.slice(i,i+8).map(async u=>{const pn=/^\d+-\d+$/.test(u)?u+'-1':u;
     try{const j=await ozon('/v2/posting/fbo/get',{posting_number:pn});const p=j.result;const t=p?.in_process_at||p?.created_at;
       if(t){const d=mskDay(t);POSTING_DAY.set(pn,d);if(p.order_number)ORDER_DAY.set(p.order_number,d);if(pn!==u)POSTING_DAY.set(u,d);fetched.push({posting_number:p.posting_number,order_number:p.order_number||null,order_day:d});}}catch(e){}}));
@@ -249,7 +253,7 @@ const postRows=[...new Map(posts.map(p=>[p.posting_number,{posting_number:p.post
 if(cacheTable&&postRows.length)await sbWrite('POST','ozon_postings?on_conflict=posting_number',postRows);
 
 // ===== 6. Пересчёт CF (syncPnl из plan.html) → sales_plan_weeks, cf_daily =====
-console.log('\n6. Пересчёт CF');
+console.log('\n6. Пересчёт CF',el());
 const prov=[...new Set((await sbAll('sales_plan_weeks?cost_provisional=eq.true&select=week&order=week')).map(x=>x.week))];
 const weeks=[...new Set([...isoWeeksOfMonth(monthOfWeek(weekStartOf(TODAY))),...isoWeeksOfMonth(monthOfWeek(W0)),W0,...prov])].sort();
 const first=weeks[0],last=addDays(weeks[weeks.length-1],6);
@@ -299,6 +303,12 @@ console.log(`  недели ${weeks.join(', ')}; начислений в баз�
 const port=syncPnl(dbCharges);                                                     // те же начисления, что в базе — проверка переноса формул
 cmp('ПЕРЕНОС ФОРМУЛ: недели по начислениям базы',wk(port.body),wk(dbWeeks));
 cmp('ПЕРЕНОС ФОРМУЛ: cf_daily mar по начислениям базы',dy(port.dayBody),dy(dbDays));
+{const A=wk(port.body),B=wk(dbWeeks),by={};A.forEach((v,k)=>{const b=B.get(k);if(b!=null&&Math.abs(v-b)>0.011){const [,w,m]=k.split('|');by[w+' '+m]=(by[w+' '+m]||0)+1;}});
+ if(Object.keys(by).length)console.log('    расхождения недель (неделя метрика: ячеек):',JSON.stringify(by));
+ const A2=dy(port.dayBody),B2=dy(dbDays),byD={};A2.forEach((v,k)=>{const b=B2.get(k);if(b!=null&&Math.abs(v-b)>0.011){const d=k.split('|')[1];byD[d]=(byD[d]||0)+1;}});
+ if(Object.keys(byD).length)console.log('    расхождения cf_daily (день: ячеек):',JSON.stringify(byD));
+ const pd=new Set();A.forEach((v,k)=>{const b=B.get(k);if(b!=null&&Math.abs(v-b)>0.011)pd.add(k.split('|')[0]);});
+ console.log(`    товаров с расхождением ${pd.size}; себестоимость менялась с начала периода у ${[...pd].filter(p=>(COST_HIST[p]||[]).some(x=>x.t>=first)).length}`);}
 const withApi=dbCharges.filter(c=>c.charge_date!==D).concat(chRows);              // день D — из API
 const res=syncPnl(withApi);
 cmp(`маржа CF дня ${D}: API против CSV`,dy(res.dayBody.filter(r=>r.day===D)),dy(dbDays.filter(r=>r.day===D)));
