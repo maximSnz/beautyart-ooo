@@ -203,7 +203,7 @@
     <div class="err" id="err"></div>
     <div class="toolbar">
       <input type="text" id="q" placeholder="Поиск по названию / артикулу" oninput="render()">
-      <button id="btnCsv" onclick="fileInput.click()">⬆ CSV продаж</button>
+      <button id="btnCsv" style="display:none" onclick="fileInput.click()">⬆ CSV продаж</button>
       <input type="file" id="fileInput" accept=".csv" style="display:none" onchange="importFile(this.files[0])">
       <div class="mode">
         <button id="modeSum" class="on" onclick="setMode('summary')">Сводная</button>
@@ -237,6 +237,8 @@ document.addEventListener('click', (e) => {
 const SUPABASE_URL='https://jaruwkpugxybwcsalhgr.supabase.co';
 const ANON='sb_publishable_09rFaH3adGXnEO3-cybX9A_eK_mCnW0';
 const HD={apikey:ANON,Authorization:'Bearer '+ANON};
+// продажи загружает ночная загрузка (ozon-daily-load) — CSV только запасной путь: адрес с ?csv=1
+if(new URLSearchParams(location.search).get('csv')==='1')document.getElementById('btnCsv').style.display='';
 let ROWS=[],COST={},STOCK={},STOCK_NOW={},STOCK_ALL={},WHCLUSTER={},SALES={},OFFER_PID={},BASE=null,SALESCOUNT=0;
 let GLOBAL_FRESH=null;
 let importing=false, MODE='summary';

@@ -450,7 +450,7 @@
       <span class="upwrap">
         <button id="btnUpload" onclick="toggleUploadMenu(event)">⬆ CSV</button>
         <div class="upmenu hide" id="upmenu">
-          <button onclick="startChargesUpload()">Начисления Ozon</button>
+          <button id="upCharges" style="display:none" onclick="startChargesUpload()">Начисления Ozon</button>
           <button onclick="startAdsUpload()">Аналитика продвижения</button>
         </div>
       </span>
@@ -480,6 +480,8 @@
 function toggleNav(btn){const item=btn.closest('.nav-item');const wasOpen=item.classList.contains('open');document.querySelectorAll('.nav-item.open').forEach(i=>i.classList.remove('open'));if(!wasOpen)item.classList.add('open');}
 document.addEventListener('click',(e)=>{if(!e.target.closest('.nav-item')){document.querySelectorAll('.nav-item.open').forEach(i=>i.classList.remove('open'));}});
 document.addEventListener('click',(e)=>{if(!e.target.closest('.upwrap')){const m=document.getElementById('upmenu');if(m)m.classList.add('hide');}});
+// начисления загружает ночная загрузка (ozon-daily-load) — CSV только запасной путь: адрес с ?csv=1 (иначе начисления задвоятся)
+if(new URLSearchParams(location.search).get('csv')==='1'){const b=document.getElementById('upCharges');if(b)b.style.display='';}
 const SUPABASE_URL='https://jaruwkpugxybwcsalhgr.supabase.co';
 const ANON='sb_publishable_09rFaH3adGXnEO3-cybX9A_eK_mCnW0';
 const HD={apikey:ANON,Authorization:'Bearer '+ANON};
@@ -914,35 +916,7 @@ async function syncPnl(extraWeeks){
     if(!r.ok){console.warn('cf_daily: HTTP',r.status,'— дневная маржа не сохранена (нет таблицы?)');break;}
   }
 }
-async function fixHypotheses(){
-  const today=localISO(new Date());
-  for(const pid in PROTO){
-    for(const it of PROTO[pid]){
-      try{
-        if(it.parent_id||!it.deadline)continue;
-        if(it.fact_ctx!=null||it.fact_dev!=null)continue;
-        const base=it.baseline_ctx?JSON.parse(it.baseline_ctx):null;
-        if(!base||!('orders' in base))continue;
-        const metric=it.metric||'orders';
-        const created=localISO(new Date(it.created_at));
-        let payload=null;
-        if(metric==='orders'){
-          if(today<=it.deadline)continue;
-          const f=await ordersAvgWeekdays(pid,addDaysISO(created,1),it.deadline);
-          if(f==null)continue;
-          payload={fact_ctx:JSON.stringify({orders:f,orders_from:addDaysISO(created,1),orders_to:it.deadline,pct:null,pct_date:null,fix_date:today}),fact_dev:1,fact_date:today};
-        }else{
-          if(today<addDaysISO(it.deadline,1))continue;
-          const f=await marginAggPeriod(pid,addDaysISO(it.deadline,-2),it.deadline);
-          if(f==null)continue;
-          payload={fact_ctx:JSON.stringify({orders:null,orders_from:null,orders_to:null,pct:f.pct,pct_from:f.from,pct_to:f.to,pct_days:f.days,fix_date:today}),fact_dev:1,fact_date:today};
-        }
-        const r=await fetch(SUPABASE_URL+`/rest/v1/product_protocol?id=eq.${it.id}`,{method:'PATCH',headers:{...HD,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify(payload)});
-        if(!r.ok)console.warn('fixHypotheses: PATCH fail',it.id,r.status);
-      }catch(e){console.warn('fixHypotheses: item fail',it&&it.id,e&&e.message);}
-    }
-  }
-}
+// фиксация факта SMART-гипотез — в ночной загрузке (scripts/ozon_daily_load.mjs, шаг 7), с 22.10.2026
 async function importCharges(file){
   if(!file)return;
   const btn=document.getElementById('btnUpload'); btn.disabled=true; btn.textContent='⏳ Загрузка…';
@@ -979,8 +953,7 @@ async function importCharges(file){
     await syncPnl(provW);
     await loadWeeks();
     TEMPS_CACHE={key:'',data:null};
-    await fixHypotheses();
-    await loadProto();  // обновить PROTO после фиксации
+    await loadProto();
     render();
     setP(100,`✔ Готово! Импортировано начислений: ${out.length} (пропущено: ${skipped}). Строк без даты J: ${noEvent}. Маржа пересчитана.`);
     setTimeout(()=>document.getElementById('progWrap').classList.add('hide'),5000);
@@ -1056,7 +1029,6 @@ async function importAds(file){
     const provW=await provisionalWeeks();
     await syncPnl(provW);
     await loadWeeks();
-    await fixHypotheses();
     await loadProto();
     document.querySelectorAll('[id^="chg_"],[id^="pulse_"]').forEach(el=>{delete el.dataset.loaded;});
     render();
@@ -1422,7 +1394,7 @@ async function load(){
       await Promise.all([loadPlans(),loadWeeks(),loadPPM(),loadProto(),loadDev(),loadCosts(),loadCostHistory(),loadAnaReq()]);
       const planCnt=ROWS.filter(r=>((PLAN[r.product_id]||{}).plan_qty||0)>0).length;
       document.getElementById('meta').textContent=`Период: ${MONTH} • позиций: ${ROWS.length} • в плане: ${planCnt} • обновлено: ${new Date().toLocaleString('ru-RU')}`;
-      render(); backgroundFix(); return;
+      render(); return;
     }catch(e){ if(a<3){await sleep(800*a);continue;} err.textContent='Ошибка загрузки: '+e.message; }
   }
 }
@@ -1430,10 +1402,7 @@ async function onMonth(v){ if(!v)return; MONTH=v; const err=document.getElementB
   try{ const [y,m]=MONTH.split('-').map(Number); WEEKS=isoWeeksOfMonth(y,m-1); WEEKISO=WEEKS.map(localISO); await Promise.all([loadPlans(),loadWeeks(),loadPPM(),loadProto(),loadDev(),loadCosts(),loadCostHistory()]);
       const planCnt=ROWS.filter(r=>((PLAN[r.product_id]||{}).plan_qty||0)>0).length;
       document.getElementById('meta').textContent=`Период: ${MONTH} • позиций: ${ROWS.length} • в плане: ${planCnt} • обновлено: ${new Date().toLocaleString('ru-RU')}`;
-      render(); backgroundFix(); }catch(e){ err.textContent='Ошибка: '+e.message; }
-}
-async function backgroundFix(){
-  try{ await fixHypotheses(); await loadProto(); render(); }catch(e){ console.warn('background fix:',e&&e.message); }
+      render(); }catch(e){ err.textContent='Ошибка: '+e.message; }
 }
 function toggleMetric(k){ EXP[k]=!EXP[k]; render(); }
 function toggleGM(k){ GM[k]=!GM[k]; render(); }
