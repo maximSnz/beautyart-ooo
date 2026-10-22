@@ -36,3 +36,16 @@ jobs:
           OZON_API_KEY: ${{ secrets.OZON_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Telegram — сводка владельцу (всегда, даже при ошибке)
+        if: always()
+        run: node scripts/admin_notify.mjs
+        env:
+          MODE: load
+          STATUS: ${{ job.status }}
+          DAY: ${{ github.event.inputs.day }}
+          WRITE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.write || vars.OZON_LOAD_WRITE || '0' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

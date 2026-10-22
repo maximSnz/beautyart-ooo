@@ -1,0 +1,31 @@
+name: admin-watch
+# Сторож (Telegram-бот администратора): тревога, если упала синхронизация товаров или к 10:00 Мск нет успешной ночной загрузки
+# и свежих данных. Ручной запуск — полный статус в Telegram (проверка, что бот работает).
+on:
+  workflow_run:
+    workflows: [ozon-products-sync]
+    types: [completed]
+  schedule:
+    - cron: '0 7 * * *'   # 07:00 UTC = 10:00 Мск
+  workflow_dispatch:
+permissions:
+  actions: read
+jobs:
+  watch:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Telegram — сторож
+        run: node scripts/admin_notify.mjs
+        env:
+          MODE: watch
+          EVENT: ${{ github.event_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

@@ -5,6 +5,7 @@
 //   plan.html fixHypotheses: фиксация факта SMART-гипотез после дедлайна (product_protocol) — с 22.10.2026 только здесь.
 // Режимы: WRITE=1 — запись в базу; иначе ПРОВЕРКА: всё считается и сверяется с базой, в базу ничего не пишется.
 // Репозиторий публичный — в лог только счётчики и расхождения в процентах; рублей, штук и артикулов в логе нет.
+import fs from 'node:fs';
 const M1=/^(CAP|INS|FW|MS|ML|SE)-/;       // matrixOf ООО (как в weekly.html / plan.html этого репозитория)
 const OZON='https://api-seller.ozon.ru';
 const H={'Client-Id':process.env.OZON_CLIENT_ID,'Api-Key':process.env.OZON_API_KEY,'Content-Type':'application/json'};
@@ -26,6 +27,9 @@ function isoWeeksOfMonth(ym){const [y,m]=ym.split('-').map(Number);const out=[];
   for(let i=0;i<6;i++){if(monthOfWeek(w)===ym)out.push(w);w=addDays(w,7);}return out;}
 const TODAY=mskDay(new Date().toISOString());
 const T0=Date.now(), el=()=>`[${Math.round((Date.now()-T0)/1000)} с]`;
+// итоги шагов для Telegram-сводки (scripts/admin_notify.mjs читает load_summary.txt; в публичный лог не печатается)
+const SUM=[], note=t=>{SUM.push(t);try{fs.writeFileSync('load_summary.txt',SUM.join('\n')+'\n');}catch(e){}};
+const nf=n=>Math.round(n).toLocaleString('ru-RU');
 const D=process.env.DAY||addDays(TODAY,-1);
 const SNAPSHOT=D===addDays(TODAY,-1);                                              // остатки «на сейчас» верны только для вчера
 console.log(`Ночная загрузка: день ${D}, режим ${WRITE?'ЗАПИСЬ':'ПРОВЕРКА (в базу ничего не пишется)'}${SNAPSHOT?'':' — день не вчерашний: снимок остатков и отклонения пропускаются'}`);
@@ -104,6 +108,7 @@ posts.forEach(p=>{ if(/cancel/i.test(p.status||''))return; if(mskDay(p.in_proces
     const k=o+'|'+wh,c=salesAgg.get(k)||{q:0,r:0};c.q+=q;c.r+=q*num(pr.price);salesAgg.set(k,c);});});
 const salesRows=[...salesAgg].map(([k,v])=>{const [offer_id,warehouse_name]=k.split('|');return {sale_date:D,offer_id,warehouse_name,qty:v.q,revenue:r2(v.r)};});
 console.log(`  отправлений в окне ${posts.length}, строк артикул+склад за день ${salesRows.length}`);
+note(`Заказы: ${nf(salesRows.reduce((a,r)=>a+r.qty,0))} шт, выручка ${nf(salesRows.reduce((a,r)=>a+r.revenue,0))} ₽ (${salesRows.length} строк артикул+склад)`);
 const dbSales=await sbAll(`product_sales?sale_date=eq.${D}&select=offer_id,warehouse_name,qty,revenue&order=offer_id,warehouse_name`);
 if(dbSales.length){cmp('штуки (сверка с CSV)',sumBy(salesRows,r=>r.offer_id+'|'+r.warehouse_name,r=>r.qty),sumBy(dbSales,r=>r.offer_id+'|'+r.warehouse_name,r=>Number(r.qty)));
   cmp('выручка (сверка с CSV)',sumBy(salesRows,r=>r.offer_id+'|'+r.warehouse_name,r=>r.revenue),sumBy(dbSales,r=>r.offer_id+'|'+r.warehouse_name,r=>Number(r.revenue)));}
@@ -122,6 +127,7 @@ active.forEach(p=>{if(!seen.has(p.offer_id))stockRows.push({report_date:D,offer_
 const dbStock=await sbAll(`stock_history?report_date=eq.${D}&select=offer_id,warehouse_name,stock&order=offer_id,warehouse_name`);
 if(dbStock.length)cmp('остатки (сверка со снимком CSV-дня; он снят позже — утром)',sumBy(stockRows,r=>r.offer_id+'|'+r.warehouse_name,r=>r.stock),sumBy(dbStock,r=>r.offer_id+'|'+r.warehouse_name,r=>Number(r.stock)),0.5);
 else console.log('  снимка за день в базе нет');
+note(SNAPSHOT?`Остатки: снимок ${stockRows.length} строк, ${nf(stockRows.reduce((a,r)=>a+Number(r.stock||0),0))} шт`:'Остатки и отклонения: пропущены (день не вчерашний)');
 if(SNAPSHOT){await sbWrite('DELETE',`stock_history?report_date=eq.${D}`);await sbWrite('POST','stock_history?on_conflict=report_date,offer_id,warehouse_name',stockRows);}
 
 // ===== 3. Отклонения остатков → deviation_history (computeDay из weekly.html, 1:1) =====
@@ -247,6 +253,7 @@ acc.forEach(a=>{
   else nonItem++;                                                                   // без товара (хранение, клики) — как CSV: не берём
 });
 console.log(`  начислений ${acc.length}, строк для базы ${chRows.length}; без товара пропущено ${nonItem}, SKU без артикула ${noOffer}, без даты заказа ${chRows.filter(r=>!r.event_date).length}`);
+{const noEv=chRows.filter(r=>!r.event_date).length;note(`Начисления: ${chRows.length} строк, итог ${nf(chRows.reduce((a,r)=>a+r.amount,0))} ₽; без товара (не в марже) ${nonItem}${noOffer?`; ⚠️ SKU без артикула ${noOffer}`:''}${noEv?`; без даты заказа ${noEv}`:''}`);}
 const dbCh=await sbAll(`ozon_charges?charge_date=eq.${D}&select=offer_id,group_name,charge_type,amount,qty,price,event_date&order=row_key`);
 if(dbCh.length){
   cmp('суммы артикул×тип (сверка с CSV)',sumBy(chRows,r=>r.offer_id+'|'+r.charge_type,r=>r.amount),sumBy(dbCh,r=>r.offer_id+'|'+r.charge_type,r=>Number(r.amount)));
@@ -325,6 +332,7 @@ const res=syncPnl(withApi);
 cmp(`маржа CF дня ${D}: API против CSV`,dy(res.dayBody.filter(r=>r.day===D)),dy(dbDays.filter(r=>r.day===D)));
 await sbWrite('POST','sales_plan_weeks?on_conflict=product_id,week,metric',res.body);
 await sbWrite('POST','cf_daily?on_conflict=product_id,day',res.dayBody);
+note(`Маржа CF за день: ${nf(res.dayBody.filter(r=>r.day===D).reduce((a,r)=>a+r.mar,0))} ₽; пересчитаны недели ${weeks.map(w=>w.slice(8,10)+'.'+w.slice(5,7)).join(', ')}`);
 
 // ===== 7. Фиксация SMART-гипотез (fixHypotheses из plan.html, 1:1) =====
 // Отличие одно: гипотеза по марже ждёт, пока в базе появится реклама за день дедлайна (её CSV грузят утром, после ночной загрузки).
@@ -374,6 +382,7 @@ for(const it of proto){
   }catch(e){hyp.ошибки++;console.log('  гипотеза: ошибка',e.message.slice(0,120));}
 }
 console.log('  гипотезы без зафиксированного факта:',JSON.stringify(hyp));
+note(`Гипотезы: зафиксировано ${hyp.заказы+hyp.маржа} (заказы ${hyp.заказы}, маржа ${hyp.маржа}); ждут рекламу ${hyp['ждут рекламу']}${hyp.ошибки?`; ⚠️ ошибки ${hyp.ошибки}`:''}`);
 if(!WRITE){ // проверка переноса: пересчитать уже зафиксированные браузером гипотезы и сравнить с записанным фактом
   const done=await sbAll('product_protocol?parent_id=is.null&deadline=not.is.null&fact_ctx=not.is.null&select=id,product_id,deadline,metric,baseline_ctx,created_at,fact_ctx&order=id');
   const chk={заказы:{совпало:0,другое:0},маржа:{совпало:0,другое:0},пропущено:0};
@@ -393,4 +402,5 @@ if(!WRITE){ // проверка переноса: пересчитать уже 
 }
 
 if(!WRITE){console.log('\nРежим проверки — в базу НЕ записано. Было бы выполнено:');PLANNED.forEach(x=>console.log('  '+x));}
+note(`Время: ${Math.round((Date.now()-T0)/60000)} мин`);
 console.log('\nГотово.');
