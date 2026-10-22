@@ -374,6 +374,21 @@ for(const it of proto){
   }catch(e){hyp.ошибки++;console.log('  гипотеза: ошибка',e.message.slice(0,120));}
 }
 console.log('  гипотезы без зафиксированного факта:',JSON.stringify(hyp));
+if(!WRITE){ // проверка переноса: пересчитать уже зафиксированные браузером гипотезы и сравнить с записанным фактом
+  const done=await sbAll('product_protocol?parent_id=is.null&deadline=not.is.null&fact_ctx=not.is.null&select=id,product_id,deadline,metric,baseline_ctx,created_at,fact_ctx&order=id');
+  const chk={заказы:{совпало:0,другое:0},маржа:{совпало:0,другое:0},пропущено:0};
+  for(const it of done.slice(-80)){
+    try{const fc=JSON.parse(it.fact_ctx),base=it.baseline_ctx?JSON.parse(it.baseline_ctx):null;if(!base||!('orders' in base)){chk.пропущено++;continue;}
+      if((it.metric||'orders')==='orders'){if(fc.orders==null){chk.пропущено++;continue;}
+        const f=await ordersAvgWeekdays(it.product_id,addDays(mskDay(it.created_at),1),it.deadline);
+        chk.заказы[f!=null&&Math.abs(f-Number(fc.orders))<0.005?'совпало':'другое']++;}
+      else{if(fc.pct==null){chk.пропущено++;continue;}
+        const f=await marginAggPeriod(it.product_id,addDays(it.deadline,-2),it.deadline);
+        chk.маржа[f&&Math.abs(f.pct-Number(fc.pct))<0.015?'совпало':'другое']++;}
+    }catch(e){chk.пропущено++;}
+  }
+  console.log(`  ПЕРЕНОС ФОРМУЛ гипотез (последние ${Math.min(80,done.length)} из ${done.length} зафиксированных браузером):`,JSON.stringify(chk));
+}
 
 if(!WRITE){console.log('\nРежим проверки — в базу НЕ записано. Было бы выполнено:');PLANNED.forEach(x=>console.log('  '+x));}
 console.log('\nГотово.');
