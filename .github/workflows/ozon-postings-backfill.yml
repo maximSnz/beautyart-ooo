@@ -1,0 +1,25 @@
+name: ozon-postings-backfill
+# Разовое заполнение справочника отправлений ozon_postings (номер → день заказа) для ночной загрузки. Только ручной запуск.
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: 'С какого дня (ГГГГ-ММ-ДД)'
+        required: false
+        default: '2026-08-31'
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Ozon postings -> ozon_postings
+        run: node scripts/ozon_postings_backfill.mjs
+        env:
+          FROM: ${{ github.event.inputs.from }}
+          OZON_CLIENT_ID: ${{ secrets.OZON_CLIENT_ID }}
+          OZON_API_KEY: ${{ secrets.OZON_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
