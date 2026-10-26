@@ -18,6 +18,8 @@ const r2=x=>Math.round(x*100)/100;
 const num=v=>Number(v?.amount??v??0);
 
 // ===== даты: ISO-строки дней по Москве, арифметика через UTC (раннер — в UTC) =====
+// день заказа — по UTC, как в выгрузках кабинета Ozon и во всей истории из CSV (решение 26.10.2026; время там = UTC до секунды)
+const orderDay=iso=>new Date(iso).toISOString().slice(0,10);
 const mskDay=iso=>new Date(new Date(iso).getTime()+3*3600e3).toISOString().slice(0,10);
 const addDays=(iso,n)=>{const d=new Date(iso+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);};
 const dow=iso=>new Date(iso+'T00:00:00Z').getUTCDay();
@@ -96,13 +98,13 @@ const stocks=await sbAll('product_stocks?select=product_id,warehouse_id,warehous
 console.log('\n1. Заказы',el());
 let posts=[],cursor='';
 for(let pg=0;pg<3000;pg++){
-  const j=await ozon('/v3/posting/fbo/list',{dir:'ASC',filter:{since:addDays(D,-2)+'T21:00:00.000Z',to:D+'T20:59:59.999Z'},limit:100,cursor,with:{analytics_data:true,financial_data:false}});
+  const j=await ozon('/v3/posting/fbo/list',{dir:'ASC',filter:{since:addDays(D,-1)+'T00:00:00.000Z',to:D+'T23:59:59.999Z'},limit:100,cursor,with:{analytics_data:true,financial_data:false}});
   posts=posts.concat(j.postings||[]); cursor=j.cursor||''; if(!j.has_next||!cursor)break;
 }
 const POSTING_DAY=new Map(), ORDER_DAY=new Map();                                 // для event_date начислений
-posts.forEach(p=>{const t=p.in_process_at||p.created_at;if(!t)return;const d=mskDay(t);POSTING_DAY.set(p.posting_number,d);if(p.order_number)ORDER_DAY.set(p.order_number,d);});
+posts.forEach(p=>{const t=p.in_process_at||p.created_at;if(!t)return;const d=orderDay(t);POSTING_DAY.set(p.posting_number,d);if(p.order_number)ORDER_DAY.set(p.order_number,d);});
 const salesAgg=new Map();
-posts.forEach(p=>{ if(/cancel/i.test(p.status||''))return; if(mskDay(p.in_process_at||p.created_at)!==D)return;
+posts.forEach(p=>{ if(/cancel/i.test(p.status||''))return; if(orderDay(p.in_process_at||p.created_at)!==D)return;
   const wh=(p.analytics_data?.warehouse_name||'').trim();
   (p.products||[]).forEach(pr=>{const o=(pr.offer_id||'').trim(),q=Number(pr.quantity||0);if(!o||!wh||!Number.isFinite(q))return;
     const k=o+'|'+wh,c=salesAgg.get(k)||{q:0,r:0};c.q+=q;c.r+=q*num(pr.price);salesAgg.set(k,c);});});
@@ -230,7 +232,7 @@ for(let i=0;i<miss.length;i+=8){
   if(i&&i%800===0)console.log(`    …запрошено ${i} из ${miss.length}`,el());
   await Promise.all(miss.slice(i,i+8).map(async u=>{const pn=/^\d+-\d+$/.test(u)?u+'-1':u;
     try{const j=await ozon('/v2/posting/fbo/get',{posting_number:pn});const p=j.result;const t=p?.in_process_at||p?.created_at;
-      if(t){const d=mskDay(t);POSTING_DAY.set(pn,d);if(p.order_number)ORDER_DAY.set(p.order_number,d);if(pn!==u)POSTING_DAY.set(u,d);fetched.push({posting_number:p.posting_number,order_number:p.order_number||null,order_day:d});}}catch(e){}}));
+      if(t){const d=orderDay(t);POSTING_DAY.set(pn,d);if(p.order_number)ORDER_DAY.set(p.order_number,d);if(pn!==u)POSTING_DAY.set(u,d);fetched.push({posting_number:p.posting_number,order_number:p.order_number||null,order_day:d});}}catch(e){}}));
 }
 console.log(`  отправлений в начислениях ${units.length}: из окна заказов ${units.length-need.length}, из ozon_postings ${need.length-miss.length}${cacheTable?'':' (таблицы нет)'}, запрошено по одному ${miss.length} за ${Math.round((Date.now()-t0)/1000)} с, найдено ${fetched.length}`);
 const eventOf=u=>POSTING_DAY.get(u)||ORDER_DAY.get(u)||null;
@@ -262,7 +264,7 @@ if(dbCh.length){
   cmp('GMV (цена × штуки) по артикулам',gmv(chRows),gmv(dbCh),0.05);
 }else console.log('  начислений за день в базе нет — сверять не с чем');
 if(chRows.length){await sbWrite('DELETE',`ozon_charges?charge_date=eq.${D}`);await sbWrite('POST','ozon_charges?on_conflict=row_key',chRows);}
-const postRows=[...new Map(posts.map(p=>[p.posting_number,{posting_number:p.posting_number,order_number:p.order_number||null,order_day:mskDay(p.in_process_at||p.created_at)}])).values()].concat(fetched);
+const postRows=[...new Map(posts.map(p=>[p.posting_number,{posting_number:p.posting_number,order_number:p.order_number||null,order_day:orderDay(p.in_process_at||p.created_at)}])).values()].concat(fetched);
 if(cacheTable&&postRows.length)await sbWrite('POST','ozon_postings?on_conflict=posting_number',postRows);
 
 // ===== 6. Пересчёт CF (syncPnl из plan.html) → sales_plan_weeks, cf_daily =====
