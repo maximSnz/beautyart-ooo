@@ -637,6 +637,25 @@ async function go(){
   load();
 }
 let PLAN_NEXT={},PLAN_PREV={};
+// План, шт — ЗАКАЗЫ (решение 26.10.2026): план выручки PNL = план, шт × цена; маржинальность CF считается от выкупов (GMV),
+// поэтому план маржи CF = план выручки × маржинальность × κ, κ = GMV (Σ sales_plan_weeks.revn) ÷ выручка PNL (Σ product_sales.revenue)
+// за 4 последние закрытые календарные недели не позже min(вчера, конец месяца) — как на картах Шухарта. Нет данных — κ = 1 (с пометкой)
+let KAPPA={k:1,from:null,to:null,n:0};
+async function loadKappa(){
+  const [y,m]=MONTH.split('-').map(Number),t=new Date();t.setHours(0,0,0,0);
+  const yISO=localISO(new Date(t.getFullYear(),t.getMonth(),t.getDate()-1)),mEnd=localISO(new Date(y,m,0));
+  let sun=parseW(mEnd<yISO?mEnd:yISO);while(sun.getDay()!==0)sun.setDate(sun.getDate()-1);
+  const sunISO=localISO(sun),keys=[3,2,1,0].map(i=>addDaysISO(sunISO,-6-7*i));
+  const page=async q=>{let out=[],off=0;while(true){const r=await fetch(SUPABASE_URL+'/rest/v1/'+q+`&limit=1000&offset=${off}`,{headers:HD});if(!r.ok)throw new Error('HTTP '+r.status);const j=await r.json();out=out.concat(j);if(j.length<1000)return out;off+=1000;}};
+  try{
+    const gmv={},rev={};
+    (await page(`sales_plan_weeks?week=in.(${keys.map(k=>`"${k}"`).join(',')})&metric=eq.revn&fact=not.is.null&select=week,fact&order=id`)).forEach(r=>{gmv[r.week]=(gmv[r.week]||0)+Number(r.fact||0);});
+    (await page(`product_sales?sale_date=gte.${keys[0]}&sale_date=lte.${sunISO}&select=sale_date,revenue&order=id`)).forEach(x=>{const d=parseW(x.sale_date);d.setDate(d.getDate()-((d.getDay()+6)%7));const k=localISO(d);rev[k]=(rev[k]||0)+Number(x.revenue||0);});
+    const ok=keys.filter(k=>gmv[k]>0&&rev[k]>0);
+    KAPPA=ok.length?{k:ok.reduce((a,k)=>a+gmv[k],0)/ok.reduce((a,k)=>a+rev[k],0),from:ok[0],to:addDaysISO(ok[ok.length-1],6),n:ok.length}:{k:1,from:null,to:null,n:0};
+  }catch(e){console.warn('κ:',e.message);KAPPA={k:1,from:null,to:null,n:0};}
+}
+const kappaTip=()=>KAPPA.n?`план маржи CF = план выручки × маржинальность × κ ${KAPPA.k.toLocaleString('ru-RU',{minimumFractionDigits:3,maximumFractionDigits:3})} (GMV ÷ выручка PNL, ${ddmm(KAPPA.from)}–${ddmm(KAPPA.to)})`:'план маржи без поправки κ: нет данных GMV за закрытые недели';
 function nextMonthISO(){const [y,m]=MONTH.split('-').map(Number);const d=new Date(y,m,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function prevMonthISO(){const [y,m]=MONTH.split('-').map(Number);const d=new Date(y,m-2,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
 function weeksOfNextMonth(){const [ny,nm]=nextMonthISO().split('-').map(Number);return isoWeeksOfMonth(ny,nm-1);}
@@ -678,10 +697,10 @@ function dayShare(p,dateISO,metric){
   const pl=planOf(p.product_id,ym);
   if(!pl||!(pl.plan_qty>0))return null;
   const [y,m]=ym.split('-').map(Number);
-  const q=(pl.plan_qty/0.95)/effMonth(y,m)*(isWeekend(dateISO)?0.7:1);
+  const q=pl.plan_qty/effMonth(y,m)*(isWeekend(dateISO)?0.7:1);
   if(metric==='sales')return q;
   if(metric==='revn')return q*pl.price;
-  if(metric==='mar')return q*pl.price*pl.margin_pct/100;
+  if(metric==='mar')return q*pl.price*pl.margin_pct/100*KAPPA.k;
   return null;
 }
 function weekTargetParts(p,weekISO,metric){
@@ -1094,7 +1113,7 @@ async function computeOrderTemps(){
     if(m)m.forEach((v,k)=>{if(k>=periodStart&&k<=execEnd)exec+=v;});
     const eElapsed=effDaysRange(periodStart, yISO<periodEnd?yISO:periodEnd);
     const proj=eElapsed>0? exec/eElapsed*effTotal : null;
-    const need=pl.plan_qty/0.95;
+    const need=pl.plan_qty; // план, шт — заказы (26.10.2026; до этого ÷ 0,95)
     const remain=need-exec;
     const rc=effRemain>0?remain/effRemain:0;
     const rp=effTotal>0?need/effTotal:0;
@@ -1391,7 +1410,7 @@ async function load(){
       BYID={}; ROWS.forEach(p=>BYID[p.product_id]=p);
       OFFER_PID={}; ROWS.forEach(p=>OFFER_PID[p.offer_id]=p.product_id);
       SKU_PID={}; ROWS.forEach(p=>{const sku=p.raw&&p.raw.sku!=null?String(p.raw.sku):'';if(sku)SKU_PID[sku]=p.product_id;});
-      await Promise.all([loadPlans(),loadWeeks(),loadPPM(),loadProto(),loadDev(),loadCosts(),loadCostHistory(),loadAnaReq()]);
+      await Promise.all([loadPlans(),loadKappa(),loadWeeks(),loadPPM(),loadProto(),loadDev(),loadCosts(),loadCostHistory(),loadAnaReq()]);
       const planCnt=ROWS.filter(r=>((PLAN[r.product_id]||{}).plan_qty||0)>0).length;
       document.getElementById('meta').textContent=`Период: ${MONTH} • позиций: ${ROWS.length} • в плане: ${planCnt} • обновлено: ${new Date().toLocaleString('ru-RU')}`;
       render(); return;
@@ -1399,7 +1418,7 @@ async function load(){
   }
 }
 async function onMonth(v){ if(!v)return; MONTH=v; const err=document.getElementById('err'); err.textContent='';
-  try{ const [y,m]=MONTH.split('-').map(Number); WEEKS=isoWeeksOfMonth(y,m-1); WEEKISO=WEEKS.map(localISO); await Promise.all([loadPlans(),loadWeeks(),loadPPM(),loadProto(),loadDev(),loadCosts(),loadCostHistory()]);
+  try{ const [y,m]=MONTH.split('-').map(Number); WEEKS=isoWeeksOfMonth(y,m-1); WEEKISO=WEEKS.map(localISO); await Promise.all([loadPlans(),loadKappa(),loadWeeks(),loadPPM(),loadProto(),loadDev(),loadCosts(),loadCostHistory()]);
       const planCnt=ROWS.filter(r=>((PLAN[r.product_id]||{}).plan_qty||0)>0).length;
       document.getElementById('meta').textContent=`Период: ${MONTH} • позиций: ${ROWS.length} • в плане: ${planCnt} • обновлено: ${new Date().toLocaleString('ru-RU')}`;
       render(); }catch(e){ err.textContent='Ошибка: '+e.message; }
@@ -1470,7 +1489,7 @@ function monthlyPlan(p,key){
   if(key==='qty'||key==='revo')return null;
   if(key==='sales')return pl.plan_qty;
   if(key==='revn')return pl.plan_qty*pl.price;
-  if(key==='mar')return pl.plan_qty*pl.price*pl.margin_pct/100;
+  if(key==='mar')return pl.plan_qty*pl.price*pl.margin_pct/100*KAPPA.k;
   if(key==='price')return pl.price;
   return pl.margin_pct;
 }
@@ -2178,12 +2197,12 @@ function drawPie(ids,buckets,total,get,fmtTotal,cap,fmtMain,fmtSide){
 }
 function matrixStats(list){
   const buckets=[{label:'до 5%',color:'#E33D78',rev:0,cnt:0},{label:'5–10%',color:'#d97706',rev:0,cnt:0},{label:'свыше 10%',color:'#16a34a',rev:0,cnt:0}];
-  let tRub=0,tMar=0,tFRev=0,tFMar=0,tOrd=0,tOrdRev=0;
+  let tRub=0,tMar=0,tMarRaw=0,tFRev=0,tFMar=0,tOrd=0,tOrdRev=0;
   let factRev=0,factMar=0,factCnt=0;
   list.forEach(p=>{
     const pl=PLAN[p.product_id]||{price:Number(p.price||0),plan_qty:0,margin_pct:0};
     const rev=pl.plan_qty*pl.price, mar=pl.plan_qty*pl.price*pl.margin_pct/100;
-    tRub+=rev; tMar+=mar;
+    tRub+=rev; tMar+=mar*KAPPA.k; tMarRaw+=mar;
     const pvRev=projVal(p,'revn'), pvMar=projVal(p,'mar');
     if(pvRev.ffV!=null)tFRev+=pvRev.ffV;
     if(pvMar.ffV!=null)tFMar+=pvMar.ffV;
@@ -2192,7 +2211,7 @@ function matrixStats(list){
     if(fMar!=null) factMar+=fMar;
     const b=pl.margin_pct<=5?buckets[0]:(pl.margin_pct<=10?buckets[1]:buckets[2]); b.rev+=rev; b.cnt+=1;
   });
-  return {buckets,tRub,tMar,tFRev,tFMar,tOrd,tOrdRev,factRev,factMar,factCnt};
+  return {buckets,tRub,tMar,tMarRaw,tFRev,tFMar,tOrd,tOrdRev,factRev,factMar,factCnt};
 }
 function hypStats(list){
   let active=0,success=0,fail=0;
@@ -2215,7 +2234,7 @@ function hypStats(list){
 function mxCard(id,title,list,gid,total){
   const s=matrixStats(list);
   const h=hypStats(list);
-  const wMar=s.tRub>0?s.tMar/s.tRub*100:0;
+  const wMar=s.tRub>0?s.tMarRaw/s.tRub*100:0; // маржинальность плана — от плановой выручки, без κ
   const wFMar=s.tFRev>0?s.tFMar/s.tFRev*100:0;
 const ordMode=ORDMODE[gid]||'summary';
 const ordOn=ordMode==='orders';
@@ -2256,7 +2275,7 @@ const body=(ordOn||revOn)?`<div class="tempwrap" id="ordbody_${gid}"><div class=
           <div class="kpititle">План (PNL)</div>
           <div class="kpirow"><div class="klabel">Заказы, шт</div><div class="kval">${fmt(list.reduce((s,p)=>s+(PLAN[p.product_id]?.plan_qty||0),0))}</div></div>
           <div class="kpirow"><div class="klabel">Выручка, ₽</div><div class="kval">${fmt(s.tRub)}</div></div>
-          <div class="kpirow"><div class="klabel">Маржа, ₽</div><div class="kval">${fmt(s.tMar)}</div></div>
+          <div class="kpirow" title="${kappaTip()}"><div class="klabel">Маржа (CF), ₽</div><div class="kval">${fmt(s.tMar)}</div></div>
           <div class="kpirow"><div class="klabel">Маржин. ср.взвеш., %</div><div class="kval">${wMar.toLocaleString('ru-RU',{maximumFractionDigits:1})}</div></div>
         </div>
         <div class="kpicol sep">
@@ -2430,7 +2449,7 @@ renderKpiPnl(g);
       let planV,ffV,dev;
       if(add[mt.key]){planV=add[mt.key].plan;ffV=add[mt.key].ff;dev=add[mt.key].dev;}
       else if(mt.key==='price'){planV=add.sales.plan>0?add.revn.plan/add.sales.plan:null;ffV=ratio('revg','ug',1);dev=ffV==null||planV==null?null:ffV-planV;}
-      else{planV=add.revn.plan!==0?add.mar.plan/add.revn.plan*100:null;ffV=ratio('mar','revn',100);dev=ffV==null||planV==null?null:ffV-planV;}
+      else{planV=add.revn.plan!==0?add.mar.plan/KAPPA.k/add.revn.plan*100:null;ffV=ratio('mar','revn',100);dev=ffV==null||planV==null?null:ffV-planV;}
       const dcls=dev==null?'n':(dev>0?'g':dev<0?'r':'n');
       h+=`<td class="num sep">${planV==null?'—':fmtFor(mt.key,planV)}</td><td class="num calc">${ffV==null?'—':fmtFor(mt.key,ffV)}</td><td class="num ${dcls}">${dev==null?'—':(dev>0?'+':'')+fmtFor(mt.key,dev)}</td>`;
       if(EXP[mt.key]){
