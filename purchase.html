@@ -223,10 +223,10 @@
       <summary>📋 Перенос в Google-таблицу «Еженедельные заявки» (временно, пока WB не в приложении)</summary>
       <div class="inner">
         <div class="note">1) В Google-таблице откройте лист недели (<b>«Озон дд.мм»</b> / <b>«Озон дд.мм ООО»</b>), скопируйте столбец A с ячейки A4 вниз (артикулы) и вставьте сюда.
-          2) Нажмите кнопку — в буфер скопируются короба по 24 кластерам и Σ (столбцы F–AD) в порядке ваших строк. 3) Встаньте в ячейку F4 листа и вставьте (Cmd+V).
+          2) Нажмите кнопку — в буфер скопируются короба по 24 кластерам (столбцы F–AC) в порядке ваших строк; Σ лист считает сам. 3) Встаньте в ячейку F4 листа и вставьте (Cmd+V).
           Переносится «заявлено» выбранной недели; Алматы + Астана → «Казахстан».</div>
         <textarea id="gsArts" rows="5" style="width:100%;box-sizing:border-box;font-family:monospace" placeholder="Вставьте артикулы из столбца A (с A4 вниз)"></textarea>
-        <div style="margin-top:6px"><button onclick="copyGs()">📋 Скопировать короба F–AD</button> <span id="gsRes" class="note"></span></div>
+        <div style="margin-top:6px"><button onclick="copyGs()">📋 Скопировать короба F–AC</button> <span id="gsRes" class="note"></span></div>
       </div>
     </details>
 
@@ -562,7 +562,7 @@ function renderT2(){
   document.getElementById('sup').innerHTML=SUP_LIST.map(([s,o],i)=>`<div class="card dl" title="Скачать Excel" onclick="exportSup(${i})"><div class="l">${esc(s)} · к закупке ⬇</div><div class="v">${nf.format(o.k)} кор.</div><div class="l">${nf.format(o.u)} шт${o.d?` · долг ${sgn(o.d)} кор. · привезти ${o.sh} кор.`:''}</div></div>`).join('');
   if(!FACT_OK&&st==='closed') document.getElementById('err').textContent='Столбец «Факт» не сохраняется: в базе нет колонки purchase_supply.fact_boxes (SQL 2026-10-27).';
 }
-// Перенос в Google-таблицу «00.2 Еженедельные заявки» (27.10.2026, временно): столбцы F–AC листа — 24 кластера в этом порядке, AD — Σ
+// Перенос в Google-таблицу «00.2 Еженедельные заявки» (27.10.2026, временно): столбцы F–AC листа — 24 кластера в этом порядке (Σ в AD лист считает сам)
 const GS_CLUSTERS=['Москва, МО и Дальние регионы','Санкт-Петербург и СЗО','Екатеринбург','Самара','Казань','Воронеж','Новосибирск','Краснодар','Махачкала','Невинномысск','Уфа','Дальний восток','Тюмень','Красноярск','Саратов','Калининград','Казахстан','Беларусь','Ярославль','Пермь','Оренбург','Тверь','Омск','Ростов'];
 const GS_ALIAS={'алматы':'казахстан','астана':'казахстан'};
 async function copyGs(){
@@ -573,7 +573,7 @@ async function copyGs(){
   const by=new Map(), outside={};
   MODEL.forEach(p=>{ const v=Array(GS_CLUSTERS.length).fill(0); p.rows.forEach(r=>{ if(!r.req) return; const k=r.c.toLowerCase(), i=col[GS_ALIAS[k]||k]; if(i==null){ outside[r.c]=(outside[r.c]||0)+r.req; return; } v[i]+=r.req; }); by.set(p.offer_id,v); });
   const seen=new Set(); let boxes=0;
-  const lines=arts.map(a=>{ if(!a) return ''; const v=by.get(a); seen.add(a); if(!v) return Array(GS_CLUSTERS.length).fill('').join('\t')+'\t0'; const t=v.reduce((x,y)=>x+y,0); boxes+=t; return v.map(x=>x||'').join('\t')+'\t'+t; });
+  const lines=arts.map(a=>{ if(!a) return ''; const v=by.get(a); seen.add(a); if(!v) return Array(GS_CLUSTERS.length).fill('').join('\t'); boxes+=v.reduce((x,y)=>x+y,0); return v.map(x=>x||'').join('\t'); });
   const missed=MODEL.filter(p=>reqOf(p)>0&&!seen.has(p.offer_id));
   try{ await navigator.clipboard.writeText(lines.join('\n')); }catch(e){ res.innerHTML='<span class="bad">Не удалось скопировать в буфер: '+esc(e.message)+'</span>'; return; }
   const total=S(MODEL,reqOf);
