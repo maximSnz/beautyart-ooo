@@ -44,3 +44,28 @@ function needBuild({prod,dem,demAt,plan,needs,turn,req,cost,month,live}){
     return {...p,...r,ag:n?.agreed_boxes??null,comment:n?.comment||''};
   });
 }
+// Потребность месяца любой базы (27.10.2026; для переноса ИП + ООО в Excel «Потребность на месяц»): те же данные, что
+// загружает need.html (без себестоимости), и needBuild. Возвращает {model, status}. url/hd — база и заголовки со входом.
+async function needFetch(url,hd,month){
+  const get=async path=>{ let out=[],off=0; for(;;){ const r=await fetch(url+path+(path.includes('?')?'&':'?')+`limit=1000&offset=${off}`,{headers:hd}); if(!r.ok) throw new Error(path.split('?')[0].replace('/rest/v1/','')+' HTTP '+r.status); const j=await r.json(); out=out.concat(j); if(j.length<1000) break; off+=1000; } return out; };
+  const [pr,dm,ms,wk,lt,pl,nd]=await Promise.all([
+    get('/rest/v1/products?select=product_id,offer_id,name,supplier,box_qty,archived&order=product_id'),
+    get('/rest/v1/cluster_demand?select=product_id,cluster,ads_cluster,available,transit,updated_at&order=product_id,cluster'),
+    get('/rest/v1/purchase_need_months?select=*&order=month'),
+    get('/rest/v1/purchase_weeks?select=week,status&order=week.desc'),
+    get('/rest/v1/cluster_lead_times?select=*&order=cluster'),
+    get(`/rest/v1/sales_plan?select=product_id,plan_qty&month=eq.${month}&order=product_id`),
+    get(`/rest/v1/purchase_needs?select=*&month=eq.${month}&order=product_id`)
+  ]);
+  const blocked=new Set(lt.filter(c=>c.blocked).map(c=>c.cluster));
+  const dem={}; let demAt='';
+  dm.forEach(d=>{ if(d.updated_at>demAt) demAt=d.updated_at; if(blocked.has(d.cluster)) return; const o=dem[d.product_id]||(dem[d.product_id]={ads:0,stock:0}); o.ads+=Number(d.ads_cluster)||0; o.stock+=(d.available||0)+(d.transit||0); });
+  const mdb={}; ms.forEach(m=>mdb[m.month]=m);
+  const rw=wk.slice(0,2).map(w=>w.week), req={};
+  if(rw.length) (await get(`/rest/v1/purchase_lines?select=week,product_id,cluster,requested_boxes,distributed_boxes&week=in.(${rw.join(',')})&order=week,product_id,cluster`)).forEach(l=>{ if(blocked.has(l.cluster)) return; req[l.product_id]=(req[l.product_id]||0)+((l.distributed_boxes??l.requested_boxes)||0); });
+  const plan={}; pl.forEach(x=>{ if(x.plan_qty>0) plan[x.product_id]=x.plan_qty; });
+  const needs={}; nd.forEach(n=>needs[n.product_id]=n);
+  const status=mdb[month]?.status||null;
+  const model=needBuild({prod:pr.filter(p=>!p.archived),dem,demAt,plan,needs,turn:needTurnover(mdb,month).turn,req,cost:{},month,live:!status||status==='draft'});
+  return {model,status};
+}

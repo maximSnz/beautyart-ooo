@@ -219,6 +219,17 @@
       <div class="inner" id="settings"></div>
     </details>
 
+    <details class="box" id="xlBox">
+      <summary>📋 Перенос в Excel «Потребность на месяц» — ИП + ООО (временно, пока WB не в приложении)</summary>
+      <div class="inner">
+        <div class="note">1) В Excel на листе <b>«Озон ММ.ГГ»</b> выделите столбец A с ячейки A2 до последней строки списка (вместе с пустыми строками) и скопируйте сюда.
+          2) Нажмите кнопку — в буфер скопируется «Заказ, кор.» выбранного месяца, <b>ИП + ООО</b> по каждому артикулу, строго по вашим строкам.
+          3) Встаньте в ячейку F2 и вставьте. Пустые строки и артикулы без заказа останутся пустыми; товары, которых нет в листе, добавятся ниже списка (F — заказ, G — артикул).</div>
+        <textarea id="xlArts" rows="5" style="width:100%;box-sizing:border-box;font-family:monospace" placeholder="Вставьте столбец A (с A2 вниз)"></textarea>
+        <div style="margin-top:6px"><button onclick="copyXl()">📋 Скопировать заказ ИП + ООО (столбец F)</button> <span id="xlRes" class="note"></span></div>
+      </div>
+    </details>
+
     <div class="note">Потребность = план месяца + план в день × дни оборачиваемости − (остаток FBO + в пути на Ozon) − две последние недельные заявки + продажи до конца текущего месяца. Всё в штуках, затем ÷ штук в коробе.</div>
     <div class="scroll"><table id="t1"></table></div>
     <div class="sec">По поставщикам</div>
@@ -227,7 +238,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="need_calc.js?v=20261027b"></script>
+<script src="need_calc.js?v=20261027c"></script>
 <script src="../beautyart-home/auth.js?v=20261021"></script>
 <script>
 function toggleNav(btn) {
@@ -432,6 +443,33 @@ function renderSup(){
   document.getElementById('sup').innerHTML=SUP_LIST.map(([s,o],i)=>`<div class="card" title="Скачать Excel" onclick="exportSup(${i})"><div class="l">${esc(s)} · ${o.ag?'согласовано':'заказ'} ⬇</div><div class="v">${rub.format(o.r)} ₽</div><div class="l">${nf.format(o.k)} кор. · ${nf.format(o.u)} шт · в неделю ≈ ${rub.format(o.r/weeks)} ₽ (${weeks} нед.)</div></div>`).join('')||'<div class="mute">Нет заказа</div>';
 }
 const supOf=p=>p.supplier||'—';
+// Перенос в Excel «Потребность на месяц» (27.10.2026, временно): столбец F листа «Озон ММ.ГГ» = заказ ИП + заказ ООО по артикулу.
+// Второе юрлицо — его база тем же входом (BA_AUTH), расчёт — needFetch из need_calc.js (как на его странице потребности).
+const XL_OTHER=ENTITY==='ИП'?{name:'ООО',url:'https://jaruwkpugxybwcsalhgr.supabase.co',anon:'sb_publishable_09rFaH3adGXnEO3-cybX9A_eK_mCnW0'}:{name:'ИП',url:'https://jvoofakrkhzoblhhuyvr.supabase.co',anon:'sb_publishable_IA4ReUU9xTL7hb_sbsHaFA_LPATJazE'};
+async function copyXl(){
+  const res=document.getElementById('xlRes'), arts=document.getElementById('xlArts').value.split(/\r?\n/).map(x=>x.split('\t')[0].trim());
+  while(arts.length&&!arts[arts.length-1]) arts.pop();
+  if(!arts.length){ res.innerHTML='<span class="bad">Вставьте столбец A</span>'; return; }
+  res.textContent='загрузка '+XL_OTHER.name+'…';
+  let other;
+  try{
+    const hd2={apikey:XL_OTHER.anon,Authorization:'Bearer '+XL_OTHER.anon};
+    if(!await BA_AUTH.login(XL_OTHER.url,hd2)) throw new Error('нет входа в базу '+XL_OTHER.name+' — выйдите и войдите снова');
+    other=await needFetch(XL_OTHER.url,hd2,MONTH);
+  }catch(e){ res.innerHTML='<span class="bad">'+esc(XL_OTHER.name)+': '+esc(e.message)+'</span>'; return; }
+  const by=new Map(), add=(o,k,v)=>{ if(!v) return; const x=by.get(o)||{[ENTITY]:0,[XL_OTHER.name]:0}; x[k]+=v; by.set(o,x); };
+  MODEL.forEach(p=>add(p.offer_id,ENTITY,p.need)); other.model.forEach(p=>add(p.offer_id,XL_OTHER.name,p.need));
+  const seen=new Set(); let tot=0;
+  const lines=arts.map(a=>{ if(!a||seen.has(a)) return ''; seen.add(a); const x=by.get(a); if(!x) return ''; const t=x[ENTITY]+x[XL_OTHER.name]; tot+=t; return t||''; });
+  // нет строки в листе — добавляем ниже списка: F — заказ, G — артикул с пометкой (решение владельца 27.10.2026)
+  const who=x=>[ENTITY,XL_OTHER.name].filter(k=>x[k]).map(k=>k+' '+x[k]).join(' + ');
+  const missed=[...by.entries()].filter(([o])=>!seen.has(o)).sort((a,b)=>a[0].localeCompare(b[0]));
+  missed.forEach(([o,x])=>{ const t=x[ENTITY]+x[XL_OTHER.name]; tot+=t; lines.push(t+'\t'+o+' — нет в листе ('+who(x)+')'); });
+  try{ await navigator.clipboard.writeText(lines.join('\n')); }catch(e){ res.innerHTML='<span class="bad">Не удалось скопировать в буфер: '+esc(e.message)+'</span>'; return; }
+  const sum=k=>[...by.values()].reduce((s,x)=>s+x[k],0);
+  res.innerHTML=`✅ Скопировано: ${arts.length} строк${missed.length?' + '+missed.length+' ниже':''}, ${nf.format(tot)} кор. (${ENTITY} ${nf.format(sum(ENTITY))} + ${XL_OTHER.name} ${nf.format(sum(XL_OTHER.name))}${other.status&&other.status!=='draft'?'':', '+XL_OTHER.name+' — черновик/расчёт'}) — вставьте в F2.`
+    +(missed.length?` <span class="warn">Нет строк в листе — добавлены ниже списка (F — заказ, G — артикул): ${missed.map(([o,x])=>esc(o)+' — '+who(x)+' кор.').join(', ')}</span>`:'');
+}
 function exportSup(i){
   const [sup]=SUP_LIST[i]||[]; if(!sup) return;
   if(!window.XLSX){ document.getElementById('err').textContent='Не загрузилась библиотека Excel — обновите страницу'; return; }
