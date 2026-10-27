@@ -497,19 +497,21 @@ function renderT1(){
 function toggle(pid){OPEN=OPEN===pid?null:pid;renderT1();}
 function renderNeeds(){
   const ym=monthOfWeek(WEEK), weeks=isoWeeksOfMonth(ym), idx=weeks.indexOf(WEEK)+1, n=weeks.length, q=document.getElementById('q').value.trim();
-  const v=vis().filter(p=>NEEDS[p.product_id]!=null);
-  const wasOf=p=>MONTH_REQ[p.product_id]||0, nowOf=p=>wasOf(p)+reqOf(p), planOf=p=>NEEDS[p.product_id]*idx/n;
+  // + товары, заказанные в этом месяце без потребности (нет плана) — чтобы «Итого» сходилось с заявкой (27.10.2026)
+  const wasOf=p=>MONTH_REQ[p.product_id]||0, nowOf=p=>wasOf(p)+reqOf(p), needOf=p=>NEEDS[p.product_id]??0, planOf=p=>needOf(p)*idx/n;
+  const v=vis().filter(p=>NEEDS[p.product_id]!=null||nowOf(p)>0);
   const dvTd=(now,plan)=>{const dv=plan?(now-plan)/plan*100:null;return `<td class="n ${dv==null?'mute':Math.abs(dv)<=10?'ok':dv>0?'warn':'bad'}">${dv==null?'—':(dv>0?'+':'')+Math.round(dv)+'%'}</td>`;};
   let h=`<colgroup><col style="width:30%"><col span="5"></colgroup><thead><tr><th class="sub">Товар</th><th class="sub sep n">Потребность ${ym.slice(5)}.${ym.slice(0,4)}, кор.</th><th class="sub n">Заказано до этой недели, кор.</th><th class="sub n">Итого с этой неделей, кор.</th><th class="sub n">По плану к ${ddmm(WEEK)} (${idx}/${n}), кор.</th><th class="sub n">Отклонение</th></tr></thead><tbody>`;
   if(!NEED_ST||NEED_ST==='draft') h+=`<tr><td colspan="6" class="mute">Потребность за ${ym.slice(5)}.${ym.slice(0,4)} ${NEED_ST?'в черновике':'ещё не создана'} — показан расчёт на сегодня, как в «Потребности на месяц» (с ручными правками менеджеров)</td></tr>`;
   if(!v.length) h+=`<tr><td colspan="6" class="mute">Нет данных о потребности за месяц</td></tr>`;
-  const G=groupsOf(v,p=>NEEDS[p.product_id]); K3=G.map(g=>g[0]);
+  const G=groupsOf(v,needOf); K3=G.map(g=>g[0]);
   G.forEach(([sup,g],gi)=>{
-    const open=OPEN3.has(sup)||!!q, gn=S(g,p=>NEEDS[p.product_id]), gnow=S(g,nowOf), gplan=S(g,planOf);
+    const open=OPEN3.has(sup)||!!q, gn=S(g,needOf), gnow=S(g,nowOf), gplan=S(g,planOf);
     h+=`<tr class="mgroup" onclick="toggleG(3,${gi})"><td><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов.</td><td class="n sep">${gn}</td><td class="n">${S(g,wasOf)}</td><td class="n">${gnow}</td><td class="n">${nf.format(gplan)}</td>${dvTd(gnow,gplan)}</tr>`;
     if(!open) return;
-    for(const p of g.sort((a,b)=>NEEDS[b.product_id]-NEEDS[a.product_id]||a.offer_id.localeCompare(b.offer_id))){
-      h+=`<tr><td>${esc(p.offer_id)}<div class="pname">${esc(p.name)}</div></td><td class="n sep">${NEEDS[p.product_id]}</td><td class="n">${wasOf(p)}</td><td class="n">${nowOf(p)}</td><td class="n">${nf.format(planOf(p))}</td>${dvTd(nowOf(p),planOf(p))}</tr>`;
+    for(const p of g.sort((a,b)=>needOf(b)-needOf(a)||a.offer_id.localeCompare(b.offer_id))){
+      const no=NEEDS[p.product_id]==null;
+      h+=`<tr><td>${esc(p.offer_id)}<div class="pname">${esc(p.name)}</div></td><td class="n sep">${no?'<span class="mute">—</span>':NEEDS[p.product_id]}</td><td class="n">${wasOf(p)}</td><td class="n">${nowOf(p)}</td><td class="n">${no?'<span class="mute">—</span>':nf.format(planOf(p))}</td>${no?'<td class="n warn" title="Товара нет в потребности месяца (нет плана) — заказ сверх потребности">нет в потребности</td>':dvTd(nowOf(p),planOf(p))}</tr>`;
     }
   });
   document.getElementById('tn').innerHTML=h+'</tbody>';
