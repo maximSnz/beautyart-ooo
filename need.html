@@ -128,11 +128,12 @@
  .lock{font-size:.85em;color:#94a3b8;margin-left:6px}
  .wrap{max-width:min(1700px,100%);box-sizing:border-box}
  #t1{font-size:.8em;table-layout:fixed;width:100%}
- #t1 th{white-space:normal;line-height:1.15;vertical-align:bottom}
+ /* шапка — как в заявке: один стиль, текст по центру (27.10.2026) */
+ #t1 th,#t1 th.n{white-space:normal;line-height:1.15;vertical-align:middle;text-align:center}
  #t1 th.mhead{background:linear-gradient(90deg,rgba(120,166,199,.18),transparent);color:#544273;font-size:.95em;text-align:center}
  #t1 th.sub{background:rgba(120,166,199,.1)}
- #t1 th.whead{background:rgba(227,61,120,.08);color:#7D3673;text-align:center}
- #t1 th.wsub{background:rgba(227,61,120,.05)}
+ #t1 th.whead{background:linear-gradient(90deg,rgba(120,166,199,.18),transparent);color:#544273;font-size:.95em;text-align:center}
+ #t1 th.wsub{background:rgba(120,166,199,.1)}
  #t1 th.sep,#t1 td.sep{border-left:1px dashed rgba(84,66,115,.3)}
  #t1 td{overflow-wrap:anywhere}
  #t1 .num{width:100%;max-width:64px;box-sizing:border-box}
@@ -226,7 +227,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="need_calc.js?v=20261027"></script>
+<script src="need_calc.js?v=20261027b"></script>
 <script src="../beautyart-home/auth.js?v=20261021"></script>
 <script>
 function toggleNav(btn) {
@@ -396,21 +397,22 @@ function renderT1(){
   const st=ST(), edN=st==='draft', edA=st==='at_buyer', q=document.getElementById('q').value.trim();
   const v=vis().sort((a,b)=>(a.supplier||'—').localeCompare(b.supplier||'—','ru')||(b.calc||0)-(a.calc||0)||a.offer_id.localeCompare(b.offer_id));
   const fmt=x=>x==null?'<span class="mute">—</span>':nf.format(x);
-  let h=`<colgroup><col style="width:19%"><col span="5" style="width:6.5%"><col span="3" style="width:6%"><col style="width:6%"><col style="width:9%"><col style="width:7.5%"></colgroup>
-    <thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="5" class="mhead sep">Расчёт потребности, шт</th><th colspan="3" class="mhead sep">Потребность</th><th colspan="2" class="whead sep">Закупщик</th><th rowspan="2" class="sub sep n" title="Согласованное × штук в коробе × себестоимость; пока согласованного нет — заказ">Сумма, ₽</th></tr>
-    <tr><th class="sub sep n">План месяца</th><th class="sub n">Запас оборачи&shy;ваемости</th><th class="sub n">Остаток + в пути на Ozon</th><th class="sub n">Заявки в пути</th><th class="sub n">Продадим до конца месяца</th>
+  let h=`<colgroup><col style="width:18%"><col span="6" style="width:6%"><col span="3" style="width:6%"><col style="width:6%"><col style="width:8.5%"><col style="width:7.5%"></colgroup>
+    <thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="6" class="mhead sep">Расчёт потребности</th><th colspan="3" class="mhead sep">Потребность</th><th colspan="2" class="whead sep">Закупщик</th><th rowspan="2" class="sub sep n" title="Согласованное × штук в коробе × себестоимость; пока согласованного нет — заказ">Сумма, ₽</th></tr>
+    <tr><th class="sub sep n">План месяца, шт</th><th class="sub n">Запас оборачи&shy;ваемости, шт</th><th class="sub n">Остаток + в пути на Ozon, шт</th><th class="sub n">Заявки в пути, шт</th><th class="sub n">Продадим до конца месяца, шт</th><th class="sub n">В коробе, шт</th>
       <th class="sub sep n">Расчёт, кор.</th><th class="sub n">Заказ, кор.</th><th class="sub n">Заказ, шт</th><th class="wsub sep n">Согласовано, кор.</th><th class="wsub">Комментарий</th></tr></thead><tbody>`;
-  if(!v.length) h+=`<tr><td colspan="12" class="mute">Нет товаров с планом на ${mLabel(MONTH)}</td></tr>`;
+  if(!v.length) h+=`<tr><td colspan="13" class="mute">Нет товаров с планом на ${mLabel(MONTH)}</td></tr>`;
   SUP_KEYS=[...new Set(v.map(p=>p.supplier||'—'))];
   SUP_KEYS.forEach((sup,i)=>{
     const g=v.filter(x=>(x.supplier||'—')===sup), gn=S(g,x=>x.need), ga=S(g,x=>x.ag), gr=S(g,sumOf), open=OPEN_SUP.has(sup)||!!q;
-    h+=`<tr class="mgroup" onclick="toggleSup(${i})"><td colspan="12"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,x=>x.calc))} кор. · заказ ${gn} кор. · ${rub.format(gr)} ₽${g.some(x=>x.ag!=null)?` · согласовано ${ga} кор.${gn?` (${Math.round(ga/gn*100)}%)`:''}`:''}</td></tr>`;
+    h+=`<tr class="mgroup" onclick="toggleSup(${i})"><td colspan="13"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,x=>x.calc))} кор. · заказ ${gn} кор. · ${rub.format(gr)} ₽${g.some(x=>x.ag!=null)?` · согласовано ${ga} кор.${gn?` (${Math.round(ga/gn*100)}%)`:''}`:''}</td></tr>`;
     if(!open) return;
     for(const p of g){
       const bc=boxCost(p);
       h+=`<tr><td><b>${esc(p.offer_id)}</b><div class="pname">${esc(p.name)}</div></td>
         <td class="n sep">${p.plan==null?'<span class="mute">нет плана</span>':nf.format(p.plan)}</td><td class="n">${fmt(p.turnover)}</td><td class="n">${fmt(p.stock)}</td><td class="n">${fmt(p.reqQty)}</td>
         <td class="n" title="${p.ads==null?'':nf.format(p.ads)+' шт/дн × '+p.dte+' дн.'}">${fmt(p.sell)}</td>
+        <td class="n${p.box_qty>0?'':' miss'}" title="${p.box_qty>0?'':'Не заполнено — заполните в «Базе товаров»'}">${p.box_qty>0?p.box_qty:''}</td>
         <td class="n sep${p.nobox?' miss':''}">${p.nobox?'<span title="Не заполнено «в коробе» — заполните в «Базе товаров»">нет «в коробе»</span>':p.calc==null?'<span class="mute">—</span>':nf2.format(p.calc)}</td>
         <td class="n">${edN&&!p.nobox?`<input class="num" type="number" min="0" step="1" value="${p.need}" title="${p.manual?'Изменено вручную; очистите поле, чтобы вернуть к расчёту':'Идёт за расчётом'}" onchange="setNeed(${p.product_id},this.value)">${p.manual?'<div class="mute" style="font-size:.75em">✎ вручную</div>':''}`:`<b>${p.need}</b>`}</td>
         <td class="n mute" title="${p.box_qty||0} шт в коробе">${nf.format(p.need*(p.box_qty||0))}</td>

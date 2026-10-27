@@ -34,7 +34,7 @@ function needBuild({prod,dem,demAt,plan,needs,turn,req,cost,month,live}){
       const calc=D==null?null:Math.round(Math.max(D,0)/p.box_qty*100)/100;
       // заказ в черновике идёт за расчётом, округлённым ВВЕРХ (решение 21.10.2026); ручная правка — сохранённый заказ
       // не равен расчёту на момент сохранения ни вверх, ни по прежнему правилу (до ближайшего)
-      const up=x=>Math.ceil(x-1e-9), auto=calc==null?0:up(calc), scb=n?.calc_boxes==null?null:Number(n.calc_boxes);
+      const up=x=>Math.ceil(x-1e-9), auto=calc==null?0:Math.max(0,up(calc)), scb=n?.calc_boxes==null?null:Number(n.calc_boxes);
       const manual=n?.need_boxes!=null&&!(scb!=null&&(n.need_boxes===up(scb)||n.need_boxes===Math.round(scb)));
       r={plan:pl,turnover,stock:dm.stock,reqQty,ads:dm.ads,dte,sell,calc,manual,need:manual?n.need_boxes:auto,cost:cost[p.product_id]??null};
     }else{
