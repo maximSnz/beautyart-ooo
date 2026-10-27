@@ -362,9 +362,9 @@ async function loadWeek(){
   NEEDS={};
   if(!NEED_ST||NEED_ST==='draft'){
     const rw=Object.keys(WEEKS).sort().reverse().slice(0,2), req={};
-    if(rw.length) (await getAll(`/rest/v1/purchase_lines?select=week,product_id,cluster,requested_boxes,distributed_boxes&week=in.(${rw.join(',')})&order=week,product_id,cluster`)).forEach(l=>{ req[l.product_id]=(req[l.product_id]||0)+((l.distributed_boxes??l.requested_boxes)||0); });
+    if(rw.length) (await getAll(`/rest/v1/purchase_lines?select=week,product_id,cluster,requested_boxes,distributed_boxes&week=in.(${rw.join(',')})&order=week,product_id,cluster`)).forEach(l=>{ if(SEED[l.cluster]?.blocked) return; req[l.product_id]=(req[l.product_id]||0)+((l.distributed_boxes??l.requested_boxes)||0); });
     const pl={}; (await getAll(`/rest/v1/sales_plan?select=product_id,plan_qty&month=eq.${month}&order=product_id`)).forEach(x=>{ if(x.plan_qty>0) pl[x.product_id]=x.plan_qty; });
-    const dem={}; DEM.forEach((m,pid)=>{ const o=dem[pid]={ads:0,stock:0}; m.forEach(d=>{ o.ads+=Number(d.ads_cluster)||0; o.stock+=(d.available||0)+(d.transit||0); }); });
+    const dem={}; DEM.forEach((m,pid)=>{ const o=dem[pid]={ads:0,stock:0}; m.forEach((d,c)=>{ if(SEED[c]?.blocked) return; o.ads+=Number(d.ads_cluster)||0; o.stock+=(d.available||0)+(d.transit||0); }); });
     needBuild({prod:PROD.filter(p=>!p.nobox),dem,demAt:DEM_AT,plan:pl,needs:ndb,turn:needTurnover(mdb,month).turn,req,cost:{},month,live:true}).forEach(p=>NEEDS[p.product_id]=p.ag??p.need);
   }else nd.forEach(n=>NEEDS[n.product_id]=n.agreed_boxes??n.need_boxes);
   MONTH_REQ={}; mr.forEach(l=>{ MONTH_REQ[l.product_id]=(MONTH_REQ[l.product_id]||0)+(l.requested_boxes||0); });
@@ -390,19 +390,20 @@ function build(){
       const nPrev=lt?lt.prev_weeks:2;
       let prev=0; for(let i=1;i<=nPrev;i++) prev+=PREV.get(addD(WEEK,-7*i)+'|'+p.product_id+'|'+c)||0;
       if(!live&&line) prev=line.prev_boxes??prev;
-      const noLt=!lt, inactive=SEED[c]&&!ACTIVE.has(c);
+      // blocked — «Заказ запрещён» в справочнике кластеров (27.10.2026): расчёт и заявлено = 0, в т. ч. ручные
+      const noLt=!lt, inactive=SEED[c]&&!ACTIVE.has(c), blocked=!!SEED[c]?.blocked;
       let calc=null;
       // коробы округляются ВВЕРХ (решение 21.10.2026): к приёмке в кластере — не меньше целевого запаса
-      if(!noLt&&!inactive&&!p.nobox){ calc=Math.max(0,Math.ceil((src.ads*(cov(lt)+(Number(lt.target_days)||0))-(src.av+src.tr))/p.box_qty-1e-9)-prev); }
-      if(!live) calc=line?line.calc_boxes:0;
+      if(!noLt&&!inactive&&!p.nobox&&!blocked){ calc=Math.max(0,Math.ceil((src.ads*(cov(lt)+(Number(lt.target_days)||0))-(src.av+src.tr))/p.box_qty-1e-9)-prev); }
+      if(!live) calc=line?line.calc_boxes:0; else if(blocked) calc=0;
       // черновик: «заявлено» идёт за расчётом; ручная правка — сохранённое ≠ расчёту на момент сохранения (решение 21.10.2026)
       const sc=line?.calc_boxes==null?null:Number(line.calc_boxes);
       const manual=!!line&&line.requested_boxes!=null&&!(sc!=null&&line.requested_boxes===sc);
-      const req=live&&!imported?(manual?line.requested_boxes:(calc||0)):(line?.requested_boxes??0);
+      const req=live&&blocked?0:live&&!imported?(manual?line.requested_boxes:(calc||0)):(line?.requested_boxes??0);
       // keep — строка с данными (как до 27.10.2026): только такие сохраняются при отправке; нулевые кластеры — только показ
       const keep=!!(src.ads>0||src.av>0||src.tr>0||prev>0||req>0||line);
       const noSnap=!live&&!!line&&line.ads==null;
-      rows.push({c,keep,noSnap,manual:live&&!imported&&manual,ads:src.ads||0,av:src.av||0,tr:src.tr||0,prev,calc,req,dist:line?.distributed_boxes??null,noLt,inactive,dws:d?.days_without_sales});
+      rows.push({c,keep,noSnap,blocked,manual:live&&!imported&&manual&&!blocked,ads:src.ads||0,av:src.av||0,tr:src.tr||0,prev,calc,req,dist:line?.distributed_boxes??null,noLt,inactive,dws:d?.days_without_sales});
     }
     rows.sort((a,b)=>b.keep-a.keep||b.ads-a.ads||a.c.localeCompare(b.c,'ru'));
     const s=SUP[p.product_id]||{};
@@ -444,12 +445,15 @@ function renderLT(){
   document.getElementById('ltLock').textContent=ed?'— можно менять, пока заявка в черновике':!st?'— заявка не создана: при создании скопируются сроки '+(LT_SRC.startsWith('copy')?'недели '+ddmm(LT_SRC.slice(5)):'по умолчанию'):'— только просмотр';
   const used=new Set(); MODEL.forEach(p=>p.rows.forEach(r=>used.add(r.c)));
   const names=[...new Set([...Object.keys(WLT),...used])].sort((a,b)=>a.localeCompare(b,'ru'));
-  let h=`<table class="lt"><tr><th>Кластер</th>${LT_H.map(x=>`<th class="n">${x}</th>`).join('')}<th class="n">Покрытие</th><th class="n">Запас</th><th class="n">Вычесть заявок</th></tr>`;
+  // «Заказ запрещён» — справочник кластеров (не неделя): действует сразу на черновики и потребность; меняется в любой момент
+  const blk=Object.values(SEED).some(x=>'blocked' in x);
+  const bcell=c=>blk&&SEED[c]?`<td class="n"><input type="checkbox" ${SEED[c].blocked?'checked':''} title="Заказ в кластер запрещён: расчёт и заявлено = 0, в потребности не учитывается" onchange="setBlocked('${esc(c)}',this.checked)"></td>`:'<td class="n mute">—</td>';
+  let h=`<table class="lt"><tr><th>Кластер</th>${LT_H.map(x=>`<th class="n">${x}</th>`).join('')}<th class="n">Покрытие</th><th class="n">Запас</th><th class="n">Вычесть заявок</th>${blk?'<th class="n">Заказ запрещён</th>':''}</tr>`;
   for(const c of names){
-    const r=WLT[c], inactive=SEED[c]&&!ACTIVE.has(c);
-    if(!r){ h+=`<tr><td>${esc(c)}</td><td colspan="9" class="bad">сроки не заданы — расчёт по кластеру не идёт ${ed?`<button class="btn2" onclick="addLT('${esc(c)}')">задать</button>`:''}</td></tr>`; continue; }
+    const r=WLT[c], inactive=SEED[c]&&!ACTIVE.has(c), bl=!!SEED[c]?.blocked;
+    if(!r){ h+=`<tr><td>${esc(c)}</td><td colspan="9" class="${bl?'mute':'bad'}">${bl?'заказ запрещён — сроки не нужны':`сроки не заданы — расчёт по кластеру не идёт ${ed?`<button class="btn2" onclick="addLT('${esc(c)}')">задать</button>`:''}`}</td>${blk?bcell(c):''}</tr>`; continue; }
     const inp=f=>ed?`<input class="num" type="number" min="0" step="1" value="${r[f]??0}" onchange="setLT('${esc(c)}','${f}',this.value)">`:(r[f]??0);
-    h+=`<tr><td>${esc(c)}${inactive?' <span class="mute">(нет у Ozon)</span>':''}</td>${LT_F.map(f=>`<td class="n">${inp(f)}</td>`).join('')}<td class="n"><b>${cov(r)}</b></td><td class="n">${inp('target_days')}</td><td class="n">${inp('prev_weeks')}</td></tr>`;
+    h+=`<tr${bl?' class="mute"':''}><td>${esc(c)}${inactive?' <span class="mute">(нет у Ozon)</span>':''}${bl?' <span class="bad">🚫 запрещён</span>':''}</td>${LT_F.map(f=>`<td class="n">${inp(f)}</td>`).join('')}<td class="n"><b>${cov(r)}</b></td><td class="n">${inp('target_days')}</td><td class="n">${inp('prev_weeks')}</td>${blk?bcell(c):''}</tr>`;
   }
   document.getElementById('lt').innerHTML=h+'</table>';
 }
@@ -478,8 +482,8 @@ function renderT1(){
       if(OPEN!==p.product_id) continue;
       h+=`<tr class="sub"><td colspan="${NC}"><table class="ct"><tr><th>Кластер</th><th class="n">Спрос, шт/дн</th><th class="n">Остаток, шт</th><th class="n">В пути, шт</th><th class="n">Прошлые заявки, кор.</th><th class="n">Расчёт, кор.</th><th class="n">Заявлено, кор.</th>${dist?'<th class="n">Распределено, кор.</th>':''}</tr>`;
       for(const r of p.rows){
-        const calcTxt=r.inactive?'<span class="mute">нет у Ozon</span>':r.noLt?'<span class="bad">нет сроков</span>':p.nobox?dash:nf.format(r.calc);
-        const edR=ed&&!p.nobox;
+        const calcTxt=r.blocked?'<span class="bad" title="Заказ в кластер запрещён (справочник кластеров)">запрещён</span>':r.inactive?'<span class="mute">нет у Ozon</span>':r.noLt?'<span class="bad">нет сроков</span>':p.nobox?dash:nf.format(r.calc);
+        const edR=ed&&!p.nobox&&!r.blocked;
         h+=`<tr${r.keep?'':' class="mute"'}><td>${esc(r.c)}</td><td class="n">${r.noSnap?dash:nf.format(r.ads)}</td><td class="n">${r.noSnap?dash:r.av}</td><td class="n">${r.noSnap?dash:r.tr}</td><td class="n">${r.noSnap&&!r.prev?dash:r.prev}</td><td class="n">${r.calc==null&&r.noSnap?dash:calcTxt}</td>
           <td class="n">${edR?`<input class="num" type="number" min="0" step="1" value="${r.req}" title="${r.manual?'Изменено вручную; очистите поле, чтобы вернуть к расчёту':'Идёт за расчётом'}" onchange="setReq(${p.product_id},'${esc(r.c)}',this.value)">${r.manual?'<div class="mute" style="font-size:.75em">✎ вручную</div>':''}`:r.req}</td>
           ${dist?`<td class="n">${edD?`<input class="num" type="number" min="0" step="1" value="${r.dist??0}" onchange="setDist(${p.product_id},'${esc(r.c)}',this.value)">`:(r.dist??0)}</td>`:''}</tr>`;
@@ -606,6 +610,14 @@ async function setFact(pid,v){
   const n=String(v).trim()===''?null:toInt(v); p.fact=n===p.ag?null:n;
   try{ await upsert('purchase_supply',[{week:WEEK,product_id:pid,fact_boxes:p.fact,updated_at:new Date().toISOString()}],'week,product_id'); }catch(e){fail(e);}
   renderT2();
+}
+async function setBlocked(c,v){
+  if(!confirm(`${v?'Запретить':'Разрешить'} заказ в кластер «${c}»? Действует сразу: черновики заявок и потребность месяца пересчитаются.`)){ render(); return; }
+  try{
+    const r=await fetch(`${SUPABASE_URL}/rest/v1/cluster_lead_times?cluster=eq.${encodeURIComponent(c)}`,{method:'PATCH',headers:{...HD,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify({blocked:v,updated_at:new Date().toISOString()})});
+    if(!r.ok) throw new Error('cluster_lead_times HTTP '+r.status);
+    SEED[c].blocked=v; await loadWeek();
+  }catch(e){ fail(e); render(); }
 }
 async function setLT(c,f,v){
   if(ST()!=='draft') return;

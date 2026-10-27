@@ -284,7 +284,7 @@ async function patchMonth(body){
 }
 
 // ===== состояние =====
-let PROD=[],NOBOX=[],DEM={},DEM_AT='',COST={},MONTHS_DB={},REQ_WEEKS=[],REQ={};
+let PROD=[],NOBOX=[],DEM={},DEM_AT='',COST={},MONTHS_DB={},REQ_WEEKS=[],REQ={},BLOCKED=new Set();
 let MONTH=addMonth(ymOf(new Date()),1),F='all',PLAN={},NEEDS={},TURN=DEFAULT_TURNOVER,TURN_SRC='',MODEL=[],OPEN_SUP=new Set();
 
 async function go(){
@@ -298,26 +298,29 @@ async function init(){
   try{ await loadBase(); await loadMonth(); }catch(e){ document.getElementById('err').textContent='Ошибка загрузки: '+e.message; }
 }
 async function loadBase(){
-  const [pr,dm,cs,ms,wk]=await Promise.all([
+  const [pr,dm,cs,ms,wk,lt]=await Promise.all([
     getAll('/rest/v1/products?select=product_id,offer_id,name,supplier,box_qty,archived&order=product_id'),
-    getAll('/rest/v1/cluster_demand?select=product_id,ads_cluster,available,transit,updated_at&order=product_id,cluster'),
+    getAll('/rest/v1/cluster_demand?select=product_id,cluster,ads_cluster,available,transit,updated_at&order=product_id,cluster'),
     getAll('/rest/v1/product_prices?select=product_id,cost,created_at&order=created_at.desc'),
     getAll('/rest/v1/purchase_need_months?select=*&order=month'),
-    getAll('/rest/v1/purchase_weeks?select=week,status&order=week.desc')
+    getAll('/rest/v1/purchase_weeks?select=week,status&order=week.desc'),
+    getAll('/rest/v1/cluster_lead_times?select=*&order=cluster')
   ]);
+  // кластеры с «Заказ запрещён» (27.10.2026) — закрыты, остатки распродаём: их спрос, остатки и заявки в потребность не входят
+  BLOCKED=new Set(lt.filter(c=>c.blocked).map(c=>c.cluster));
   const act=pr.filter(p=>!p.archived);
   PROD=act.filter(p=>p.box_qty>0).map(p=>({...p,m:matrixOf(p.offer_id)}));
   NOBOX=act.filter(p=>!(p.box_qty>0));
   DEM={}; DEM_AT='';
-  dm.forEach(d=>{ const o=DEM[d.product_id]||(DEM[d.product_id]={ads:0,stock:0}); o.ads+=Number(d.ads_cluster)||0; o.stock+=(d.available||0)+(d.transit||0); if(d.updated_at>DEM_AT)DEM_AT=d.updated_at; });
+  dm.forEach(d=>{ if(BLOCKED.has(d.cluster)){ if(d.updated_at>DEM_AT)DEM_AT=d.updated_at; return; } const o=DEM[d.product_id]||(DEM[d.product_id]={ads:0,stock:0}); o.ads+=Number(d.ads_cluster)||0; o.stock+=(d.available||0)+(d.transit||0); if(d.updated_at>DEM_AT)DEM_AT=d.updated_at; });
   COST={}; cs.forEach(c=>{ if(!(c.product_id in COST)) COST[c.product_id]=Number(c.cost); });
   MONTHS_DB={}; ms.forEach(m=>MONTHS_DB[m.month]=m);
   // «в пути» — две последние недельные заявки в любом статусе (решение 16.10.2026); у черновика — только сохранённое
   REQ_WEEKS=wk.slice(0,2).map(w=>w.week);
   REQ={};
   if(REQ_WEEKS.length){
-    const ln=await getAll(`/rest/v1/purchase_lines?select=week,product_id,requested_boxes,distributed_boxes&week=in.(${REQ_WEEKS.join(',')})&order=week,product_id,cluster`);
-    ln.forEach(l=>{ REQ[l.product_id]=(REQ[l.product_id]||0)+((l.distributed_boxes??l.requested_boxes)||0); });
+    const ln=await getAll(`/rest/v1/purchase_lines?select=week,product_id,cluster,requested_boxes,distributed_boxes&week=in.(${REQ_WEEKS.join(',')})&order=week,product_id,cluster`);
+    ln.forEach(l=>{ if(BLOCKED.has(l.cluster)) return; REQ[l.product_id]=(REQ[l.product_id]||0)+((l.distributed_boxes??l.requested_boxes)||0); });
   }
 }
 const ST=()=>MONTHS_DB[MONTH]?.status||null;
@@ -369,6 +372,7 @@ function renderSettings(){
     <tr><td>Дни оборачиваемости на конец месяца</td><td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${TURN}" onchange="setTurn(this.value)">`:TURN}</td>
       <td class="mute">${!st?(TURN_SRC.startsWith('copy')?'при создании скопируется из '+mLabel(TURN_SRC.slice(5)):'по умолчанию'):''}</td></tr>
     <tr><td>Дней в месяце</td><td class="n">${daysIn(MONTH)}</td><td class="mute">план в день = план ÷ дней месяца</td></tr>
+    ${BLOCKED.size?`<tr><td>Не учитываются (заказ запрещён)</td><td class="n">${BLOCKED.size} кл.</td><td class="mute">${[...BLOCKED].sort().map(esc).join(', ')} — спрос, остатки и заявки</td></tr>`:''}
     <tr><td>Продажи считаются до конца текущего месяца</td><td class="n">${daysToEom()} дн.</td><td class="mute">от даты данных Ozon</td></tr>
     <tr><td>Недельные заявки «в пути»</td><td class="n">${REQ_WEEKS.length?REQ_WEEKS.map(ddmm).join(', '):'нет'}</td><td class="mute">две последние, в любом статусе (у черновика — только сохранённые строки)</td></tr>
   </table>`;
