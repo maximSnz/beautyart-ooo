@@ -128,11 +128,12 @@
  .lock{font-size:.85em;color:#94a3b8;margin-left:6px}
  .wrap{max-width:min(1700px,100%);box-sizing:border-box}
  table.pt{font-size:.8em;table-layout:fixed;width:100%}
- table.pt th{white-space:normal;line-height:1.15;vertical-align:bottom}
+ /* шапки всех таблиц заявки — один стиль, текст по центру (27.10.2026) */
+ table.pt th,table.pt th.n{white-space:normal;line-height:1.15;vertical-align:middle;text-align:center}
  table.pt th.mhead{background:linear-gradient(90deg,rgba(120,166,199,.18),transparent);color:#544273;font-size:.95em;text-align:center}
  table.pt th.sub{background:rgba(120,166,199,.1)}
- table.pt th.whead{background:rgba(227,61,120,.08);color:#7D3673;text-align:center}
- table.pt th.wsub{background:rgba(227,61,120,.05)}
+ table.pt th.whead{background:linear-gradient(90deg,rgba(120,166,199,.18),transparent);color:#544273;font-size:.95em;text-align:center}
+ table.pt th.wsub{background:rgba(120,166,199,.1)}
  table.pt th.sep,table.pt td.sep{border-left:1px dashed rgba(84,66,115,.3)}
  table.pt td{overflow-wrap:anywhere}
  table.pt .num{width:100%;max-width:64px;box-sizing:border-box}
