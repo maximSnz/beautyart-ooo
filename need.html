@@ -144,6 +144,13 @@
  .card.hl .l,.card.hl .v{color:#fff}
  #sup .card{cursor:pointer;transition:border-color .2s}
  #sup .card:hover{border-color:#E33D78}
+ /* поля чисел: без стрелок внутри, кнопки «−» / «+» по бокам (27.10.2026) */
+ input.num::-webkit-outer-spin-button,input.num::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+ input.num{-moz-appearance:textfield;appearance:textfield}
+ .stp{display:inline-flex;align-items:center;gap:2px;white-space:nowrap}
+ .stp button{width:20px;height:24px;padding:0;border-radius:6px;background:#fff;color:#544273;border:1px solid rgba(84,66,115,.3);font-size:14px;line-height:1;cursor:pointer;flex:none}
+ .stp button:hover{border-color:#E33D78;color:#E33D78}
+ #t1 .stp .num,.stp .num{width:46px;min-width:38px;max-width:52px}
  @media (max-width:900px){ #t1{min-width:860px} }
  @media (max-width:640px){ .wbar .wlbl{min-width:0;font-size:1.05em} .step{min-width:120px} }
 </style><style>
@@ -514,5 +521,9 @@ async function prevStage(){
   if(!confirm(`Вернуть потребность на шаг «${STAGES[i-1][1]}»?`)) return;
   try{ await patchMonth({status:STAGES[i-1][0]}); await loadBase(); await loadMonth(); }catch(e){fail(e);}
 }
+// кнопки «−» / «+» у каждого поля числа: меняют на 1 и сохраняют, как ручной ввод (событие change)
+function stepNum(b,d){ const i=b.parentNode.querySelector('input'); if(!i||i.disabled) return; const x=Math.max(0,(Number(i.value)||0)+d); i.value=x; i.dispatchEvent(new Event('change',{bubbles:true})); }
+function wrapNums(root){ root.querySelectorAll('input.num:not([data-stp])').forEach(i=>{ i.dataset.stp=1; const s=document.createElement('span'); s.className='stp'; s.onclick=e=>e.stopPropagation(); i.replaceWith(s); s.innerHTML='<button type="button" title="−1" onclick="stepNum(this,-1)">−</button>'; s.appendChild(i); s.insertAdjacentHTML('beforeend','<button type="button" title="+1" onclick="stepNum(this,1)">+</button>'); }); }
+new MutationObserver(()=>wrapNums(document.getElementById('app'))).observe(document.getElementById('app'),{childList:true,subtree:true});
 if(BA_AUTH.has(SUPABASE_URL))go();
 </script></body></html>
