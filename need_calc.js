@@ -17,12 +17,14 @@ function needDaysToEom(demAt,month){
   const [y,m]=month.split('-').map(Number), start=new Date(y,m-1,1);
   return Math.max(0,Math.round((start-d0)/864e5)-1);
 }
-// prod — товары с box_qty > 0; dem[pid] = {ads, stock}; plan[pid] = plan_qty; needs[pid] — строка purchase_needs;
+// prod — неархивные товары (без «в коробе» — без расчёта); dem[pid] = {ads, stock}; plan[pid] = plan_qty; needs[pid] — строка purchase_needs;
 // req[pid] — короба двух последних недельных заявок; cost[pid] — себестоимость; live — потребность в черновике (или не создана)
+// Показываются все товары (27.10.2026): без плана — «нет плана», заказ 0; без «в коробе» (nobox) — без расчёта, заказ 0.
 function needBuild({prod,dem,demAt,plan,needs,turn,req,cost,month,live}){
   const dte=needDaysToEom(demAt,month);
   return prod.map(p=>{
     const n=needs[p.product_id];
+    if(!(p.box_qty>0)) return {...p,nobox:true,plan:live?(plan[p.product_id]??null):(n?.plan_qty??null),turnover:null,stock:null,reqQty:null,ads:null,dte,sell:null,calc:null,manual:false,need:0,cost:cost[p.product_id]??null,ag:n?.agreed_boxes??null,comment:n?.comment||''};
     let r;
     if(live){
       const pl=plan[p.product_id]??null, dm=dem[p.product_id]||{ads:0,stock:0};
@@ -40,5 +42,5 @@ function needBuild({prod,dem,demAt,plan,needs,turn,req,cost,month,live}){
       r={plan:pl,turnover,stock:n?.stock_qty??null,reqQty:n?.requests_qty??null,ads:n?.ads??null,dte:n?.days_to_eom??null,sell,calc:n?.calc_boxes==null?null:Number(n.calc_boxes),need:n?.need_boxes??0,cost:n?.unit_cost==null?(cost[p.product_id]??null):Number(n.unit_cost)};
     }
     return {...p,...r,ag:n?.agreed_boxes??null,comment:n?.comment||''};
-  }).filter(p=>p.plan!=null||p.need>0||p.ag!=null||needs[p.product_id]);
+  });
 }

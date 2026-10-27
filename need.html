@@ -151,6 +151,7 @@
  .stp button{width:20px;height:24px;padding:0;border-radius:6px;background:#fff;color:#544273;border:1px solid rgba(84,66,115,.3);font-size:14px;line-height:1;cursor:pointer;flex:none}
  .stp button:hover{border-color:#E33D78;color:#E33D78}
  #t1 .stp .num,.stp .num{width:46px;min-width:38px;max-width:52px}
+ td.miss{background:rgba(227,61,120,.35)}
  @media (max-width:900px){ #t1{min-width:860px} }
  @media (max-width:640px){ .wbar .wlbl{min-width:0;font-size:1.05em} .step{min-width:120px} }
 </style><style>
@@ -309,7 +310,7 @@ async function loadBase(){
   // кластеры с «Заказ запрещён» (27.10.2026) — закрыты, остатки распродаём: их спрос, остатки и заявки в потребность не входят
   BLOCKED=new Set(lt.filter(c=>c.blocked).map(c=>c.cluster));
   const act=pr.filter(p=>!p.archived);
-  PROD=act.filter(p=>p.box_qty>0).map(p=>({...p,m:matrixOf(p.offer_id)}));
+  PROD=act.map(p=>({...p,m:matrixOf(p.offer_id)})); // все неархивные, в т. ч. без «в коробе» (27.10.2026)
   NOBOX=act.filter(p=>!(p.box_qty>0));
   DEM={}; DEM_AT='';
   dm.forEach(d=>{ if(BLOCKED.has(d.cluster)){ if(d.updated_at>DEM_AT)DEM_AT=d.updated_at; return; } const o=DEM[d.product_id]||(DEM[d.product_id]={ads:0,stock:0}); o.ads+=Number(d.ads_cluster)||0; o.stock+=(d.available||0)+(d.transit||0); if(d.updated_at>DEM_AT)DEM_AT=d.updated_at; });
@@ -410,9 +411,9 @@ function renderT1(){
       h+=`<tr><td><b>${esc(p.offer_id)}</b><div class="pname">${esc(p.name)}</div></td>
         <td class="n sep">${p.plan==null?'<span class="mute">нет плана</span>':nf.format(p.plan)}</td><td class="n">${fmt(p.turnover)}</td><td class="n">${fmt(p.stock)}</td><td class="n">${fmt(p.reqQty)}</td>
         <td class="n" title="${p.ads==null?'':nf.format(p.ads)+' шт/дн × '+p.dte+' дн.'}">${fmt(p.sell)}</td>
-        <td class="n sep">${p.calc==null?'<span class="mute">—</span>':nf2.format(p.calc)}</td>
-        <td class="n">${edN?`<input class="num" type="number" min="0" step="1" value="${p.need}" title="${p.manual?'Изменено вручную; очистите поле, чтобы вернуть к расчёту':'Идёт за расчётом'}" onchange="setNeed(${p.product_id},this.value)">${p.manual?'<div class="mute" style="font-size:.75em">✎ вручную</div>':''}`:`<b>${p.need}</b>`}</td>
-        <td class="n mute" title="${p.box_qty} шт в коробе">${nf.format(p.need*p.box_qty)}</td>
+        <td class="n sep${p.nobox?' miss':''}">${p.nobox?'<span title="Не заполнено «в коробе» — заполните в «Базе товаров»">нет «в коробе»</span>':p.calc==null?'<span class="mute">—</span>':nf2.format(p.calc)}</td>
+        <td class="n">${edN&&!p.nobox?`<input class="num" type="number" min="0" step="1" value="${p.need}" title="${p.manual?'Изменено вручную; очистите поле, чтобы вернуть к расчёту':'Идёт за расчётом'}" onchange="setNeed(${p.product_id},this.value)">${p.manual?'<div class="mute" style="font-size:.75em">✎ вручную</div>':''}`:`<b>${p.need}</b>`}</td>
+        <td class="n mute" title="${p.box_qty||0} шт в коробе">${nf.format(p.need*(p.box_qty||0))}</td>
         <td class="n sep">${edA?`<input class="num" type="number" min="0" step="1" value="${p.ag??''}" placeholder="—" onchange="setAg(${p.product_id},this.value)">`:(p.ag??'—')}</td>
         <td>${edA?`<input value="${esc(p.comment)}" onchange="setComment(${p.product_id},this.value)">`:esc(p.comment)}</td>
         <td class="n sep">${bc==null?'<span class="warn" title="нет себестоимости в «Базе товаров»">—</span>':rub.format(qtyOf(p)*bc)}</td></tr>`;
@@ -482,7 +483,7 @@ async function nextStage(){
     if(st==='draft'){
       if(!confirm('Отправить потребность закупщику? После этого «Заказ» и параметры расчёта менять нельзя.')) return;
       const now=new Date().toISOString();
-      await upsert('purchase_needs',MODEL.map(p=>needRow(p,{updated_at:now})),'month,product_id');
+      await upsert('purchase_needs',MODEL.filter(p=>!p.nobox).map(p=>needRow(p,{updated_at:now})),'month,product_id');
       await patchMonth({status:'at_buyer',submitted_at:now});
     }else if(st==='at_buyer'){
       const miss=MODEL.filter(p=>p.need>0&&p.ag==null);
