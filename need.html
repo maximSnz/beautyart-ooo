@@ -225,6 +225,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="need_calc.js?v=20261027"></script>
 <script src="../beautyart-home/auth.js?v=20261021"></script>
 <script>
 function toggleNav(btn) {
@@ -247,7 +248,7 @@ function matrixOf(offer){ return (/^(CAP|INS|FW|MS|ML|SE)-/.test(offer))?'m1':'m
 const MGR={m1:'Илья',m2:'Ольга'};
 const STAGES=[['draft','Расчёт и заказ менеджеров'],['at_buyer','Закупщик: согласование с поставщиками'],['closed','Согласована']];
 const STAGE_BTN={draft:'Отправить закупщику',at_buyer:'Согласовано'};
-const DEFAULT_TURNOVER=9;
+const DEFAULT_TURNOVER=NEED_DEFAULT_TURNOVER; // need_calc.js
 const MONTHS=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -328,42 +329,14 @@ async function loadMonth(){
   ]);
   PLAN={}; pl.forEach(p=>{ if(p.plan_qty>0) PLAN[p.product_id]=p.plan_qty; });
   NEEDS={}; nd.forEach(n=>NEEDS[n.product_id]=n);
-  const m=MONTHS_DB[MONTH];
-  if(m){ TURN=m.turnover_days; TURN_SRC='month'; }
-  else { const prev=Object.keys(MONTHS_DB).filter(x=>x<MONTH).sort().pop(); TURN=prev?MONTHS_DB[prev].turnover_days:DEFAULT_TURNOVER; TURN_SRC=prev?'copy:'+prev:'default'; }
+  ({turn:TURN,src:TURN_SRC}=needTurnover(MONTHS_DB,MONTH));
   build(); render();
 }
 
-// ===== расчёт =====
-// дней до конца месяца, предшествующего плановому: от даты данных Ozon (сам день не считается)
-function daysToEom(){
-  if(!DEM_AT) return 0;
-  const d=new Date(DEM_AT), d0=new Date(d.getFullYear(),d.getMonth(),d.getDate());
-  const [y,m]=MONTH.split('-').map(Number), start=new Date(y,m-1,1);
-  return Math.max(0,Math.round((start-d0)/864e5)-1);
-}
+// ===== расчёт ===== (формула — need_calc.js, общая с purchase.html)
+function daysToEom(){ return needDaysToEom(DEM_AT,MONTH); }
 function build(){
-  const live=!ST()||ST()==='draft', dte=daysToEom();
-  MODEL=PROD.map(p=>{
-    const n=NEEDS[p.product_id];
-    let r;
-    if(live){
-      const plan=PLAN[p.product_id]??null, dem=DEM[p.product_id]||{ads:0,stock:0};
-      const reqQty=(REQ[p.product_id]||0)*p.box_qty, sell=dem.ads*dte;
-      const turnover=plan==null?null:plan/daysIn(MONTH)*TURN;
-      const D=plan==null?null:plan+turnover-dem.stock-reqQty+sell;
-      const calc=D==null?null:Math.round(Math.max(D,0)/p.box_qty*100)/100;
-      // заказ в черновике идёт за расчётом, округлённым ВВЕРХ (решение 21.10.2026); ручная правка — сохранённый заказ
-      // не равен расчёту на момент сохранения ни вверх, ни по прежнему правилу (до ближайшего)
-      const up=x=>Math.ceil(x-1e-9), auto=calc==null?0:up(calc), scb=n?.calc_boxes==null?null:Number(n.calc_boxes);
-      const manual=n?.need_boxes!=null&&!(scb!=null&&(n.need_boxes===up(scb)||n.need_boxes===Math.round(scb)));
-      r={plan,turnover,stock:dem.stock,reqQty,ads:dem.ads,dte,sell,calc,manual,need:manual?n.need_boxes:auto,cost:COST[p.product_id]??null};
-    }else{
-      const plan=n?.plan_qty??null, turnover=plan==null?null:plan/daysIn(MONTH)*TURN, sell=(Number(n?.ads)||0)*(n?.days_to_eom||0);
-      r={plan,turnover,stock:n?.stock_qty??null,reqQty:n?.requests_qty??null,ads:n?.ads??null,dte:n?.days_to_eom??null,sell,calc:n?.calc_boxes==null?null:Number(n.calc_boxes),need:n?.need_boxes??0,cost:n?.unit_cost==null?(COST[p.product_id]??null):Number(n.unit_cost)};
-    }
-    return {...p,...r,ag:n?.agreed_boxes??null,comment:n?.comment||''};
-  }).filter(p=>p.plan!=null||p.need>0||p.ag!=null||NEEDS[p.product_id]);
+  MODEL=needBuild({prod:PROD,dem:DEM,demAt:DEM_AT,plan:PLAN,needs:NEEDS,turn:TURN,req:REQ,cost:COST,month:MONTH,live:!ST()||ST()==='draft'});
 }
 const S=(a,f)=>a.reduce((x,r)=>x+(Number(f(r))||0),0);
 const boxCost=p=>p.cost==null?null:p.cost*p.box_qty;

@@ -149,6 +149,7 @@
  .stp button:hover{border-color:#E33D78;color:#E33D78}
  table.pt .stp .num,.stp .num{width:46px;min-width:38px;max-width:52px}
  td.miss{background:rgba(227,61,120,.35)}
+ #tn tr.mgroup td{background:rgba(125,54,115,.1)}
  .card.dl{cursor:pointer} .card.dl:hover{border-color:#E33D78}
  @media (max-width:900px){ table.pt{min-width:860px} }
  @media (max-width:640px){ .wbar .wlbl{min-width:0;font-size:1.05em} .step{min-width:120px} }
@@ -234,6 +235,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="need_calc.js?v=20261027"></script>
 <script src="../beautyart-home/auth.js?v=20261021"></script>
 <script>
 function toggleNav(btn) {
@@ -294,7 +296,7 @@ async function patchWeek(body){
 
 // ===== состояние =====
 let PROD=[],NOBOX=[],DEM=new Map(),DEM_AT='',SEED={},ACTIVE=new Set(),WEEKS={};
-let WEEK=addD(keyOfMonday(new Date()),7),F='all',OPEN=null,OPEN1=new Set(),OPEN2=new Set(),K1=[],K2=[];
+let WEEK=addD(keyOfMonday(new Date()),7),F='all',OPEN=null,OPEN1=new Set(),OPEN2=new Set(),OPEN3=new Set(),K1=[],K2=[],K3=[],NEED_ST=null;
 let WLT={},LT_SRC='',LINES=new Map(),PREV=new Map(),SUP={},NEEDS={},MONTH_REQ={},MODEL=[],DEBT={},FACT_OK=true;
 
 async function go(){
@@ -343,17 +345,28 @@ async function loadWeek(){
   // долг поставщика = Σ (согласовано − факт) по прошлым неделям; факт хранится, только если отличается от согласованного
   const fx=await getAll(`/rest/v1/purchase_supply?select=week,product_id,agreed_boxes,fact_boxes&week=lt.${WEEK}&fact_boxes=not.is.null&order=week,product_id`).catch(()=>null);
   FACT_OK=fx!==null; DEBT={}; (fx||[]).forEach(s=>{ DEBT[s.product_id]=(DEBT[s.product_id]||0)+(s.agreed_boxes||0)-s.fact_boxes; });
-  const [ln,pv,sp,nd,mr]=await Promise.all([
+  const [ln,pv,sp,nd,nm,mr]=await Promise.all([
     w?getAll(`/rest/v1/purchase_lines?select=*&week=eq.${WEEK}&order=product_id,cluster`):[],
     getAll(`/rest/v1/purchase_lines?select=week,product_id,cluster,requested_boxes,distributed_boxes&week=in.(${prevWeeks.join(',')})&order=week,product_id,cluster`),
     w?getAll(`/rest/v1/purchase_supply?select=*&week=eq.${WEEK}&order=product_id`):[],
-    getAll(`/rest/v1/purchase_needs?select=product_id,need_boxes,agreed_boxes&month=eq.${month}&order=product_id`),
+    getAll(`/rest/v1/purchase_needs?select=*&month=eq.${month}&order=product_id`),
+    getAll(`/rest/v1/purchase_need_months?select=*&order=month`),
     mWeeks.length?getAll(`/rest/v1/purchase_lines?select=week,product_id,requested_boxes&week=in.(${mWeeks.join(',')})&order=week,product_id,cluster`):[]
   ]);
   LINES=new Map(); ln.forEach(l=>LINES.set(l.product_id+'|'+l.cluster,l));
   PREV=new Map(); pv.forEach(l=>{ const k=l.week+'|'+l.product_id+'|'+l.cluster; PREV.set(k,(l.distributed_boxes??l.requested_boxes)||0); });
   SUP={}; sp.forEach(s=>SUP[s.product_id]=s);
-  NEEDS={}; nd.forEach(n=>NEEDS[n.product_id]=n.agreed_boxes??n.need_boxes);
+  // потребность месяца: в черновике (или не создана) — расчёт need_calc.js, как на экране need.html; после отправки — сохранённая
+  const mdb={}; nm.forEach(m=>mdb[m.month]=m); NEED_ST=mdb[month]?.status||null;
+  const ndb={}; nd.forEach(n=>ndb[n.product_id]=n);
+  NEEDS={};
+  if(!NEED_ST||NEED_ST==='draft'){
+    const rw=Object.keys(WEEKS).sort().reverse().slice(0,2), req={};
+    if(rw.length) (await getAll(`/rest/v1/purchase_lines?select=week,product_id,cluster,requested_boxes,distributed_boxes&week=in.(${rw.join(',')})&order=week,product_id,cluster`)).forEach(l=>{ req[l.product_id]=(req[l.product_id]||0)+((l.distributed_boxes??l.requested_boxes)||0); });
+    const pl={}; (await getAll(`/rest/v1/sales_plan?select=product_id,plan_qty&month=eq.${month}&order=product_id`)).forEach(x=>{ if(x.plan_qty>0) pl[x.product_id]=x.plan_qty; });
+    const dem={}; DEM.forEach((m,pid)=>{ const o=dem[pid]={ads:0,stock:0}; m.forEach(d=>{ o.ads+=Number(d.ads_cluster)||0; o.stock+=(d.available||0)+(d.transit||0); }); });
+    needBuild({prod:PROD.filter(p=>!p.nobox),dem,demAt:DEM_AT,plan:pl,needs:ndb,turn:needTurnover(mdb,month).turn,req,cost:{},month,live:true}).forEach(p=>NEEDS[p.product_id]=p.ag??p.need);
+  }else nd.forEach(n=>NEEDS[n.product_id]=n.agreed_boxes??n.need_boxes);
   MONTH_REQ={}; mr.forEach(l=>{ MONTH_REQ[l.product_id]=(MONTH_REQ[l.product_id]||0)+(l.requested_boxes||0); });
   OPEN=null; build(); render();
 }
@@ -443,7 +456,7 @@ function renderLT(){
 function palOf(p,boxes){return p.boxes_per_pallet>0?boxes/p.boxes_per_pallet:null;}
 const supOf=p=>p.supplier||'—';
 function groupsOf(v,key){ const by=new Map(); v.forEach(p=>{const s=supOf(p); if(!by.has(s))by.set(s,[]); by.get(s).push(p);}); return [...by.entries()].sort((a,b)=>S(b[1],key)-S(a[1],key)||a[0].localeCompare(b[0],'ru')); }
-function toggleG(t,i){ const set=t===1?OPEN1:OPEN2, k=(t===1?K1:K2)[i]; set.has(k)?set.delete(k):set.add(k); t===1?renderT1():renderT2(); }
+function toggleG(t,i){ const set=[,OPEN1,OPEN2,OPEN3][t], k=[,K1,K2,K3][t][i]; set.has(k)?set.delete(k):set.add(k); [,renderT1,renderT2,renderNeeds][t](); }
 function renderT1(){
   const st=ST(), v=vis(), ed=st==='draft', dist=st==='distribution'||st==='closed', edD=st==='distribution', q=document.getElementById('q').value.trim();
   document.getElementById('h1').textContent=dist?'Распределение обеспеченного по кластерам':'Заявка менеджера';
@@ -478,16 +491,23 @@ function renderT1(){
 }
 function toggle(pid){OPEN=OPEN===pid?null:pid;renderT1();}
 function renderNeeds(){
-  const v=vis(), ym=monthOfWeek(WEEK), weeks=isoWeeksOfMonth(ym), idx=weeks.indexOf(WEEK)+1, n=weeks.length;
-  const has=Object.keys(NEEDS).length;
-  let h=`<colgroup><col style="width:30%"><col span="5"></colgroup><thead><tr><th class="sub">Товар</th><th class="sub sep n">Потребность ${ym.slice(5)}.${ym.slice(0,4)}, кор.</th><th class="sub n">Заказано до этой недели</th><th class="sub n">Итого с этой неделей</th><th class="sub n">По плану к ${ddmm(WEEK)} (${idx}/${n})</th><th class="sub n">Отклонение</th></tr></thead>`;
-  if(!has) h+=`<tr><td colspan="6" class="mute">Нет данных о потребности за месяц</td></tr>`;
-  else for(const p of v){
-    const need=NEEDS[p.product_id]; if(need==null) continue;
-    const was=MONTH_REQ[p.product_id]||0, now=was+reqOf(p), plan=need*idx/n, dv=plan?(now-plan)/plan*100:null;
-    h+=`<tr><td>${esc(p.offer_id)}</td><td class="n">${need}</td><td class="n">${was}</td><td class="n">${now}</td><td class="n">${nf.format(plan)}</td><td class="n ${dv==null?'mute':Math.abs(dv)<=10?'ok':dv>0?'warn':'bad'}">${dv==null?'—':(dv>0?'+':'')+Math.round(dv)+'%'}</td></tr>`;
-  }
-  document.getElementById('tn').innerHTML=h;
+  const ym=monthOfWeek(WEEK), weeks=isoWeeksOfMonth(ym), idx=weeks.indexOf(WEEK)+1, n=weeks.length, q=document.getElementById('q').value.trim();
+  const v=vis().filter(p=>NEEDS[p.product_id]!=null);
+  const wasOf=p=>MONTH_REQ[p.product_id]||0, nowOf=p=>wasOf(p)+reqOf(p), planOf=p=>NEEDS[p.product_id]*idx/n;
+  const dvTd=(now,plan)=>{const dv=plan?(now-plan)/plan*100:null;return `<td class="n ${dv==null?'mute':Math.abs(dv)<=10?'ok':dv>0?'warn':'bad'}">${dv==null?'—':(dv>0?'+':'')+Math.round(dv)+'%'}</td>`;};
+  let h=`<colgroup><col style="width:30%"><col span="5"></colgroup><thead><tr><th class="sub">Товар</th><th class="sub sep n">Потребность ${ym.slice(5)}.${ym.slice(0,4)}, кор.</th><th class="sub n">Заказано до этой недели, кор.</th><th class="sub n">Итого с этой неделей, кор.</th><th class="sub n">По плану к ${ddmm(WEEK)} (${idx}/${n}), кор.</th><th class="sub n">Отклонение</th></tr></thead><tbody>`;
+  if(!NEED_ST||NEED_ST==='draft') h+=`<tr><td colspan="6" class="mute">Потребность за ${ym.slice(5)}.${ym.slice(0,4)} ${NEED_ST?'в черновике':'ещё не создана'} — показан расчёт на сегодня, как в «Потребности на месяц» (с ручными правками менеджеров)</td></tr>`;
+  if(!v.length) h+=`<tr><td colspan="6" class="mute">Нет данных о потребности за месяц</td></tr>`;
+  const G=groupsOf(v,p=>NEEDS[p.product_id]); K3=G.map(g=>g[0]);
+  G.forEach(([sup,g],gi)=>{
+    const open=OPEN3.has(sup)||!!q, gn=S(g,p=>NEEDS[p.product_id]), gnow=S(g,nowOf), gplan=S(g,planOf);
+    h+=`<tr class="mgroup" onclick="toggleG(3,${gi})"><td><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов.</td><td class="n sep">${gn}</td><td class="n">${S(g,wasOf)}</td><td class="n">${gnow}</td><td class="n">${nf.format(gplan)}</td>${dvTd(gnow,gplan)}</tr>`;
+    if(!open) return;
+    for(const p of g.sort((a,b)=>NEEDS[b.product_id]-NEEDS[a.product_id]||a.offer_id.localeCompare(b.offer_id))){
+      h+=`<tr><td>${esc(p.offer_id)}<div class="pname">${esc(p.name)}</div></td><td class="n sep">${NEEDS[p.product_id]}</td><td class="n">${wasOf(p)}</td><td class="n">${nowOf(p)}</td><td class="n">${nf.format(planOf(p))}</td>${dvTd(nowOf(p),planOf(p))}</tr>`;
+    }
+  });
+  document.getElementById('tn').innerHTML=h+'</tbody>';
 }
 // факт поставки (27.10.2026): по умолчанию = согласовано, правится на шаге «Закрыта»; хранится, только если отличается
 const factOf=p=>p.fact??p.ag;
