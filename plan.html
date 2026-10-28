@@ -1448,20 +1448,6 @@ async function upsertPPM(pid,patch){
   await fetch(SUPABASE_URL+'/rest/v1/product_plan_meta?on_conflict=product_id,month',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},body:JSON.stringify({product_id:pid,month:MONTH,weekday:next.weekday,protocol:next.protocol,work_date:next.work_date})});
 }
 async function setWorkDate(pid,val){ await upsertPPM(pid,{work_date:val||null}); render(); }
-async function editField(pid,field){
-  const p=BYID[pid]; if(!p)return;
-  const pl=PLAN[pid]||{price:Number(p.price||0),plan_qty:0,margin_pct:0};
-  const labels={price:'Цена продажи, ₽',plan_qty:'План, шт',margin_pct:'План маржинальность, %'};
-  const val=prompt(labels[field]+':', pl[field]);
-  if(val==null)return;
-  const num=Number(String(val).replace(',','.'));
-  if(!isFinite(num)||num<0){alert('Некорректное значение');return;}
-  pl[field]=num; PLAN[pid]=pl;
-  TEMPS_CACHE={key:'',data:null};
-  const r=await fetch(SUPABASE_URL+'/rest/v1/sales_plan?on_conflict=month,product_id',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},body:JSON.stringify({month:MONTH,product_id:pid,price:pl.price,plan_qty:pl.plan_qty,margin_pct:pl.margin_pct})});
-  if(!r.ok){alert('Ошибка сохранения: HTTP '+r.status);return;}
-  render();
-}
 async function editWeek(pid,week,metric){
   const rec=(WD[pid]&&WD[pid][metric]&&WD[pid][metric][week])?WD[pid][metric][week]:{forecast:null};
   const val=prompt(`Прогноз на ${week} (пусто = авторасчёт):`, rec.forecast==null?'':rec.forecast);
@@ -2401,8 +2387,8 @@ renderKpiPnl(g);
       else if(mt.key==='pct'){ const ap=avgPctFact(p); ffV=ap; dev=ap==null?null:ap-planV; }
       else { const pv=projVal(p,mt.key); ffV=pv.ffV; dev=pv.dev; }
       const dcls=dev==null?'n':(dev>0?'g':dev<0?'r':'n');
-      const editKey=mt.edit;
-      h+=`<td class="num sep ${editKey?'editable':''}" ${editKey?`title="Изменить план" onclick="editField(${pid},'${editKey}')"`:''}>${planV==null?'—':fmtFor(mt.key,planV)}</td>`;
+      // план меняется только на картах Шухарта (beautyart-home/shewhart.html, решение владельца 29.10.2026) — здесь только просмотр
+      h+=`<td class="num sep" ${mt.edit?`title="План задаётся на картах Шухарта"`:''}>${planV==null?'—':fmtFor(mt.key,planV)}</td>`;
       h+=`<td class="num calc">${ffV==null?'—':fmtFor(mt.key,ffV)}</td>`;
       h+=`<td class="num ${dcls}">${dev==null?'—':(dev>0?'+':'')+fmtFor(mt.key,dev)}</td>`;
       if(EXP[mt.key]){
