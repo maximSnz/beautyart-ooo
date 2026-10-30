@@ -1,0 +1,25 @@
+name: ozon-ads-probe
+# Пробная сверка Ozon Performance API (реклама) с ozon_ad_spend из CSV. Только чтение, только ручной запуск.
+on:
+  workflow_dispatch:
+    inputs:
+      day:
+        description: 'День сверки ГГГГ-ММ-ДД (пусто — последний день с рекламой в базе)'
+        required: false
+        default: ''
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Probe Ozon Performance API vs Supabase (read-only)
+        run: node scripts/ozon_ads_probe.mjs
+        env:
+          DAY: ${{ github.event.inputs.day }}
+          OZON_PERF_CLIENT_ID: ${{ secrets.OZON_PERF_CLIENT_ID }}
+          OZON_PERF_CLIENT_SECRET: ${{ secrets.OZON_PERF_CLIENT_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
