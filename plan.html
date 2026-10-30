@@ -95,6 +95,7 @@
  .calc{color:#544273}
  .g{color:#16a34a}.r{color:#E33D78}.n{color:#94a3b8}
  .factcell{color:#94a3b8}
+ td.wcell.factcell{color:#1C0D2E}  /* недельный факт — как месячные значения (30.10.2026) */
  .autocell{color:#544273}
  .editable{cursor:pointer;white-space:nowrap}
  .editable::after{content:" ✎";opacity:.3;font-size:.8em}
@@ -131,6 +132,8 @@
  .psectitle{font-weight:700;color:#544273;font-size:.85em;margin-bottom:8px}
  .sec-head{cursor:pointer;user-select:none}
  .sec-caret{display:inline-block;margin-right:6px}
+ /* протокол не влияет на ширину колонок таблицы: занимает всю строку, широкие таблицы внутри прокручиваются (30.10.2026) */
+ .protowrap{width:0;min-width:100%}
  .pulsewrap{overflow-x:auto}
  .pulsemetric{color:#544273;font-weight:700}
  .pulsetable{width:auto;min-width:0;font-size:.82em;border-collapse:collapse}
@@ -2057,33 +2060,49 @@ function pulseByDay(chargeRows){
   const m=new Map();
   chargeRows.forEach(c=>{
     const d=c.event_date; if(!d)return;
-    let g=m.get(d); if(!g){g={gmv:0,sales:0,pnl:0,revP:0,prop:0,unit:0};m.set(d,g);}
+    let g=m.get(d); if(!g){g={gmv:0,sales:0,pnl:0,revP:0,prop:0,unit:0,comm:0};m.set(d,g);}
     const amt=Number(c.amount||0), qty=Number(c.qty||0), gv=Number(c.gmv||0);
     g.pnl+=amt; if(PULSE_PROP.has(c.charge_type))g.prop+=amt; else g.unit+=amt;
+    if(c.charge_type==='Вознаграждение за продажу'||c.charge_type==='Возврат вознаграждения')g.comm+=amt;
     if(c.charge_type==='Выручка'){ g.gmv+=gv; g.sales+=qty; g.revP+=amt; }
     else if(c.charge_type==='Возврат выручки'){ g.gmv+=gv; g.sales-=qty; g.revP+=amt; }
   });
   return m;
 }
+// Комиссия Ozon («Вознаграждение за продажу») зависит от цены: до 300 ₽ включительно ~23% суммы выкупа, выше — ~51% (данные ИП
+// и ООО 01–22.10.2026; в ООО у части категорий до 300 ₽ — 17%). Решение владельца 30.10.2026: граница — ровно 300 ₽ цены заказа.
+// Ступень, в которой товар продавался, — его собственная ставка; другая ступень — ставка по данным юрлиц (OZON_COMM).
+const OZON_COMM_EDGE=300, OZON_COMM={low:23,high:51};
 // Коэффициенты — медиана 4 недель заказов, закончившихся 8 дней назад (выкупы пришли): r = пропорциональные ÷ GMV,
 // t = налог × выручка P ÷ GMV, u = (себестоимость на дату × выкупленные шт − расходы на штуку) ÷ заказанные шт, b = GMV ÷ выручка заказов
 function pulseCal(pid,byDayCh,byDaySales,byDayRev,todayISO){
   const med=a=>{ const b=[...a].sort((x,y)=>x-y), m=b.length>>1; return b.length%2?b[m]:(b[m-1]+b[m])/2; };
   const to=addDaysISO(todayISO,-8), fr=addDaysISO(to,-27), W=[]; let oqAll=0,orAll=0;
-  for(let i=0;i<4;i++){ const f=addDaysISO(fr,i*7); let gmv=0,prop=0,unit=0,revP=0,cogs=0,oq=0,orev=0;
+  for(let i=0;i<4;i++){ const f=addDaysISO(fr,i*7); let gmv=0,prop=0,unit=0,revP=0,cogs=0,oq=0,orev=0,comm=0;
     for(let k=0;k<7;k++){ const d=addDaysISO(f,k), g=byDayCh.get(d);
-      if(g){ gmv+=g.gmv; prop+=g.prop; unit+=g.unit; revP+=g.revP; cogs+=costAt(pid,d).cost*g.sales; }
+      if(g){ gmv+=g.gmv; prop+=g.prop; unit+=g.unit; revP+=g.revP; comm+=g.comm; cogs+=costAt(pid,d).cost*g.sales; }
       oq+=byDaySales.get(d)||0; orev+=byDayRev.get(d)||0; }
     oqAll+=oq; orAll+=orev;
-    if(gmv>0&&oq>0&&orev>0)W.push({b:gmv/orev,r:prop/gmv,t:TAX_RATE*revP/gmv,u:(cogs-unit)/oq}); }
+    if(gmv>0&&oq>0&&orev>0)W.push({b:gmv/orev,r:prop/gmv,t:TAX_RATE*revP/gmv,u:(cogs-unit)/oq,c:-comm/gmv}); }
   const C={ok:W.length>0,from:fr,to,p0:oqAll>0?orAll/oqAll:null};
-  if(C.ok){ C.b=med(W.map(w=>w.b)); C.r=med(W.map(w=>w.r)); C.t=med(W.map(w=>w.t)); C.u=med(W.map(w=>w.u)); }
+  if(C.ok){ C.b=med(W.map(w=>w.b)); C.r=med(W.map(w=>w.r)); C.t=med(W.map(w=>w.t)); C.u=med(W.map(w=>w.u));
+    // r0 — пропорциональные без комиссии; комиссия — по ступени цены: своя ставка товара и ставка юрлиц для другой ступени
+    const c=med(W.map(w=>w.c)), own=C.p0!=null&&C.p0>OZON_COMM_EDGE?'high':'low';
+    C.r0=C.r+c; C.comm={low:own==='low'?c:OZON_COMM.low/100,high:own==='high'?c:OZON_COMM.high/100,own}; }
   return C;
 }
-// маржинальность, % от суммы выкупов (как CF) при цене заказа P и ДРР D (% выручки заказов): r − t − u ÷ (P × b) − D ÷ b
-const unitPct=(C,P,D)=>(C.r-C.t-C.u/(P*C.b)-(D||0)/100/C.b)*100;
+// ставка комиссии при цене заказа P: до 300 ₽ включительно — нижняя ступень, выше — верхняя
+const unitComm=(C,P)=>P<=OZON_COMM_EDGE?C.comm.low:C.comm.high;
+const unitR=(C,P)=>C.r0-unitComm(C,P);
+// маржинальность, % от суммы выкупов (как CF) при цене заказа P и ДРР D (% выручки заказов): r(P) − t − u ÷ (P × b) − D ÷ b
+const unitPct=(C,P,D)=>(unitR(C,P)-C.t-C.u/(P*C.b)-(D||0)/100/C.b)*100;
 // цена, при которой маржинальность = m при ДРР D; null — недостижимо при таком ДРР
-const unitPriceFor=(C,m,D)=>{ const den=C.b*(C.r-C.t-(D||0)/100/C.b-m/100); return den>0?C.u/den:null; };
+// по ступеням: сначала до 300 ₽, потом выше (выше 300 ₽ комиссия больше — цена может не помочь)
+const unitPriceFor=(C,m,D)=>{
+  const at=r=>{ const den=C.b*(r-C.t-(D||0)/100/C.b-m/100); return den>0?C.u/den:null; };
+  const lo=at(C.r0-C.comm.low); if(lo!=null&&lo<=OZON_COMM_EDGE)return lo;
+  const hi=at(C.r0-C.comm.high); if(hi!=null)return Math.max(hi,OZON_COMM_EDGE+1);
+  return null; };
 const UNIT={};
 async function loadUnit(pid){
   const offer=(BYID[pid]||{}).offer_id;
@@ -2130,13 +2149,14 @@ function unitCalc(pid){
   if(!(P>0)){ res.innerHTML='<div class="psub">Введите цену больше 0.</div>'; grid.innerHTML=''; document.getElementById('unitinfo_'+pid).innerHTML=''; return; }
   const m=U.planPct;
   const bg=v=>v<NET_FLOOR?'background:rgba(227,61,120,0.30);':(m!=null&&v<m?'background:rgba(253,224,71,0.45);':'background:rgba(22,163,74,0.30);');
-  const G=P*C.b, cut=G*(1-C.r), tax=G*C.t, ads=P*D/100, mar=G*(C.r-C.t)-C.u-ads, pct=mar/G*100;
+  const cr=unitComm(C,P), r=unitR(C,P), G=P*C.b, com=G*cr, cut=G*(1-C.r0), tax=G*C.t, ads=P*D/100, mar=G*(r-C.t)-C.u-ads, pct=mar/G*100;
   const row=(n,v,share,tip,b)=>`<tr${b?' style="font-weight:700"':''}><td style="text-align:left" title="${esc(tip||'')}">${n}</td><td class="num">${v<0?'−':''}${fmt2(Math.abs(Math.round(v*100)/100))} ₽</td><td class="num" style="color:#64748b">${share==null?'':f1(share)+'%'}</td></tr>`;
   // слева — расчёт на 1 заказ, в середине — матрица «цена × ДРР», справа — выводы (блок ниже по высоте)
   let h=`<div><table class="pulsetable" style="font-size:.86em"><thead><tr><th style="text-align:left">На 1 заказ</th><th>₽</th><th>% выкупа</th></tr></thead><tbody>`
     +row('Цена заказа',P,null,'Цена, которую видит покупатель при заказе')
     +row(`Сумма выкупа (выкупается ${f1(C.b*100)}%)`,G,100,'Сколько в среднем выкупают с одного заказа: часть заказов отменяют или не забирают; сюда же входят баллы Ozon')
-    +row('Удержания Ozon, пропорциональные цене',-cut,-(1-C.r)*100,'Комиссия, эквайринг и другие удержания, которые растут вместе с ценой (за вычетом их возвратов)')
+    +row(`Комиссия Ozon (${P<=OZON_COMM_EDGE?'до':'выше'} ${OZON_COMM_EDGE} ₽)`,-com,-cr*100,`Вознаграждение за продажу: до ${OZON_COMM_EDGE} ₽ включительно — ${f1(C.comm.low*100)}%, выше — ${f1(C.comm.high*100)}% суммы выкупа${C.comm.own==='low'?' (до 300 ₽ — по данным товара, выше — по данным юрлиц)':' (выше 300 ₽ — по данным товара, до 300 ₽ — по данным юрлиц)'}`)
+    +row('Прочие удержания и баллы, пропорциональные цене',-cut,-(1-C.r0)*100,'Эквайринг, программы партнёров, баллы за скидки и т. п. — растут вместе с ценой')
     +row('Налог',-tax,-C.t*100,'3% от выручки P')
     +row('Логистика, возвраты, упаковка и себестоимость',-C.u,-C.u/G*100,'Расходы на заказанную штуку — от цены не зависят')
     +row(`Реклама (ДРР ${f1(D)}% от цены заказа)`,-ads,-ads/G*100,'Реклама на один заказ')
@@ -2160,6 +2180,7 @@ function unitCalc(pid){
   const pp=U.planPrice!=null?Math.round(U.planPrice):null;
   const prices=[...new Set([-3,-2,-1,0,1,2,3].map(i=>Math.round(P+i*st)).filter(p=>i0(p)).concat(pp!=null?[pp]:[]))].filter(p=>p>0).sort((a,b)=>a-b);
   function i0(p){ return pp==null||p===Math.round(P)||Math.abs(p-pp)>=st/2; }  // строка сетки рядом с ценой плана не дублирует её
+  if(prices.length&&prices[0]<=OZON_COMM_EDGE&&prices[prices.length-1]>OZON_COMM_EDGE){ [OZON_COMM_EDGE,OZON_COMM_EDGE+1].forEach(p=>{ if(!prices.includes(p))prices.push(p); }); prices.sort((a,b)=>a-b); }  // скачок комиссии на 300 ₽
   const drrs=[...new Set([0,2,4,6,8,10,15,20,Math.round(D*10)/10])].sort((a,b)=>a-b);
   let g=`<table class="pulsetable" style="font-size:.82em"><thead><tr><th title="Маржинальность, % при цене (строки) и ДРР (столбцы); щелчок — подставить">Цена \\ ДРР</th>${drrs.map(d=>`<th>${f1(d)}%</th>`).join('')}</tr></thead><tbody>`;
   prices.forEach(p=>{ g+=`<tr><td class="pulsemetric">${fmt(p)} ₽${U.planPrice!=null&&p===Math.round(U.planPrice)?' (план)':''}</td>`;
@@ -2288,10 +2309,11 @@ async function pulseHtml(pid,offer){
   h+='</tr>';
   const limTip=cal.ok
     ?`Лимиты считаются от цены дня — одна цена, один лимит. Коэффициенты — медиана 4 недель заказов ${ddmm(cal.from)}–${ddmm(cal.to)} (выкупы по ним уже пришли):\n`
-      +`• комиссия Ozon, эквайринг и другие удержания, пропорциональные цене, — ${f1((1-cal.r)*100)}% суммы выкупов (GMV);\n`
+      +`• комиссия Ozon — ${f1(cal.comm.low*100)}% суммы выкупов при цене до ${OZON_COMM_EDGE} ₽ включительно, ${f1(cal.comm.high*100)}% — выше;\n`
+      +`• эквайринг, баллы и другие удержания, пропорциональные цене, — ${f1((1-cal.r0)*100)}%;\n`
       +`• логистика, доставка, возвраты, упаковка и себестоимость — ${fmt(cal.u)} ₽ на заказанную штуку (от цены не зависят);\n`
       +`• налог — ${f1(cal.t*100)}% суммы выкупов; выкупается ${f1(cal.b*100)}% выручки заказов.\n`
-      +`Маржинальность до рекламы при цене P = ${f1((cal.r-cal.t)*100)}% − ${fmt(cal.u)} ₽ ÷ (P × ${f1(cal.b*100)}%).\n`
+      +`Маржинальность до рекламы при цене P = ${f1((cal.r0-cal.comm.low-cal.t)*100)}% (до ${OZON_COMM_EDGE} ₽) или ${f1((cal.r0-cal.comm.high-cal.t)*100)}% (выше) − ${fmt(cal.u)} ₽ ÷ (P × ${f1(cal.b*100)}%).\n`
       +`Безубыточный ДРР = (до рекламы − ${NET_FLOOR}%) × выкуп — ниже ${NET_FLOOR}% маржинальности компания в убытке по чистой прибыли; плановый = (до рекламы − план маржинальности${planPct!=null?' '+f1(planPct)+'%':' — нет плана'}) × выкуп.\n\n`
       +`При цене:\n`+tipPrices.map(p=>{ const X=limAtPrice(p); return `  ${fmt(p)} ₽ — до рекламы ${f1(X.pre)}%, лимиты ${X.target!=null?f1(X.target)+' / ':''}${f1(X.be)}%`; }).join('\n')
       +`\n\nЗелёный — до планового лимита, жёлтый — прибыльно, но ниже плана, красный — маржинальность ниже ${NET_FLOOR}%: убыток по чистой прибыли.`
@@ -2556,9 +2578,9 @@ renderKpiPnl(g);
       h+=`<td class="num ${dcls}">${dev==null?'—':(dev>0?'+':'')+fmtFor(mt.key,dev)}</td>`;
       if(EXP[mt.key]){
         if(mt.key==='price'){
-          WEEKISO.forEach((w,i)=>{ const pf=priceFactForWeek(pid,w); h+=`<td class="num wcell factcell" title="Факт цены (PNL)">${pf==null?'—':fmt2(pf)}</td>`; });
+          WEEKISO.forEach((w,i)=>{ const pf=priceFactForWeek(pid,w); h+=`<td class="num wcell factcell" title="Факт цены (CF, по дате начисления): выручка ÷ шт выкупов">${pf==null?'—':fmt2(pf)}</td>`; });
         }else if(mt.key==='pct'){
-          WEEKISO.forEach((w,i)=>{ const pf=pctFactForWeek(pid,w); h+=`<td class="num wcell factcell" title="Факт маржин. (PNL)">${pf==null?'—':fmt2(pf)}</td>`; });
+          WEEKISO.forEach((w,i)=>{ const pf=pctFactForWeek(pid,w); h+=`<td class="num wcell factcell" title="Факт маржинальности (CF, по дате начисления): маржа ÷ сумма выкупов">${pf==null?'—':fmt2(pf)}</td>`; });
         }else if(mt.plan===false){
           WEEKISO.forEach((w,i)=>{ const r=getRec(pid,WDKEY[mt.key],w); h+=`<td class="num wcell factcell" title="Факт (заказы)">${r.fact==null?'—':wfmt(mt.key,r.fact)}</td>`; });
         }else{
