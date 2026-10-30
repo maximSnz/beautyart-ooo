@@ -2054,13 +2054,14 @@ async function pulseHtml(pid,offer){
   const start=wStart<mStart?wStart:mStart, end=wEnd>mEnd?wEnd:mEnd;
   const first=localISO(start), last=localISO(end);
   const o=encodeURIComponent(offer);
-  const [salesRows,stockRows,chargeRows,lastRow,adsMap,temps]=await Promise.all([
+  const [salesRows,stockRows,chargeRows,lastRow,adsMap,temps,cfRows]=await Promise.all([
     pulseFetch(`product_sales?offer_id=eq.${o}&sale_date=gte.${first}&sale_date=lte.${last}&select=sale_date,qty,revenue&order=sale_date.asc,warehouse_name.asc`),
     pulseFetch(`stock_history?offer_id=eq.${o}&report_date=gte.${first}&report_date=lte.${last}&select=report_date,stock&order=report_date.asc,warehouse_name.asc`),
     pulseFetch(`ozon_charges?offer_id=eq.${o}&event_date=gte.${first}&event_date=lte.${last}&select=event_date,charge_type,amount,qty,price&order=row_key`),
     fetch(SUPABASE_URL+'/rest/v1/product_sales?select=sale_date&order=sale_date.desc&limit=1',{headers:HD}).then(r=>{if(!r.ok)throw new Error('product_sales HTTP '+r.status);return r.json();}),
     loadAdSpend(first,last),
-    computeOrderTemps()
+    computeOrderTemps(),
+    pulseFetch(`cf_daily?product_id=eq.${pid}&day=gte.${first}&day=lte.${last}&select=day,mar,revn&order=day`).catch(()=>null)
   ]);
   // последний загруженный день заказов (по всем товарам): до него день без строк = 0 заказов, не «нет данных»
   const lastSale=lastRow.length?lastRow[0].sale_date:'';
@@ -2103,7 +2104,10 @@ async function pulseHtml(pid,offer){
   const stockNums=stockVals.filter(v=>v!=null);
   const kMn=stockNums.length?Math.min(...stockNums):0, kMx=stockNums.length?Math.max(...stockNums):0;
   const stockBg=v=>{ if(v==null||!stockNums.length)return ''; const t=(kMx===kMn)?0.5:(v-kMn)/(kMx-kMn); return `background:rgba(227,61,120,${(0.44-0.38*t).toFixed(2)});`; };
-  const mNums=marginVals.filter(v=>v!=null);
+  // маржинальность по дате начисления — дневная маржа CF из cf_daily (как главная и карты Шухарта): mar ÷ revn
+  const cfByDay=new Map(); (cfRows||[]).forEach(r=>cfByDay.set(r.day,r));
+  const cfVals=days.map(iso=>{ const r=cfByDay.get(iso); return r&&Number(r.revn)>0?Number(r.mar)/Number(r.revn)*100:null; });
+  const mNums=marginVals.concat(cfVals).filter(v=>v!=null);
   const mMn=mNums.length?Math.min(...mNums):0, mMx=mNums.length?Math.max(...mNums):1;
   const marginBg=v=>{ if(v==null)return ''; if(v<0)return 'background:rgba(227,61,120,.18);'; const t=(mMx===mMn)?0.5:(v-mMn)/(mMx-mMn); return `background:rgba(22,163,74,${(0.06+0.44*t).toFixed(2)});`; };
   const nowMs=new Date().getTime();
@@ -2135,8 +2139,12 @@ async function pulseHtml(pid,offer){
   h+='<tr><td class="pulsemetric">Остатки, шт</td>';
   stockVals.forEach(v=>{ h+=`<td class="num" style="${stockBg(v)}">${v==null?'—':fmt(v)}</td>`; });
   h+='</tr>';
-  h+='<tr><td class="pulsemetric" title="Маржа заказов этого дня (все начисления по ним, по дате заказа) ÷ GMV; не равна дневной марже главной и карт Шухарта — там по дате начисления">Маржинальность (по дате заказа), %</td>';
+  h+='<tr><td class="pulsemetric" title="Сколько заработали заказы, сделанные в этот день.&#10;&#10;Берём все начисления Ozon по этим заказам — продажу, комиссию, логистику, возвраты, — даже если Ozon провёл их позже. Вычитаем себестоимость, рекламу этого дня и налог 3% и делим на сумму продаж по ценам (GMV).&#10;&#10;Зачем: видно, выгодны ли были цена и реклама именно в этот день. По ней считаются база и факт SMART-гипотез.&#10;&#10;Последние 7 дней (*) — цифра ещё неокончательная: выкупы приходят позже, поэтому она обычно занижена.">Маржинальность (по дате заказа), %</td>';
   marginVals.forEach(v=>{ h+=`<td class="num" style="${marginBg(v)}">${v==null?'—':f1(v)}</td>`; });
+  h+='</tr>';
+  h+='<tr><td class="pulsemetric" title="Сколько товар заработал в этот день по данным Ozon.&#10;&#10;Берём все начисления, которые Ozon провёл в этот день, по любым заказам — в том числе выкупы заказов прошлых дней. Вычитаем себестоимость, рекламу этого дня и налог 3% и делим на сумму продаж по ценам (GMV).&#10;&#10;Зачем: цифра окончательная сразу и совпадает с дневной маржой на главной и на картах Шухарта.&#10;&#10;Ограничение: для оценки решений одного дня не подходит — сегодняшняя реклама сравнивается с выкупами старых заказов. За неделю и больше обе строки сближаются.">Маржинальность (по дате начисления), %</td>';
+  if(cfRows==null)h+=`<td class="num" colspan="${days.length}">нет данных cf_daily</td>`;
+  else cfVals.forEach(v=>{ h+=`<td class="num" style="${marginBg(v)}">${v==null?'—':f1(v)}</td>`; });
   h+='</tr>';
   const DRR_TARGET=5, DRR_MAX_DIST=30;
   const drrBg=v=>{
@@ -2150,7 +2158,7 @@ async function pulseHtml(pid,offer){
   h+='<tr><td class="pulsemetric">ДРР, %</td>';
   drrVals.forEach(v=>{ h+=`<td class="num" style="${drrBg(v)}">${v==null?'—':(isFinite(v)?f1(v):'∞')}</td>`; });
   h+='</tr>';
-  h+='</tbody></table><div class="psub" style="margin-top:6px">* — предварительный день (последние 7 дней): маржинальность уточняется по мере доезда начислений. Дни старше 7 дней устойчивы; редкие поздние возвраты возможны и по ним — это нормальная ревизия.</div></div>';
+  h+='</tbody></table><div class="psub" style="margin-top:6px">* — предварительный день (последние 7 дней): маржинальность по дате заказа уточняется по мере доезда начислений; по дате начисления — окончательная. Дни старше 7 дней устойчивы; редкие поздние возвраты возможны и по ним — это нормальная ревизия.</div></div>';
   return h;
 }
 function arcPath(cx,cy,rO,rI,a0,a1){
