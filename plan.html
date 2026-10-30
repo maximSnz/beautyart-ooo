@@ -2024,14 +2024,18 @@ async function pulseFetch(path){
   return out;
 }
 // начисления товара, сложенные базой по дню заказа и типу (представление ozon_charges_by_event, sql/2026-10-30_…): у ходовых
-// товаров сотни тысяч строк. Окно ~100 дней база не успевает сложить за 8 с (statement timeout) — запросы по неделям, параллельно.
+// товаров сотни тысяч строк. Окно ~100 дней база не успевает сложить за 8 с (statement timeout) — запросы по неделям (~0,4 с),
+// не больше 3 одновременно (15 сразу перегружали базу — HTTP 500), сбой недели — до 2 повторов.
 // Нет представления (404) — построчно (медленно), gmv = цена × шт
 async function pulseCharges(o,from,to){
-  const parts=[];
-  for(let d=from;d<=to;d=addDaysISO(d,7)){ const e=addDaysISO(d,6);
-    parts.push(pulseFetch(`ozon_charges_by_event?offer_id=eq.${o}&event_date=gte.${d}&event_date=lte.${e<to?e:to}&select=event_date,charge_type,amount,qty,gmv&order=event_date,charge_type`)); }
-  try{ return (await Promise.all(parts)).flat(); }
-  catch(e){
+  const weeks=[]; for(let d=from;d<=to;d=addDaysISO(d,7)){ const e=addDaysISO(d,6); weeks.push([d,e<to?e:to]); }
+  const one=async([f,t])=>{ for(let k=0;;k++){ try{ return await pulseFetch(`ozon_charges_by_event?offer_id=eq.${o}&event_date=gte.${f}&event_date=lte.${t}&select=event_date,charge_type,amount,qty,gmv&order=event_date,charge_type`); }
+    catch(e){ if(/HTTP 404/.test(e.message)||k>=2)throw e; await sleep(800*(k+1)); } } };
+  try{
+    const out=[]; let i=0;
+    await Promise.all([0,1,2].map(async()=>{ while(i<weeks.length){ const w=weeks[i++]; out.push(...await one(w)); } }));
+    return out;
+  }catch(e){
     if(!/HTTP 404/.test(e.message))throw e;
     return (await pulseFetch(`ozon_charges?offer_id=eq.${o}&event_date=gte.${from}&event_date=lte.${to}&select=event_date,charge_type,amount,qty,price&order=row_key`)).map(c=>({...c,gmv:Number(c.price||0)*Number(c.qty||0)}));
   }
