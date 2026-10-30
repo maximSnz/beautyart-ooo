@@ -2047,6 +2047,9 @@ async function pulseCharges(o,from,to){
 }
 // начисления, пропорциональные цене (выручка, баллы, комиссия, эквайринг и т. п.); остальные — расходы на штуку (логистика,
 // доставка, возвраты, упаковка, хранение) — для лимитов ДРР от цены
+// корпоративное правило (решение владельца 30.10.2026): маржинальность CF ниже 5% — для компании убыток по чистой прибыли
+// (постоянные расходы); «в ноль» и «безубыточный ДРР» в «Юнит-экономике» и «Руке на пульсе» — по этому порогу, как MARGIN_FLOOR на главной
+const NET_FLOOR=5;
 const PULSE_PROP=new Set(['Выручка','Баллы за скидки','Возврат выручки','Вознаграждение за продажу','Возврат вознаграждения','Эквайринг','Программы партнёров','Продвижение бренда']);
 // Модель маржинальности от цены — общая для «Юнит-экономики» и лимитов ДРР «Руки на пульсе» (решения владельца 30.10.2026).
 // Начисления по дате заказа: пропорциональные цене (PULSE_PROP) и расходы на штуку (остальные).
@@ -2109,7 +2112,7 @@ async function loadUnit(pid){
       +`<button onclick="unitSet(${pid},${P0},${D0})">Как сейчас (${fmt(P0)} ₽, ${f1(D0)}%)</button>`
       +(U.planPrice!=null?`<button onclick="unitSet(${pid},${Math.round(U.planPrice)},null)">Цена плана (${fmt(U.planPrice)} ₽)</button>`:'')
       +`</div><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start"><div id="unitres_${pid}"></div><div id="unitgrid_${pid}"></div><div id="unitinfo_${pid}" style="font-size:.86em;line-height:1.6;max-width:420px"></div></div>`
-      +`<div class="psub" style="margin-top:6px;color:#94a3b8">Модель не знает, как цена и реклама меняют число заказов, — это проверяйте SMART-гипотезой. Маржинальность — от суммы выкупов, как в факте (CF).</div>`;
+      +`<div class="psub" style="margin-top:6px;color:#94a3b8">Модель не знает, как цена и реклама меняют число заказов, — это проверяйте SMART-гипотезой. Маржинальность — от суммы выкупов, как в факте (CF). Ниже ${NET_FLOOR}% — убыток для компании по чистой прибыли (красный).</div>`;
     unitCalc(pid);
   }catch(e){
     if(box)box.innerHTML=`<div class="psub" style="color:#E33D78">Ошибка загрузки: ${esc(e.message)}. Сверните и раскройте блок, чтобы повторить.</div>`;
@@ -2126,7 +2129,7 @@ function unitCalc(pid){
   const res=document.getElementById('unitres_'+pid), grid=document.getElementById('unitgrid_'+pid);
   if(!(P>0)){ res.innerHTML='<div class="psub">Введите цену больше 0.</div>'; grid.innerHTML=''; document.getElementById('unitinfo_'+pid).innerHTML=''; return; }
   const m=U.planPct;
-  const bg=v=>v<0?'background:rgba(227,61,120,0.30);':(m!=null&&v<m?'background:rgba(253,224,71,0.45);':'background:rgba(22,163,74,0.30);');
+  const bg=v=>v<NET_FLOOR?'background:rgba(227,61,120,0.30);':(m!=null&&v<m?'background:rgba(253,224,71,0.45);':'background:rgba(22,163,74,0.30);');
   const G=P*C.b, cut=G*(1-C.r), tax=G*C.t, ads=P*D/100, mar=G*(C.r-C.t)-C.u-ads, pct=mar/G*100;
   const row=(n,v,share,tip,b)=>`<tr${b?' style="font-weight:700"':''}><td style="text-align:left" title="${esc(tip||'')}">${n}</td><td class="num">${v<0?'−':''}${fmt2(Math.abs(Math.round(v*100)/100))} ₽</td><td class="num" style="color:#64748b">${share==null?'':f1(share)+'%'}</td></tr>`;
   // слева — расчёт на 1 заказ, в середине — матрица «цена × ДРР», справа — выводы (блок ниже по высоте)
@@ -2143,11 +2146,12 @@ function unitCalc(pid){
   h=''
     +`<div style="padding:4px 10px;border-radius:8px;${bg(pct)}"><b>Маржинальность: ${f1(pct)}%</b>${m!=null?` (план ${f1(m)}%)`:''}</div>`;
   const pre=unitPct(C,P,0);
-  h+=pre<0?`<div>При цене ${fmt(P)} ₽ товар убыточен даже без рекламы (до рекламы ${f1(pre)}%).</div>`
-    :(m!=null&&pre<m)?`<div>При цене ${fmt(P)} ₽ план маржинальности не выходит даже без рекламы (до рекламы ${f1(pre)}%); в ноль — реклама до <b>${f1(pre*C.b)}%</b>.</div>`
-    :`<div>При цене ${fmt(P)} ₽ реклама до <b>${f1((pre-(m||0))*C.b)}%</b>${m!=null?` — план маржинальности, до <b>${f1(pre*C.b)}%</b> — в ноль`:' — в ноль'}.</div>`;
+  const beD=(pre-NET_FLOOR)*C.b;  // «в ноль» — по чистой прибыли: маржинальность 5%
+  h+=pre<NET_FLOOR?`<div>При цене ${fmt(P)} ₽ товар убыточен по чистой прибыли даже без рекламы (до рекламы ${f1(pre)}% — ниже ${NET_FLOOR}%).</div>`
+    :(m!=null&&pre<m)?`<div>При цене ${fmt(P)} ₽ план маржинальности не выходит даже без рекламы (до рекламы ${f1(pre)}%); в ноль по чистой прибыли — реклама до <b>${f1(beD)}%</b>.</div>`
+    :`<div>При цене ${fmt(P)} ₽ реклама до <b>${f1(Math.max(0,(pre-(m!=null?m:NET_FLOOR))*C.b))}%</b>${m!=null?` — план маржинальности, до <b>${f1(beD)}%</b> — в ноль по чистой прибыли`:' — в ноль по чистой прибыли'}.</div>`;
   if(m!=null){ const pm=unitPriceFor(C,m,D); h+=pm==null?`<div>При ДРР ${f1(D)}% план маржинальности <b>не выходит ни при какой цене</b> — реклама больше, чем остаётся с продажи.</div>`:`<div>При ДРР ${f1(D)}% план маржинальности выходит при цене от <b>${fmt(Math.ceil(pm))} ₽</b>.</div>`; }
-  const p0=unitPriceFor(C,0,D); h+=p0==null?`<div>При ДРР ${f1(D)}% в ноль <b>не выйти ни при какой цене</b>.</div>`:`<div>При ДРР ${f1(D)}% в ноль — при цене <b>${fmt(Math.ceil(p0))} ₽</b>.</div>`;
+  const p0=unitPriceFor(C,NET_FLOOR,D); h+=p0==null?`<div>При ДРР ${f1(D)}% в ноль по чистой прибыли (${NET_FLOOR}%) <b>не выйти ни при какой цене</b>.</div>`:`<div>При ДРР ${f1(D)}% в ноль по чистой прибыли (${NET_FLOOR}%) — при цене от <b>${fmt(Math.ceil(p0))} ₽</b>.</div>`;
   if(U.planQty){ h+=`<div title="Если заказов будет столько, сколько в плане; модель не знает, как цена и реклама меняют спрос">При плане ${fmt(U.planQty)} шт/мес: маржа ≈ <b>${fmt(U.planQty*mar)} ₽</b> в месяц</div>`; }
   if(U.q7>0){ h+=`<div title="Если заказы останутся на уровне последних 7 дней">При текущих заказах (${fmt(U.q7/7)} шт/день): ≈ <b>${fmt(U.q7/7*30*mar)} ₽</b> за 30 дней</div>`; }
   document.getElementById('unitinfo_'+pid).innerHTML=h;
@@ -2205,12 +2209,12 @@ async function pulseHtml(pid,offer){
   };
   // Лимиты ДРР — от цены (решение владельца 30.10.2026; до этого — по окну дней, у одинаковых дней лимиты расходились).
   // Модель — pulseCal / unitPct (общая с «Юнит-экономикой»): до рекламы при цене P = r − t − u ÷ (P × b);
-  // безубыточный ДРР = до рекламы × b, плановый = (до рекламы − план) × b.
+  // безубыточный ДРР = (до рекламы − 5%) × b (порог чистой прибыли NET_FLOOR), плановый = (до рекламы − план) × b.
   const planPct=PLAN[pid]&&PLAN[pid].margin_pct!=null&&PLAN[pid].plan_qty>0?Number(PLAN[pid].margin_pct):null;
   const planPrice=PLAN[pid]&&PLAN[pid].plan_qty>0?Number(PLAN[pid].price):null;
   const cal=pulseCal(pid,byDayCh,byDaySales,byDayRev,todayISO);
   const limAtPrice=p=>{ const X={ok:cal.ok&&p!=null&&p>0,p};
-    if(X.ok){ X.pre=unitPct(cal,p,0); X.be=Math.max(0,X.pre*cal.b); X.target=planPct==null?null:Math.max(0,(X.pre-planPct)*cal.b); }
+    if(X.ok){ X.pre=unitPct(cal,p,0); X.be=Math.max(0,(X.pre-NET_FLOOR)*cal.b); X.target=planPct==null?null:Math.max(0,(X.pre-planPct)*cal.b); }
     return X; };
   const days=[];
   for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){ days.push(localISO(new Date(d))); }
@@ -2245,11 +2249,11 @@ async function pulseHtml(pid,offer){
   const stockNums=stockVals.filter(v=>v!=null);
   const kMn=stockNums.length?Math.min(...stockNums):0, kMx=stockNums.length?Math.max(...stockNums):0;
   const stockBg=v=>{ if(v==null||!stockNums.length)return ''; const t=(kMx===kMn)?0.5:(v-kMn)/(kMx-kMn); return `background:rgba(227,61,120,${(0.44-0.38*t).toFixed(2)});`; };
-  // маржинальность — относительно плана: зелёный — не ниже плана, жёлтый — от 0 до плана, красный — убыток
-  const marginBg=v=>{ if(v==null)return ''; if(v<0)return 'background:rgba(227,61,120,0.30);'; if(planPct!=null&&v<planPct)return 'background:rgba(253,224,71,0.45);'; return 'background:rgba(22,163,74,0.30);'; };
+  // маржинальность — относительно плана: зелёный — не ниже плана, жёлтый — от 5% до плана, красный — ниже 5% (убыток по чистой прибыли)
+  const marginBg=v=>{ if(v==null)return ''; if(v<NET_FLOOR)return 'background:rgba(227,61,120,0.30);'; if(planPct!=null&&v<planPct)return 'background:rgba(253,224,71,0.45);'; return 'background:rgba(22,163,74,0.30);'; };
 
   const priceBg=v=>(v==null||planPrice==null)?'':(v<planPrice*0.98?'background:rgba(227,61,120,.14);':'');
-  // ДРР: зелёный — до планового лимита, жёлтый — до безубыточного, красный — выше (убыток)
+  // ДРР: зелёный — до планового лимита, жёлтый — до безубыточного (маржинальность 5%), красный — выше (убыток по чистой прибыли)
   const drrZone=(v,L)=>{ if(v==null)return null; if(!isFinite(v))return 'red'; if(!L.ok)return null; if(v>L.be)return 'red'; if(L.target!=null&&v>L.target)return 'yellow'; return 'green'; };
   const ZBG={red:'background:rgba(227,61,120,0.38);',yellow:'background:rgba(253,224,71,0.45);',green:'background:rgba(22,163,74,0.30);'};
   const drrBg=(v,L)=>{ if(v!=null&&!isFinite(v))return 'background:rgba(227,61,120,0.45);'; const z=drrZone(v,L); return z?ZBG[z]:''; };
@@ -2288,16 +2292,16 @@ async function pulseHtml(pid,offer){
       +`• логистика, доставка, возвраты, упаковка и себестоимость — ${fmt(cal.u)} ₽ на заказанную штуку (от цены не зависят);\n`
       +`• налог — ${f1(cal.t*100)}% суммы выкупов; выкупается ${f1(cal.b*100)}% выручки заказов.\n`
       +`Маржинальность до рекламы при цене P = ${f1((cal.r-cal.t)*100)}% − ${fmt(cal.u)} ₽ ÷ (P × ${f1(cal.b*100)}%).\n`
-      +`Безубыточный ДРР = до рекламы × выкуп; плановый = (до рекламы − план маржинальности${planPct!=null?' '+f1(planPct)+'%':' — нет плана'}) × выкуп.\n\n`
+      +`Безубыточный ДРР = (до рекламы − ${NET_FLOOR}%) × выкуп — ниже ${NET_FLOOR}% маржинальности компания в убытке по чистой прибыли; плановый = (до рекламы − план маржинальности${planPct!=null?' '+f1(planPct)+'%':' — нет плана'}) × выкуп.\n\n`
       +`При цене:\n`+tipPrices.map(p=>{ const X=limAtPrice(p); return `  ${fmt(p)} ₽ — до рекламы ${f1(X.pre)}%, лимиты ${X.target!=null?f1(X.target)+' / ':''}${f1(X.be)}%`; }).join('\n')
-      +`\n\nЗелёный — до планового лимита, жёлтый — в плюсе, но ниже плана, красный — реклама съедает всю маржу (убыток).`
+      +`\n\nЗелёный — до планового лимита, жёлтый — прибыльно, но ниже плана, красный — маржинальность ниже ${NET_FLOOR}%: убыток по чистой прибыли.`
     :'Лимиты не рассчитаны: мало заказов и выкупов за 4 недели до последних 7 дней.';
   h+=`<tr><td class="pulsemetric" title="${T('Сколько процентов от выручки заказов дня ушло на рекламу (рычаг 2 — реклама): реклама дня ÷ выручка заказов дня, как на главной.\n\n'+limTip)}">ДРР, %${lim.ok?` <span style="font-weight:400;color:#94a3b8">${lim.target!=null?f1(lim.target)+' / ':''}${f1(lim.be)}</span>`:''}</td>`;
   drrVals.forEach((v,i)=>{ const X=dayLim[i];
     const lt=X.ok?`<div style="font-size:.78em;color:#64748b;line-height:1.1">(${X.target!=null?f1(X.target)+'/':''}${f1(X.be)})</div>`:'';
     h+=`<td class="num" style="${drrBg(v,X)}"${X.ok?` title="ДРР дня и лимиты при цене ${fmt(X.p)} ₽${days[i]>=todayISO||priceVals[i]==null?' (текущая)':''}: плановый ${X.target!=null?f1(X.target)+'%':'— нет плана'} / безубыточный ${f1(X.be)}% (маржинальность до рекламы при этой цене ${f1(X.pre)}%)"`:''}>${v==null?'—':(isFinite(v)?f1(v):'∞')}${lt}</td>`; });
   h+='</tr>';
-  h+=`<tr><td class="pulsemetric" title="${T('Итог: что дают цена и реклама вместе — маржинальность до рекламы минус реклама.\n\nЗа 7 дней по эту дату, по дате заказа; реклама — расходы этих 7 дней.\n\nСемь дней вместо одного — потому что за день заказов мало и цифра прыгает. Последние 7 дней (*) — неокончательно: выкупы ещё приходят, цифра обычно занижена.\n\nЦвет — к плану маржинальности: зелёный — план выполняется, жёлтый — в плюсе, но ниже плана, красный — убыток.')}">Маржинальность (7 дн), %</td>`;
+  h+=`<tr><td class="pulsemetric" title="${T('Итог: что дают цена и реклама вместе — маржинальность до рекламы минус реклама.\n\nЗа 7 дней по эту дату, по дате заказа; реклама — расходы этих 7 дней.\n\nСемь дней вместо одного — потому что за день заказов мало и цифра прыгает. Последние 7 дней (*) — неокончательно: выкупы ещё приходят, цифра обычно занижена.\n\nЦвет — к плану маржинальности: зелёный — план выполняется, жёлтый — от 5% до плана, красный — ниже 5%: убыток по чистой прибыли.')}">Маржинальность (7 дн), %</td>`;
   roll.forEach(r=>{ const v=r?r.net:null; h+=`<td class="num" style="${marginBg(v)}">${v==null?'—':f1(v)}</td>`; });
   h+='</tr>';
   h+=`<tr><td class="pulsemetric" title="${T('Остаток на складах Ozon на конец дня, шт (сумма по всем складам).')}">Остатки, шт</td>`;
