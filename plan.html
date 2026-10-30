@@ -2045,6 +2045,19 @@ async function pulseFetch(path){
   }
   return out;
 }
+// начисления товара, сложенные базой по дню заказа и типу (представление ozon_charges_by_event, sql/2026-10-30_…): у ходовых
+// товаров сотни тысяч строк. Окно ~100 дней база не успевает сложить за 8 с (statement timeout) — запросы по неделям, параллельно.
+// Нет представления (404) — построчно (медленно), gmv = цена × шт
+async function pulseCharges(o,from,to){
+  const parts=[];
+  for(let d=from;d<=to;d=addDaysISO(d,7)){ const e=addDaysISO(d,6);
+    parts.push(pulseFetch(`ozon_charges_by_event?offer_id=eq.${o}&event_date=gte.${d}&event_date=lte.${e<to?e:to}&select=event_date,charge_type,amount,qty,gmv&order=event_date,charge_type`)); }
+  try{ return (await Promise.all(parts)).flat(); }
+  catch(e){
+    if(!/HTTP 404/.test(e.message))throw e;
+    return (await pulseFetch(`ozon_charges?offer_id=eq.${o}&event_date=gte.${from}&event_date=lte.${to}&select=event_date,charge_type,amount,qty,price&order=row_key`)).map(c=>({...c,gmv:Number(c.price||0)*Number(c.qty||0)}));
+  }
+}
 async function pulseHtml(pid,offer){
   if(!WEEKISO.length)return '<div class="psub">нет недель</div>';
   // период — недели месяца, дополненные до целого месяца (если 1-е или последнее число вне ISO-недель)
@@ -2054,15 +2067,13 @@ async function pulseHtml(pid,offer){
   const start=wStart<mStart?wStart:mStart, end=wEnd>mEnd?wEnd:mEnd;
   const first=localISO(start), last=localISO(end);
   const todayISO=localISO(new Date());
-  // лимиты ДРР — по 28 «созревшим» дням заказов (старше 7 дней: выкупы и возвраты по ним уже пришли)
-  const limTo=addDaysISO(todayISO,-8), limFrom=addDaysISO(limTo,-27);
-  const winFrom=addDaysISO(first,-6);                       // маржинальность за 7 дней — окно до первого дня таблицы
-  const from=limFrom<winFrom?limFrom:winFrom;
+  // данные — с запасом: лимиты ДРР каждого дня таблицы (28 дней до «за 8 дней до него») и потолок 4 недели назад
+  const from=addDaysISO(first<todayISO?first:todayISO,-64);
   const o=encodeURIComponent(offer);
   const [salesRows,stockRows,chargeRows,lastRow,adsMap,temps]=await Promise.all([
     pulseFetch(`product_sales?offer_id=eq.${o}&sale_date=gte.${from}&sale_date=lte.${last}&select=sale_date,qty,revenue&order=sale_date.asc,warehouse_name.asc`),
     pulseFetch(`stock_history?offer_id=eq.${o}&report_date=gte.${first}&report_date=lte.${last}&select=report_date,stock&order=report_date.asc,warehouse_name.asc`),
-    pulseFetch(`ozon_charges?offer_id=eq.${o}&event_date=gte.${from}&event_date=lte.${last}&select=event_date,charge_type,amount,qty,price&order=row_key`),
+    pulseCharges(o,from,last),
     fetch(SUPABASE_URL+'/rest/v1/product_sales?select=sale_date&order=sale_date.desc&limit=1',{headers:HD}).then(r=>{if(!r.ok)throw new Error('product_sales HTTP '+r.status);return r.json();}),
     loadAdSpend(from,last),
     computeOrderTemps()
@@ -2078,10 +2089,10 @@ async function pulseHtml(pid,offer){
   chargeRows.forEach(c=>{
     const d=c.event_date; if(!d)return;
     let g=byDayCh.get(d); if(!g){g={gmv:0,sales:0,pnl:0,revP:0};byDayCh.set(d,g);}
-    const amt=Number(c.amount||0), qty=Number(c.qty||0), price=Number(c.price||0);
+    const amt=Number(c.amount||0), qty=Number(c.qty||0), gv=Number(c.gmv||0);
     g.pnl+=amt;
-    if(c.charge_type==='Выручка'){ g.gmv+=price*qty; g.sales+=qty; g.revP+=amt; }
-    else if(c.charge_type==='Возврат выручки'){ g.gmv+=price*qty; g.sales-=qty; g.revP+=amt; }
+    if(c.charge_type==='Выручка'){ g.gmv+=gv; g.sales+=qty; g.revP+=amt; }
+    else if(c.charge_type==='Возврат выручки'){ g.gmv+=gv; g.sales-=qty; g.revP+=amt; }
   });
   const adsByDay=adsMap.get(pid)||new Map();
   // сумма за период по дате заказа: GMV, маржа до рекламы (pnl − себестоимость на дату − налог), реклама, выручка заказов PNL
@@ -2098,16 +2109,25 @@ async function pulseHtml(pid,offer){
   // плановый = (маржинальность до рекламы − план маржинальности) × выкуп; выкуп = GMV ÷ выручка заказов.
   // Обе величины — медиана 4 недель окна: одна неделя с аномальными начислениями не обнуляет лимит (решение 30.10.2026)
   const med=a=>{ if(!a.length)return null; const b=[...a].sort((x,y)=>x-y), m=b.length>>1; return b.length%2?b[m]:(b[m-1]+b[m])/2; };
-  const limWeeks=[0,1,2,3].map(i=>{ const f=addDaysISO(limFrom,i*7), t=addDaysISO(f,6), a=agg(f,t);
-    return {f,t,pre:a.gmv>0?a.pre/a.gmv*100:null,buy:a.gmv>0&&a.rev>0?a.gmv/a.rev:null}; });
-  const preW=limWeeks.map(w=>w.pre).filter(v=>v!=null), buyW=limWeeks.map(w=>w.buy).filter(v=>v!=null);
-  const lim={ok:preW.length>0&&buyW.length>0};
-  if(lim.ok){
-    lim.pre=med(preW); lim.buy=med(buyW);
-    lim.be=Math.max(0,lim.pre*lim.buy);
-    const pl=PLAN[pid]; lim.planPct=pl&&pl.margin_pct!=null&&pl.plan_qty>0?Number(pl.margin_pct):null;
-    lim.target=lim.planPct==null?null:Math.max(0,(lim.pre-lim.planPct)*lim.buy);
-  }
+  // лимит на день d — по 28 «созревшим» дням заказов, закончившимся за 8 дней до d (выкупы и возвраты по ним уже пришли);
+  // каждый день таблицы красится по своему лимиту, будущие — по сегодняшнему (решение 30.10.2026)
+  const planPct=PLAN[pid]&&PLAN[pid].margin_pct!=null&&PLAN[pid].plan_qty>0?Number(PLAN[pid].margin_pct):null;
+  const LIM_MEMO=new Map();
+  const limAt=d=>{
+    if(LIM_MEMO.has(d))return LIM_MEMO.get(d);
+    const to=addDaysISO(d,-8), fr=addDaysISO(to,-27);
+    const weeks=[0,1,2,3].map(i=>{ const f=addDaysISO(fr,i*7), t=addDaysISO(f,6), a=agg(f,t);
+      return {f,t,pre:a.gmv>0?a.pre/a.gmv*100:null,buy:a.gmv>0&&a.rev>0?a.gmv/a.rev:null}; });
+    const preW=weeks.map(w=>w.pre).filter(v=>v!=null), buyW=weeks.map(w=>w.buy).filter(v=>v!=null);
+    const L={ok:preW.length>0&&buyW.length>0,from:fr,to,weeks,planPct};
+    if(L.ok){
+      L.pre=med(preW); L.buy=med(buyW);
+      L.be=Math.max(0,L.pre*L.buy);
+      L.target=planPct==null?null:Math.max(0,(L.pre-planPct)*L.buy);
+    }
+    LIM_MEMO.set(d,L); return L;
+  };
+  const lim=limAt(todayISO), limFrom=lim.from, limTo=lim.to, limWeeks=lim.weeks;
   const days=[];
   for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){ days.push(localISO(new Date(d))); }
   const salesVals=days.map(iso=>{ const v=byDaySales.get(iso); return v!=null?v:(iso<=lastSale?0:null); });
@@ -2120,6 +2140,13 @@ async function pulseHtml(pid,offer){
     return a.gmv>0?{pre:a.pre/a.gmv*100,net:(a.pre-a.ads)/a.gmv*100}:null;
   });
   // ДРР — как на главной: реклама дня ÷ выручка PNL заказов того же дня (product_sales.revenue)
+  // лимит дня (решение владельца 30.10.2026, «по факту»): день старше 8 дней (выкупы пришли) — по фактической маржинальности до рекламы
+  // и выкупу 7 дней по этот день, цвет ДРР согласуется с маржинальностью за 7 дн.; последние 7 дней и будущие — последний известный (lim)
+  const matureTo=addDaysISO(todayISO,-8);
+  const factLim=iso=>{ const f=addDaysISO(iso,-6), a=agg(f,iso), L={ok:a.gmv>0&&a.rev>0,from:f,to:iso,fact:true};
+    if(L.ok){ L.pre=a.pre/a.gmv*100; L.buy=a.gmv/a.rev; L.be=Math.max(0,L.pre*L.buy); L.target=planPct==null?null:Math.max(0,(L.pre-planPct)*L.buy); }
+    return L; };
+  const dayLim=days.map(iso=>iso<=matureTo?factLim(iso):lim);
   const drrVals=days.map(iso=>{
     const ads=adsByDay.get(iso)||0;
     if(ads===0) return null;
@@ -2133,23 +2160,51 @@ async function pulseHtml(pid,offer){
   const stockNums=stockVals.filter(v=>v!=null);
   const kMn=stockNums.length?Math.min(...stockNums):0, kMx=stockNums.length?Math.max(...stockNums):0;
   const stockBg=v=>{ if(v==null||!stockNums.length)return ''; const t=(kMx===kMn)?0.5:(v-kMn)/(kMx-kMn); return `background:rgba(227,61,120,${(0.44-0.38*t).toFixed(2)});`; };
-  const mNums=roll.filter(Boolean).flatMap(r=>[r.pre,r.net]);
-  const mMn=mNums.length?Math.min(...mNums):0, mMx=mNums.length?Math.max(...mNums):1;
-  const marginBg=v=>{ if(v==null)return ''; if(v<0)return 'background:rgba(227,61,120,.18);'; const t=(mMx===mMn)?0.5:(v-mMn)/(mMx-mMn); return `background:rgba(22,163,74,${(0.06+0.44*t).toFixed(2)});`; };
+  // маржинальность — относительно плана: зелёный — не ниже плана, жёлтый — от 0 до плана, красный — убыток
+  const marginBg=v=>{ if(v==null)return ''; if(v<0)return 'background:rgba(227,61,120,0.30);'; if(planPct!=null&&v<planPct)return 'background:rgba(253,224,71,0.45);'; return 'background:rgba(22,163,74,0.30);'; };
   const planPrice=PLAN[pid]&&PLAN[pid].plan_qty>0?Number(PLAN[pid].price):null;
   const priceBg=v=>(v==null||planPrice==null)?'':(v<planPrice*0.98?'background:rgba(227,61,120,.14);':'');
   // ДРР: зелёный — до планового лимита, жёлтый — до безубыточного, красный — выше (убыток)
-  const drrBg=v=>{
-    if(v==null)return '';
-    if(!isFinite(v))return 'background:rgba(227,61,120,0.45);';
-    if(!lim.ok)return '';
-    if(v>lim.be)return 'background:rgba(227,61,120,0.38);';
-    if(lim.target!=null&&v>lim.target)return 'background:rgba(253,224,71,0.45);';
-    return 'background:rgba(22,163,74,0.30);';
-  };
+  const drrZone=(v,L)=>{ if(v==null)return null; if(!isFinite(v))return 'red'; if(!L.ok)return null; if(v>L.be)return 'red'; if(L.target!=null&&v>L.target)return 'yellow'; return 'green'; };
+  const ZBG={red:'background:rgba(227,61,120,0.38);',yellow:'background:rgba(253,224,71,0.45);',green:'background:rgba(22,163,74,0.30);'};
+  const drrBg=(v,L)=>{ if(v!=null&&!isFinite(v))return 'background:rgba(227,61,120,0.45);'; const z=drrZone(v,L); return z?ZBG[z]:''; };
+  // «Что делать» — по последним 7 прошедшим дням: зоны ДРР, заказы к плану, цена к плану, потолок до рекламы сейчас и 4 недели назад
+  const verdict=(()=>{
+    const idx=days.map((iso,i)=>i).filter(i=>days[i]<todayISO&&days[i]>=addDaysISO(todayISO,-7));
+    const z={red:0,yellow:0,green:0,none:0};
+    idx.forEach(i=>{ const k=drrZone(drrVals[i],dayLim[i]); z[k||'none']++; });
+    const rec=idx.slice(-3).map(i=>drrZone(drrVals[i],dayLim[i])).filter(Boolean);
+    const recentBad=rec.filter(k=>k!=='green').length, recentOk=rec.length===3&&recentBad===0;
+    let q=0,r=0,pq=0; const p=BYID[pid];
+    for(let d=addDaysISO(todayISO,-7);d<todayISO;d=addDaysISO(d,1)){ q+=byDaySales.get(d)||0; r+=byDayRev.get(d)||0; const s=p?dayShare(p,d,'sales'):null; if(s!=null)pq+=s; }
+    const price7=q>0?r/q:null, priceLow=price7!=null&&planPrice!=null&&price7<planPrice*0.98;
+    const ordPct=pq>0?q/pq*100:null;
+    const prev=limAt(addDaysISO(todayISO,-28)), drop=lim.ok&&prev.ok?prev.pre-lim.pre:null;
+    const facts=[];
+    if(z.red+z.yellow+z.green)facts.push(`реклама за 7 дн: 🔴 ${z.red} · 🟡 ${z.yellow} · 🟢 ${z.green} дн.`);
+    if(ordPct!=null)facts.push(`заказы ${fmt(q)} шт — ${fmt(ordPct)}% плана`);
+    if(price7!=null)facts.push(`цена ${fmt(price7)} ₽${planPrice!=null?` (план ${fmt(planPrice)} ₽)`:''}`);
+    if(lim.ok)facts.push(`потолок до рекламы ${f1(lim.pre)}%${prev.ok?` (4 нед. назад ${f1(prev.pre)}%)`:''}${planPct!=null?`, план ${f1(planPct)}%`:''}`);
+    const lt=lim.ok?(lim.target!=null?lim.target:lim.be):null;
+    let act,lvl;
+    if(!lim.ok){ act='Лимиты рекламы не рассчитаны — мало выкупов за 4 недели.'; lvl='none'; }
+    else if(lim.pre<0){ act='Товар убыточен ещё до рекламы — реклама только увеличивает убыток. Смотрите цену и расходы (комиссия, логистика, себестоимость).'; lvl='red'; }
+    else if(planPct!=null&&lim.pre<planPct){ act=`План маржинальности не выйдет даже без рекламы: потолок ${f1(lim.pre)}% ниже плана ${f1(planPct)}%. Смотрите цену${priceLow?' — она ниже плана':''} и расходы или пересмотрите план.`; lvl='red'; }
+    else if(z.red+z.yellow>=2&&recentOk){ act=`Реклама уже в лимите последние 3 дня (до этого выше лимита ${z.red+z.yellow-recentBad} дн.) — маржинальность за 7 дн. отстаёт: в окне ещё дни с дорогой рекламой и невыкупленные заказы. Держите ДРР ≤${f1(lt)}% и проверьте через неделю.`; lvl='green'; }
+    else if(z.red>=3){ act=`Сократите рекламу: ДРР выше безубыточного (${f1(lim.be)}%) ${z.red} дн. из 7 — реклама съедает всю маржу.`; lvl='red'; }
+    else if(z.red+z.yellow>=4){
+      act=(drop!=null&&drop>=2)
+        ?`Реклама выше планового лимита (≤${f1(lt)}%), потому что потолок до рекламы снизился с ${f1(prev.pre)}% до ${f1(lim.pre)}%${priceLow?' — цена ниже плана, вероятная причина':''}. Сначала смотрите ${priceLow?'цену':'цену и расходы'}, затем — рекламу.`
+        :`Реклама выше планового лимита (≤${f1(lt)}%): снизьте её${priceLow?' или верните цену к плану':' или поднимите цену'}.`;
+      lvl='yellow'; }
+    else if(ordPct!=null&&ordPct<90){ act=`Реклама в лимите, заказов ${fmt(ordPct)}% плана — есть запас: рекламу можно добавить до ≤${f1(lt)}%.`; lvl='green'; }
+    else { act='В норме: реклама в лимите'+(ordPct!=null?`, заказы ${fmt(ordPct)}% плана`:'')+'.'; lvl='green'; }
+    const bc={red:'#E33D78',yellow:'#eab308',green:'#16a34a',none:'#94a3b8'}[lvl];
+    return `<div style="border-left:4px solid ${bc};background:#f8f9fb;padding:6px 10px;margin:4px 0 8px;font-size:.86em;color:#1C0D2E"><b>Что делать:</b> ${esc(act)}<div style="color:#64748b;margin-top:2px">${esc(facts.join(' · '))}</div></div>`;
+  })();
   const nowMs=new Date().getTime();
   const T=s=>s.replace(/"/g,'&quot;');
-  let h='<div class="pulsewrap"><table class="pulsetable"><thead><tr><th>Параметр</th>';
+  let h=verdict+'<div class="pulsewrap"><table class="pulsetable"><thead><tr><th>Параметр</th>';
   days.forEach(iso=>{
     const prov=iso<todayISO&&(nowMs-parseW(iso).getTime())<7*86400000;
     h+=prov?`<th title="предварительно: выкупы и возвраты по заказам этого дня ещё приходят — маржинальность уточнится сама">${ddmm(iso)}*</th>`:`<th>${ddmm(iso)}</th>`;
@@ -2181,21 +2236,23 @@ async function pulseHtml(pid,offer){
       +limWeeks.map(w=>`  ${ddmm(w.f)}–${ddmm(w.t)}: до рекламы ${w.pre==null?'—':f1(w.pre)+'%'}, выкуп ${w.buy==null?'—':f1(w.buy*100)+'%'}`).join('\n')
       +`\n• маржинальность до рекламы (медиана) — ${f1(lim.pre)}% от суммы выкупов (GMV);\n• выкупается (медиана) ${f1(lim.buy*100)}% выручки заказов;\n• безубыточный ДРР = ${f1(lim.pre)}% × ${f1(lim.buy*100)}% = ${f1(lim.be)}%`
       +(lim.target!=null?`;\n• плановый ДРР = (${f1(lim.pre)}% − план маржинальности ${f1(lim.planPct)}%) × ${f1(lim.buy*100)}% = ${f1(lim.target)}%.`:'.\n• планового лимита нет — нет плана маржинальности на месяц.')
-      +`\n\nЗелёный — до планового лимита, жёлтый — в плюсе, но ниже плана, красный — реклама съедает всю маржу (убыток).`
+      +`\n\nЗелёный — до планового лимита, жёлтый — в плюсе, но ниже плана, красный — реклама съедает всю маржу (убыток). Лимиты дня — в ячейке под ДРР: у дней старше 8 дней — по факту (маржинальность до рекламы и выкуп 7 дней по этот день, цвет согласуется с маржинальностью за 7 дн.), у последних 7 дней и будущих — последние известные (эти, сверху). Подробно — наведите на ячейку.`
     :'Лимиты не рассчитаны: нет выкупов по заказам за 4 недели до последних 7 дней.';
   h+=`<tr><td class="pulsemetric" title="${T('Сколько процентов от выручки заказов дня ушло на рекламу (рычаг 2 — реклама): реклама дня ÷ выручка заказов дня, как на главной.\n\n'+limTip)}">ДРР, %${lim.ok?` <span style="font-weight:400;color:#94a3b8">≤${lim.target!=null?f1(lim.target)+' / ':''}${f1(lim.be)}</span>`:''}</td>`;
-  drrVals.forEach(v=>{ h+=`<td class="num" style="${drrBg(v)}">${v==null?'—':(isFinite(v)?f1(v):'∞')}</td>`; });
+  drrVals.forEach((v,i)=>{ const L=dayLim[i];
+    const lt=L.ok?`<div style="font-size:.78em;color:#64748b;line-height:1.1">(≤${L.target!=null?f1(L.target)+'/':''}${f1(L.be)})</div>`:'';
+    h+=`<td class="num" style="${drrBg(v,L)}"${L.ok?` title="ДРР дня и лимиты: ≤ плановый${L.target!=null?' '+f1(L.target)+'%':' — нет плана'} / безубыточный ${f1(L.be)}% — ${L.fact?`по факту заказов ${ddmm(L.from)}–${ddmm(L.to)}`:`последние известные: заказы ${ddmm(L.from)}–${ddmm(L.to)}, медиана 4 недель`} (маржинальность до рекламы ${f1(L.pre)}%, выкуп ${f1(L.buy*100)}%)"`:''}>${v==null?'—':(isFinite(v)?f1(v):'∞')}${lt}</td>`; });
   h+='</tr>';
-  h+=`<tr><td class="pulsemetric" title="${T('Экономика самого товара при этой цене — сколько остаётся с продаж до рекламы.\n\nЗа 7 дней по эту дату, по дате заказа: все начисления Ozon по заказам этих дней (продажа, комиссия, логистика, возвраты) − себестоимость − налог 3%, делённое на сумму выкупов по ценам (GMV).\n\nМеняется от цены, тарифов Ozon и себестоимости, не от рекламы. Это потолок: больше этого реклама забрать не может.')}">Маржинальность до рекламы (7 дн), %</td>`;
+  h+=`<tr><td class="pulsemetric" title="${T('Экономика самого товара при этой цене — сколько остаётся с продаж до рекламы.\n\nЗа 7 дней по эту дату, по дате заказа: все начисления Ozon по заказам этих дней (продажа, комиссия, логистика, возвраты) − себестоимость − налог 3%, делённое на сумму выкупов по ценам (GMV).\n\nМеняется от цены, тарифов Ozon и себестоимости, не от рекламы. Это потолок: больше этого реклама забрать не может.\n\nЦвет — к плану маржинальности: зелёный — не ниже плана (есть место для рекламы), жёлтый — план не выйдет даже без рекламы, красный — убыток до рекламы.')}">Маржинальность до рекламы (7 дн), %</td>`;
   roll.forEach(r=>{ const v=r?r.pre:null; h+=`<td class="num" style="${marginBg(v)}">${v==null?'—':f1(v)}</td>`; });
   h+='</tr>';
-  h+=`<tr><td class="pulsemetric" title="${T('Итог: что дают цена и реклама вместе — маржинальность до рекламы минус реклама.\n\nЗа 7 дней по эту дату, по дате заказа; реклама — расходы этих 7 дней.\n\nСемь дней вместо одного — потому что за день заказов мало и цифра прыгает. Последние 7 дней (*) — неокончательно: выкупы ещё приходят, цифра обычно занижена.')}">Маржинальность (7 дн), %</td>`;
+  h+=`<tr><td class="pulsemetric" title="${T('Итог: что дают цена и реклама вместе — маржинальность до рекламы минус реклама.\n\nЗа 7 дней по эту дату, по дате заказа; реклама — расходы этих 7 дней.\n\nСемь дней вместо одного — потому что за день заказов мало и цифра прыгает. Последние 7 дней (*) — неокончательно: выкупы ещё приходят, цифра обычно занижена.\n\nЦвет — к плану маржинальности: зелёный — план выполняется, жёлтый — в плюсе, но ниже плана, красный — убыток.')}">Маржинальность (7 дн), %</td>`;
   roll.forEach(r=>{ const v=r?r.net:null; h+=`<td class="num" style="${marginBg(v)}">${v==null?'—':f1(v)}</td>`; });
   h+='</tr>';
   h+=`<tr><td class="pulsemetric" title="${T('Остаток на складах Ozon на конец дня, шт (сумма по всем складам).')}">Остатки, шт</td>`;
   stockVals.forEach(v=>{ h+=`<td class="num" style="${stockBg(v)}">${v==null?'—':fmt(v)}</td>`; });
   h+='</tr>';
-  h+='</tbody></table><div class="psub" style="margin-top:6px">* — предварительный день (последние 7 дней): выкупы и возвраты по заказам ещё приходят, маржинальность за 7 дней с этими днями уточнится сама. ДРР рядом с названием — лимиты товара: плановый / безубыточный (подробно — в подсказке).</div></div>';
+  h+='</tbody></table><div class="psub" style="margin-top:6px">* — предварительный день (последние 7 дней): выкупы и возвраты по заказам ещё приходят, маржинальность за 7 дней с этими днями уточнится сама. ДРР рядом с названием — последние известные лимиты товара: плановый / безубыточный; в ячейке — лимиты дня (старше 8 дней — по факту 7 дней по этот день).</div></div>';
   return h;
 }
 function arcPath(cx,cy,rO,rI,a0,a1){
