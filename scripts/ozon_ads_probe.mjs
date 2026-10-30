@@ -57,6 +57,9 @@ const ex=await perf(`/api/client/statistics/expense?dateFrom=${D}&dateTo=${D}`);
 const spent=new Set();String(ex.text||'').split('\n').slice(1).forEach(l=>{const c=l.split(';');if(c.length>3&&Number(String(c[3]).replace(',','.'))>0)spent.add(String(c[0]).trim());});
 const ids=camps.map(c=>String(c.id)).filter(id=>spent.has(id));
 console.log(`Кампаний с расходом за день: ${ids.length} из ${camps.length}`);
+{const tp=new Map(camps.map(c=>[String(c.id),c.advObjectType||'?']));const sumT={};let tot=0;
+ String(ex.text||'').split('\n').slice(1).forEach(l=>{const c=l.split(';');if(c.length<4)return;const v=Number(String(c[3]).replace(',','.'))||0;tot+=v;const t=tp.get(String(c[0]).trim())||'нет в списке кампаний';sumT[t]=(sumT[t]||0)+v;});
+ console.log('Расход за день по типам кампаний (доля):',Object.entries(sumT).map(([k,v])=>k+' '+(tot?(v/tot*100).toFixed(1):0)+'%').join(', '));}
 const apiSku={};let reports=0,fails=0,heads=new Set(),typesSeen={};
 for(let i=0;i<ids.length;i+=10){
   const part=ids.slice(i,i+10);
@@ -87,5 +90,7 @@ console.log('Заголовки отчётов:');[...heads].slice(0,3).forEach(
 let same=0,diff=0,onlyA=0,onlyB=0,sa=0;
 new Set([...Object.keys(apiSku),...Object.keys(dbSku)]).forEach(k=>{const a=apiSku[k],b=dbSku[k];sa+=a||0;
   if(a==null)onlyB++;else if(b==null)onlyA++;else if(Math.abs(a-b)>0.05)diff++;else same++;});
+const tails=[];new Set([...Object.keys(apiSku),...Object.keys(dbSku)]).forEach(k=>{const a=apiSku[k],b=dbSku[k];if(a==null||b==null||Math.abs(a-b)>0.05)tails.push(`…${k.slice(-3)} ${a==null?'нет в API':b==null?'нет в CSV':'API '+pct(a,b)}`);});
+if(tails.length)console.log('Несошедшиеся SKU (последние 3 цифры):',tails.join('; '));
 console.log(`Сверка по SKU за ${D}: итог API ${pct(sa,dbSum)} к CSV; SKU совпало ${same}, другая сумма ${diff}, только в API ${onlyA}, только в CSV ${onlyB}`);
 console.log('Готово. В базу ничего не записано.');
