@@ -2021,7 +2021,7 @@ function setSection(id,open){
 async function loadPulse(pid){
   const offer=(BYID[pid]||{}).offer_id;
   const box=document.getElementById('pulsetbl_'+pid);
-  try{ if(box)box.innerHTML=await pulseHtml(pid,offer); }
+  try{ if(box){ box.innerHTML=await pulseHtml(pid,offer); pulseTrend(pid); } }
   catch(e){
     if(box)box.innerHTML=`<div class="psub" style="color:#E33D78">Ошибка загрузки: ${esc(e.message)}. Сверните и раскройте блок, чтобы повторить.</div>`;
     const el=document.getElementById('pulse_'+pid); if(el)delete el.dataset.loaded;
@@ -2195,6 +2195,29 @@ function unitCalc(pid){
     g+='</tr>'; });
   grid.innerHTML=g+'</tbody></table>';
 }
+const PULSE_TREND={};
+// линия тренда «Руки на пульсе»: точки — под центрами колонок дней (по заголовкам), шкала — по значениям, плану и 5%
+function pulseTrend(pid){
+  const T0=PULSE_TREND[pid], box=document.getElementById('pulsetbl_'+pid); if(!T0||!box)return;
+  const host=box.querySelector('.pulsetrend'), tbl=box.querySelector('table'); if(!host||!tbl)return;
+  const td=host.parentElement, ths=[...tbl.rows[0].cells].slice(1), W=td.clientWidth, H=64, pad=10;
+  const xs=ths.map(th=>th.offsetLeft+th.offsetWidth/2-td.offsetLeft);
+  const vals=T0.pts.filter(Boolean).map(p=>p.v); if(!vals.length){ host.innerHTML='<div class="psub" style="padding:6px">нет данных</div>'; return; }
+  const refs=[NET_FLOOR].concat(T0.plan!=null?[T0.plan]:[]);
+  let lo=Math.min(...vals,...refs), hi=Math.max(...vals,...refs); if(hi-lo<1){hi+=1;lo-=1;}
+  const y=v=>pad+(hi-v)/(hi-lo)*(H-2*pad);
+  const zc=v=>v<NET_FLOOR?'#E33D78':(T0.plan!=null&&v<T0.plan?'#eab308':'#16a34a');
+  let g=`<svg width="${W}" height="${H}" style="display:block;overflow:visible">`;
+  const hl=(v,c,dash,lbl)=>`<line x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="${c}" stroke-width="1" stroke-dasharray="${dash}" opacity=".7"/><text x="4" y="${y(v)-2}" font-size="9" fill="${c}">${lbl}</text>`;
+  g+=hl(NET_FLOOR,'#E33D78','2 3',`${NET_FLOOR}%`); if(T0.plan!=null)g+=hl(T0.plan,'#16a34a','5 3',`план ${f1(T0.plan)}%`);
+  // отрезки между соседними точками: сплошной — факт, пунктир — если хотя бы одна точка — оценка
+  for(let i=1;i<T0.pts.length;i++){ const a=T0.pts[i-1], b=T0.pts[i]; if(!a||!b)continue;
+    g+=`<line x1="${xs[i-1]}" y1="${y(a.v)}" x2="${xs[i]}" y2="${y(b.v)}" stroke="#544273" stroke-width="2"${a.est||b.est?' stroke-dasharray="4 3"':''}/>`; }
+  T0.pts.forEach((p,i)=>{ if(!p)return; g+=`<circle cx="${xs[i]}" cy="${y(p.v)}" r="3.2" fill="${p.est?'#fff':zc(p.v)}" stroke="${zc(p.v)}" stroke-width="1.6"><title>${ddmm(p.iso)}: за 4 дня ${p.est?'≈':''}${f1(p.v)}%${p.est?' (оценка по модели)':''}</title></circle>`; });
+  const li=T0.pts.map((p,i)=>p?i:-1).filter(i=>i>=0).pop();
+  if(li!=null){ const p=T0.pts[li]; g+=`<text x="${xs[li]+6}" y="${y(p.v)+3}" font-size="10" font-weight="700" fill="${zc(p.v)}">${p.est?'≈':''}${f1(p.v)}</text>`; }
+  host.innerHTML=g+'</svg>';
+}
 async function pulseHtml(pid,offer){
   if(!WEEKISO.length)return '<div class="psub">нет недель</div>';
   // период — недели месяца, дополненные до целого месяца (если 1-е или последнее число вне ISO-недель)
@@ -2338,17 +2361,20 @@ async function pulseHtml(pid,offer){
     const lt=X.ok?`<div style="font-size:.78em;color:#64748b;line-height:1.1">(${X.target!=null?f1(X.target)+'/':''}${f1(X.be)})</div>`:'';
     h+=`<td class="num" style="${drrBg(v,X)}"${X.ok?` title="ДРР дня и лимиты при цене ${fmt(X.p)} ₽${days[i]>=todayISO||priceVals[i]==null?' (текущая)':''}: плановый ${X.target!=null?f1(X.target)+'%':'— нет плана'} / безубыточный ${f1(X.be)}% (маржинальность до рекламы при этой цене ${f1(X.pre)}%)"`:''}>${v==null?'—':(isFinite(v)?f1(v):'∞')}${lt}</td>`; });
   h+='</tr>';
-  h+=`<tr><td class="pulsemetric" title="${T('Итог: что дают цена и реклама вместе — маржинальность до рекламы минус реклама, по дате заказа.\n\nОсновное значение — за 4 дня по эту дату (за день заказов мало, и цифра прыгает); в скобках — за сам день (как лимиты под ДРР).\n\nПоследние 7 дней (*, «≈», курсив) — оценка по модели при фактических цене и ДРР этих дней: факт там ещё неполный (выкупы приходят) и занижен; неполный факт — в подсказке ячейки.\n\nЦвет — по основному значению, к плану маржинальности: зелёный — план выполняется, жёлтый — от 5% до плана, красный — ниже 5%: убыток по чистой прибыли.')}">Маржинальность (4 дн / день), %</td>`;
-  roll.forEach((r,i)=>{ const v=r?r.net:null, dm=dayMar[i];
-    const sub=dm?`<div style="font-size:.78em;color:#64748b;line-height:1.1">(${dm.est?'≈':''}${f1(dm.net)})</div>`:'';
-    const tip=x=>x&&x.est?`оценка по модели: цена ${fmt(x.P)} ₽, ДРР ${f1(x.D)}%; неполный факт ${x.fact==null?'—':f1(x.fact)+'%'} (выкупы ещё приходят)`:'факт';
-    const title=r?`4 дня: ${f1(v)}% — ${tip(r)}${dm?`\nДень: ${f1(dm.net)}% — ${tip(dm)}`:''}`:'';
-    h+=`<td class="num" style="${marginBg(v)}${r&&r.est?'font-style:italic':''}"${title?` title="${esc(title)}"`:''}>${v==null?'—':(r.est?'≈':'')+f1(v)}${sub}</td>`; });
+  // маржинальность — за день (решение владельца 30.10.2026: колонка = один день, цвет согласуется с ДРР дня); окно 4 дня — строкой «Тренд»
+  h+=`<tr><td class="pulsemetric" title="${T('Итог дня: что дали цена и реклама этого дня — маржинальность до рекламы минус реклама, по дате заказа (все начисления по заказам дня).\n\nПоследние 7 дней (*, «≈», курсив) — оценка по модели при фактических цене и ДРР дня: факт там ещё неполный (выкупы приходят) и занижен; неполный факт — в подсказке ячейки.\n\nЦвет — к плану маржинальности: зелёный — план выполняется, жёлтый — от 5% до плана, красный — ниже 5%: убыток по чистой прибыли.')}">Маржинальность, %</td>`;
+  const tipM=x=>x&&x.est?`оценка по модели: цена ${fmt(x.P)} ₽, ДРР ${f1(x.D)}%; неполный факт ${x.fact==null?'—':f1(x.fact)+'%'} (выкупы ещё приходят)`:'факт';
+  dayMar.forEach((dm,i)=>{ const v=dm?dm.net:null, r=roll[i];
+    const title=dm?`День: ${f1(v)}% — ${tipM(dm)}${r?`\nЗа 4 дня по эту дату: ${f1(r.net)}% — ${tipM(r)}`:''}`:'';
+    h+=`<td class="num" style="${marginBg(v)}${dm&&dm.est?'font-style:italic':''}"${title?` title="${esc(title)}"`:''}>${v==null?'—':(dm.est?'≈':'')+f1(v)}</td>`; });
   h+='</tr>';
+  // тренд: маржинальность за 4 дня — линией под днями (рисует pulseTrend после вставки таблицы: нужны позиции колонок)
+  h+=`<tr><td class="pulsemetric" title="${T('Тренд маржинальности: за 4 дня по каждую дату — сглаживает дневные скачки и показывает направление.\n\nСплошная линия — факт, пунктир — оценка по модели (свежие дни). Зелёный пунктир — план маржинальности, красный — 5% (ниже — убыток по чистой прибыли). Наведите на точку — значение.')}">Тренд (4 дн), %</td><td colspan="${days.length}" style="padding:0"><div class="pulsetrend" style="position:relative;height:64px"></div></td></tr>`;
+  PULSE_TREND[pid]={pts:days.map((iso,i)=>roll[i]?{iso,v:roll[i].net,est:!!roll[i].est}:null),plan:planPct};
   h+=`<tr><td class="pulsemetric" title="${T('Остаток на складах Ozon на конец дня, шт (сумма по всем складам).')}">Остатки, шт</td>`;
   stockVals.forEach(v=>{ h+=`<td class="num" style="${stockBg(v)}">${v==null?'—':fmt(v)}</td>`; });
   h+='</tr>';
-  h+='</tbody></table><div class="psub" style="margin-top:6px">* — свежий день (последние 7 дней): выкупы и возвраты по заказам ещё приходят, поэтому маржинальность (за 4 дня и за день) — оценка по модели («≈», курсив); через 8 дней её заменит факт. ДРР: в ячейке под значением — лимиты при цене этого дня (плановый/безубыточный; одна цена — один лимит).</div></div>';
+  h+='</tbody></table><div class="psub" style="margin-top:6px">* — свежий день (последние 7 дней): выкупы и возвраты по заказам ещё приходят, поэтому маржинальность дня и тренд — оценка по модели («≈», курсив); через 8 дней её заменит факт. ДРР: в ячейке под значением — лимиты при цене этого дня (плановый/безубыточный; одна цена — один лимит).</div></div>';
   return h;
 }
 function arcPath(cx,cy,rO,rI,a0,a1){
