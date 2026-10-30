@@ -1995,9 +1995,15 @@ function protoBlock(pid,offer){
     <div class="psection"><div class="psectitle">📝 Заметки менеджера</div>${renderNotes(pid)}</div>`;
 }
 function toggleSection(id){
+  // «Юнит-экономика» и «Рука на пульсе» раскрываются и сворачиваются вместе (решение владельца 30.10.2026)
+  const pair=id.match(/^(unit|pulse)_(\d+)$/);
+  if(pair){ const el=document.getElementById(id); if(!el)return; const open=el.classList.contains('hide');
+    ['unit_','pulse_'].forEach(p=>setSection(p+pair[2],open)); return; }
+  setSection(id,document.getElementById(id)&&document.getElementById(id).classList.contains('hide'));
+}
+function setSection(id,open){
   const el=document.getElementById(id); if(!el)return;
-  el.classList.toggle('hide');
-  const open=!el.classList.contains('hide');
+  el.classList.toggle('hide',!open);
   const c=document.getElementById('caret_'+id); if(c)c.textContent=open?'▾':'▸';
   if(open&&id.indexOf('chg_')===0&&!el.dataset.loaded){
     el.dataset.loaded='1';
@@ -2243,18 +2249,20 @@ async function pulseHtml(pid,offer){
   const stockVals=days.map(iso=>{ const v=rawStock.get(iso); return v==null?null:v; });
   const priceVals=days.map(iso=>{ const q=byDaySales.get(iso)||0; return q>0?(byDayRev.get(iso)||0)/q:null; });
   // маржинальность за 7 дней по дату (по дате заказа): до рекламы и после; реклама — по дате расхода
-  // свежие 7 дней (окно не «созрело»: выкупы ещё приходят, факт занижен) — оценка по модели (решение владельца 30.10.2026):
-  // маржинальность при фактических цене и ДРР тех же 7 дней (unitPct); неполный факт — в подсказке
+  // маржинальность по дате заказа за период f…t (решение владельца 30.10.2026): основное значение — окно 4 дня, в скобках — день.
+  // Период «созрел» (t не позже 8 дней назад: выкупы пришли) — факт; свежий — оценка по модели при фактических цене и ДРР периода
+  // (unitPct; факт там занижен — выкупы ещё приходят, неполный факт — в подсказке)
   const matureTo=addDaysISO(todayISO,-8);
-  const roll=days.map(iso=>{
-    if(iso>=todayISO)return null;
-    const f=addDaysISO(iso,-6), a=agg(f,iso), fact=a.gmv>0?{pre:a.pre/a.gmv*100,net:(a.pre-a.ads)/a.gmv*100}:null;
-    if(iso<=matureTo)return fact;
-    let q=0; for(let d=f;d<=iso;d=addDaysISO(d,1))q+=byDaySales.get(d)||0;
-    if(!cal.ok||!(q>0&&a.rev>0))return fact;
+  const marOf=(f,t)=>{
+    if(t>=todayISO)return null;
+    const a=agg(f,t), fact=a.gmv>0?(a.pre-a.ads)/a.gmv*100:null;
+    if(t<=matureTo)return fact==null?null:{net:fact};
+    let q=0; for(let d=f;d<=t;d=addDaysISO(d,1))q+=byDaySales.get(d)||0;
+    if(!cal.ok||!(q>0&&a.rev>0))return fact==null?null:{net:fact};
     const P=a.rev/q, D=a.ads/a.rev*100;
-    return {pre:unitPct(cal,P,0),net:unitPct(cal,P,D),est:true,P,D,fact:fact?fact.net:null};
-  });
+    return {net:unitPct(cal,P,D),est:true,P,D,fact};
+  };
+  const roll=days.map(iso=>marOf(addDaysISO(iso,-3),iso)), dayMar=days.map(iso=>marOf(iso,iso));
   // ДРР — как на главной: реклама дня ÷ выручка PNL заказов того же дня (product_sales.revenue)
   // лимит дня — от цены этого дня (решение владельца 30.10.2026: одна цена — один лимит); нет заказов в день — последняя известная
   // цена; сегодня и будущие — текущая (средняя за 7 дней)
@@ -2330,15 +2338,17 @@ async function pulseHtml(pid,offer){
     const lt=X.ok?`<div style="font-size:.78em;color:#64748b;line-height:1.1">(${X.target!=null?f1(X.target)+'/':''}${f1(X.be)})</div>`:'';
     h+=`<td class="num" style="${drrBg(v,X)}"${X.ok?` title="ДРР дня и лимиты при цене ${fmt(X.p)} ₽${days[i]>=todayISO||priceVals[i]==null?' (текущая)':''}: плановый ${X.target!=null?f1(X.target)+'%':'— нет плана'} / безубыточный ${f1(X.be)}% (маржинальность до рекламы при этой цене ${f1(X.pre)}%)"`:''}>${v==null?'—':(isFinite(v)?f1(v):'∞')}${lt}</td>`; });
   h+='</tr>';
-  h+=`<tr><td class="pulsemetric" title="${T('Итог: что дают цена и реклама вместе — маржинальность до рекламы минус реклама.\n\nЗа 7 дней по эту дату, по дате заказа; реклама — расходы этих 7 дней.\n\nСемь дней вместо одного — потому что за день заказов мало и цифра прыгает. Последние 7 дней (*, «≈», курсив) — оценка по модели при фактических цене и ДРР этих дней: факт там ещё неполный (выкупы приходят) и занижен; неполный факт — в подсказке ячейки.\n\nЦвет — к плану маржинальности: зелёный — план выполняется, жёлтый — от 5% до плана, красный — ниже 5%: убыток по чистой прибыли.')}">Маржинальность (7 дн), %</td>`;
-  roll.forEach(r=>{ const v=r?r.net:null;
-    if(r&&r.est){ h+=`<td class="num" style="${marginBg(v)}font-style:italic" title="Оценка по модели: цена ${fmt(r.P)} ₽ и ДРР ${f1(r.D)}% за эти 7 дней (как в «Юнит-экономике»). Неполный факт: ${r.fact==null?'—':f1(r.fact)+'%'} — выкупы по этим заказам ещё приходят, факт пока занижен">≈${f1(v)}</td>`; return; }
-    h+=`<td class="num" style="${marginBg(v)}">${v==null?'—':f1(v)}</td>`; });
+  h+=`<tr><td class="pulsemetric" title="${T('Итог: что дают цена и реклама вместе — маржинальность до рекламы минус реклама, по дате заказа.\n\nОсновное значение — за 4 дня по эту дату (за день заказов мало, и цифра прыгает); в скобках — за сам день (как лимиты под ДРР).\n\nПоследние 7 дней (*, «≈», курсив) — оценка по модели при фактических цене и ДРР этих дней: факт там ещё неполный (выкупы приходят) и занижен; неполный факт — в подсказке ячейки.\n\nЦвет — по основному значению, к плану маржинальности: зелёный — план выполняется, жёлтый — от 5% до плана, красный — ниже 5%: убыток по чистой прибыли.')}">Маржинальность (4 дн / день), %</td>`;
+  roll.forEach((r,i)=>{ const v=r?r.net:null, dm=dayMar[i];
+    const sub=dm?`<div style="font-size:.78em;color:#64748b;line-height:1.1">(${dm.est?'≈':''}${f1(dm.net)})</div>`:'';
+    const tip=x=>x&&x.est?`оценка по модели: цена ${fmt(x.P)} ₽, ДРР ${f1(x.D)}%; неполный факт ${x.fact==null?'—':f1(x.fact)+'%'} (выкупы ещё приходят)`:'факт';
+    const title=r?`4 дня: ${f1(v)}% — ${tip(r)}${dm?`\nДень: ${f1(dm.net)}% — ${tip(dm)}`:''}`:'';
+    h+=`<td class="num" style="${marginBg(v)}${r&&r.est?'font-style:italic':''}"${title?` title="${esc(title)}"`:''}>${v==null?'—':(r.est?'≈':'')+f1(v)}${sub}</td>`; });
   h+='</tr>';
   h+=`<tr><td class="pulsemetric" title="${T('Остаток на складах Ozon на конец дня, шт (сумма по всем складам).')}">Остатки, шт</td>`;
   stockVals.forEach(v=>{ h+=`<td class="num" style="${stockBg(v)}">${v==null?'—':fmt(v)}</td>`; });
   h+='</tr>';
-  h+='</tbody></table><div class="psub" style="margin-top:6px">* — свежий день (последние 7 дней): выкупы и возвраты по заказам ещё приходят, поэтому маржинальность за 7 дней — оценка по модели («≈», курсив); через 8 дней её заменит факт. ДРР: в ячейке под значением — лимиты при цене этого дня (плановый/безубыточный; одна цена — один лимит).</div></div>';
+  h+='</tbody></table><div class="psub" style="margin-top:6px">* — свежий день (последние 7 дней): выкупы и возвраты по заказам ещё приходят, поэтому маржинальность (за 4 дня и за день) — оценка по модели («≈», курсив); через 8 дней её заменит факт. ДРР: в ячейке под значением — лимиты при цене этого дня (плановый/безубыточный; одна цена — один лимит).</div></div>';
   return h;
 }
 function arcPath(cx,cy,rO,rI,a0,a1){
