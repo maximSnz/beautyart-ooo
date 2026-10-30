@@ -1046,7 +1046,7 @@ async function importAds(file){
     await syncPnl(provW);
     await loadWeeks();
     await loadProto();
-    document.querySelectorAll('[id^="chg_"],[id^="pulse_"]').forEach(el=>{delete el.dataset.loaded;});
+    document.querySelectorAll('[id^="chg_"],[id^="pulse_"],[id^="unit_"]').forEach(el=>{delete el.dataset.loaded;});
     render();
     setP(100,`✔ Готово! SKU с расходами: ${body.length}.${unknown.length?` Неизвестных SKU: ${unknown.length} (${unknown.slice(0,5).join(', ')}${unknown.length>5?'…':''}).`:''} Маржа пересчитана с рекламой.`);
     setTimeout(()=>document.getElementById('progWrap').classList.add('hide'),6000);
@@ -1986,6 +1986,7 @@ function protoBlock(pid,offer){
     <div class="psection"><div class="psectitle">📈 Рекомендации на следующую неделю</div>${renderRecs(pid)}</div>
     <div class="psection"><div class="psectitle"><a href="https://maximsnz.github.io/beautyart/weekly.html" target="_blank" class="stocklink">📦 Рекомендации по управлению остатками</a></div>${renderStock(pid)}</div>
 <div class="psection"><div class="psectitle sec-head" onclick="toggleSection('chg_${pid}')"><span class="sec-caret" id="caret_chg_${pid}">▸</span>💰 Начисления за период (декомпозиция)</div><div class="hide" id="chg_${pid}"><div id="chgtbl_${pid}" class="psub">загрузка…</div></div></div>
+<div class="psection"><div class="psectitle sec-head" onclick="toggleSection('unit_${pid}')"><span class="sec-caret" id="caret_unit_${pid}">▸</span>🧮 Юнит-экономика</div><div class="hide" id="unit_${pid}"><div id="unitbox_${pid}" class="psub">загрузка…</div></div></div>
 <div class="psection"><div class="psectitle sec-head" onclick="toggleSection('pulse_${pid}')"><span class="sec-caret" id="caret_pulse_${pid}">▸</span>🩺 Рука на пульсе</div><div class="hide" id="pulse_${pid}"><div id="pulsetbl_${pid}" class="psub">загрузка…</div></div></div>
     <div class="psection"><div class="psectitle">🎯 SMART-протокол</div>${(PROTO[pid]||[]).filter(it=>!it.parent_id).map(renderItem).join('')||'<div class="psub">пока нет пунктов</div>'}${renderSmartForm(pid)}</div>
     <div class="psection"><div class="psectitle">📝 Заметки менеджера</div>${renderNotes(pid)}</div>`;
@@ -1998,6 +1999,10 @@ function toggleSection(id){
   if(open&&id.indexOf('chg_')===0&&!el.dataset.loaded){
     el.dataset.loaded='1';
     loadChargesFor(Number(id.slice(4)));
+  }
+  if(open&&id.indexOf('unit_')===0&&!el.dataset.loaded){
+    el.dataset.loaded='1';
+    loadUnit(Number(id.slice(5)));
   }
   if(open&&id.indexOf('pulse_')===0&&!el.dataset.loaded){
     el.dataset.loaded='1';
@@ -2043,6 +2048,120 @@ async function pulseCharges(o,from,to){
 // начисления, пропорциональные цене (выручка, баллы, комиссия, эквайринг и т. п.); остальные — расходы на штуку (логистика,
 // доставка, возвраты, упаковка, хранение) — для лимитов ДРР от цены
 const PULSE_PROP=new Set(['Выручка','Баллы за скидки','Возврат выручки','Вознаграждение за продажу','Возврат вознаграждения','Эквайринг','Программы партнёров','Продвижение бренда']);
+// Модель маржинальности от цены — общая для «Юнит-экономики» и лимитов ДРР «Руки на пульсе» (решения владельца 30.10.2026).
+// Начисления по дате заказа: пропорциональные цене (PULSE_PROP) и расходы на штуку (остальные).
+function pulseByDay(chargeRows){
+  const m=new Map();
+  chargeRows.forEach(c=>{
+    const d=c.event_date; if(!d)return;
+    let g=m.get(d); if(!g){g={gmv:0,sales:0,pnl:0,revP:0,prop:0,unit:0};m.set(d,g);}
+    const amt=Number(c.amount||0), qty=Number(c.qty||0), gv=Number(c.gmv||0);
+    g.pnl+=amt; if(PULSE_PROP.has(c.charge_type))g.prop+=amt; else g.unit+=amt;
+    if(c.charge_type==='Выручка'){ g.gmv+=gv; g.sales+=qty; g.revP+=amt; }
+    else if(c.charge_type==='Возврат выручки'){ g.gmv+=gv; g.sales-=qty; g.revP+=amt; }
+  });
+  return m;
+}
+// Коэффициенты — медиана 4 недель заказов, закончившихся 8 дней назад (выкупы пришли): r = пропорциональные ÷ GMV,
+// t = налог × выручка P ÷ GMV, u = (себестоимость на дату × выкупленные шт − расходы на штуку) ÷ заказанные шт, b = GMV ÷ выручка заказов
+function pulseCal(pid,byDayCh,byDaySales,byDayRev,todayISO){
+  const med=a=>{ const b=[...a].sort((x,y)=>x-y), m=b.length>>1; return b.length%2?b[m]:(b[m-1]+b[m])/2; };
+  const to=addDaysISO(todayISO,-8), fr=addDaysISO(to,-27), W=[]; let oqAll=0,orAll=0;
+  for(let i=0;i<4;i++){ const f=addDaysISO(fr,i*7); let gmv=0,prop=0,unit=0,revP=0,cogs=0,oq=0,orev=0;
+    for(let k=0;k<7;k++){ const d=addDaysISO(f,k), g=byDayCh.get(d);
+      if(g){ gmv+=g.gmv; prop+=g.prop; unit+=g.unit; revP+=g.revP; cogs+=costAt(pid,d).cost*g.sales; }
+      oq+=byDaySales.get(d)||0; orev+=byDayRev.get(d)||0; }
+    oqAll+=oq; orAll+=orev;
+    if(gmv>0&&oq>0&&orev>0)W.push({b:gmv/orev,r:prop/gmv,t:TAX_RATE*revP/gmv,u:(cogs-unit)/oq}); }
+  const C={ok:W.length>0,from:fr,to,p0:oqAll>0?orAll/oqAll:null};
+  if(C.ok){ C.b=med(W.map(w=>w.b)); C.r=med(W.map(w=>w.r)); C.t=med(W.map(w=>w.t)); C.u=med(W.map(w=>w.u)); }
+  return C;
+}
+// маржинальность, % от суммы выкупов (как CF) при цене заказа P и ДРР D (% выручки заказов): r − t − u ÷ (P × b) − D ÷ b
+const unitPct=(C,P,D)=>(C.r-C.t-C.u/(P*C.b)-(D||0)/100/C.b)*100;
+// цена, при которой маржинальность = m при ДРР D; null — недостижимо при таком ДРР
+const unitPriceFor=(C,m,D)=>{ const den=C.b*(C.r-C.t-(D||0)/100/C.b-m/100); return den>0?C.u/den:null; };
+const UNIT={};
+async function loadUnit(pid){
+  const offer=(BYID[pid]||{}).offer_id;
+  const box=document.getElementById('unitbox_'+pid);
+  try{
+    const todayISO=localISO(new Date()), from=addDaysISO(todayISO,-35), y=addDaysISO(todayISO,-1), w7=addDaysISO(todayISO,-7);
+    const o=encodeURIComponent(offer);
+    const [salesRows,chargeRows,adsMap]=await Promise.all([
+      pulseFetch(`product_sales?offer_id=eq.${o}&sale_date=gte.${from}&sale_date=lte.${y}&select=sale_date,qty,revenue&order=sale_date.asc,warehouse_name.asc`),
+      pulseCharges(o,from,addDaysISO(todayISO,-8)),
+      loadAdSpend(w7,y)
+    ]);
+    const byDaySales=new Map(), byDayRev=new Map();
+    salesRows.forEach(r=>{ byDaySales.set(r.sale_date,(byDaySales.get(r.sale_date)||0)+Number(r.qty||0)); byDayRev.set(r.sale_date,(byDayRev.get(r.sale_date)||0)+Number(r.revenue||0)); });
+    const C=pulseCal(pid,pulseByDay(chargeRows),byDaySales,byDayRev,todayISO);
+    let q7=0,r7=0,a7=0; const ads=adsMap.get(pid)||new Map();
+    for(let d=w7;d<=y;d=addDaysISO(d,1)){ q7+=byDaySales.get(d)||0; r7+=byDayRev.get(d)||0; a7+=ads.get(d)||0; }
+    const pl=PLAN[pid]&&PLAN[pid].plan_qty>0?PLAN[pid]:null;
+    const U=UNIT[pid]={C,p7:q7>0?r7/q7:C.p0,d7:r7>0?a7/r7*100:0,q7,planPct:pl&&pl.margin_pct!=null?Number(pl.margin_pct):null,planPrice:pl?Number(pl.price):null,planQty:pl?Number(pl.plan_qty):null};
+    if(!C.ok){ box.innerHTML='<div class="psub">Модель не рассчитана: мало заказов и выкупов за 4 недели до последних 7 дней.</div>'; return; }
+    const P0=Math.round(U.p7), D0=Math.round(U.d7*10)/10;
+    const inp=(id,v,st)=>`<input type="number" id="${id}_${pid}" value="${v}" step="${st}" min="0" oninput="unitCalc(${pid})" style="width:90px">`;
+    box.innerHTML=`<div class="psub" style="margin:0 0 8px">Прогноз маржинальности товара при цене и ДРР. Остальное — по статистике заказов ${ddmm(C.from)}–${ddmm(C.to)} (медиана 4 недель, выкупы по ним уже пришли); обновляется каждый день.</div>`
+      +`<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:.86em">`
+      +`<label>Цена заказа, ₽ ${inp('unitP',P0,1)}</label><label>ДРР, % ${inp('unitD',D0,0.5)}</label>`
+      +`<button onclick="unitSet(${pid},${P0},${D0})">Как сейчас (${fmt(P0)} ₽, ${f1(D0)}%)</button>`
+      +(U.planPrice!=null?`<button onclick="unitSet(${pid},${Math.round(U.planPrice)},null)">Цена плана (${fmt(U.planPrice)} ₽)</button>`:'')
+      +`</div><div id="unitres_${pid}"></div><div id="unitgrid_${pid}" style="margin-top:8px"></div>`
+      +`<div class="psub" style="margin-top:6px;color:#94a3b8">Модель не знает, как цена и реклама меняют число заказов, — это проверяйте SMART-гипотезой. Маржинальность — от суммы выкупов, как в факте (CF).</div>`;
+    unitCalc(pid);
+  }catch(e){
+    if(box)box.innerHTML=`<div class="psub" style="color:#E33D78">Ошибка загрузки: ${esc(e.message)}. Сверните и раскройте блок, чтобы повторить.</div>`;
+    const el=document.getElementById('unit_'+pid); if(el)delete el.dataset.loaded;
+  }
+}
+function unitSet(pid,P,D){
+  const ip=document.getElementById('unitP_'+pid), id=document.getElementById('unitD_'+pid);
+  if(P!=null&&ip)ip.value=P; if(D!=null&&id)id.value=D; unitCalc(pid);
+}
+function unitCalc(pid){
+  const U=UNIT[pid]; if(!U||!U.C.ok)return; const C=U.C;
+  const P=Number(document.getElementById('unitP_'+pid).value), D=Number(document.getElementById('unitD_'+pid).value)||0;
+  const res=document.getElementById('unitres_'+pid), grid=document.getElementById('unitgrid_'+pid);
+  if(!(P>0)){ res.innerHTML='<div class="psub">Введите цену больше 0.</div>'; grid.innerHTML=''; return; }
+  const m=U.planPct;
+  const bg=v=>v<0?'background:rgba(227,61,120,0.30);':(m!=null&&v<m?'background:rgba(253,224,71,0.45);':'background:rgba(22,163,74,0.30);');
+  const G=P*C.b, cut=G*(1-C.r), tax=G*C.t, ads=P*D/100, mar=G*(C.r-C.t)-C.u-ads, pct=mar/G*100;
+  const row=(n,v,share,tip,b)=>`<tr${b?' style="font-weight:700"':''}><td style="text-align:left" title="${esc(tip||'')}">${n}</td><td class="num">${v<0?'−':''}${fmt2(Math.abs(Math.round(v*100)/100))} ₽</td><td class="num" style="color:#64748b">${share==null?'':f1(share)+'%'}</td></tr>`;
+  let h=`<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start"><table class="pulsetable" style="font-size:.86em"><thead><tr><th style="text-align:left">На 1 заказ</th><th>₽</th><th>% выкупа</th></tr></thead><tbody>`
+    +row('Цена заказа',P,null,'Цена, которую видит покупатель при заказе')
+    +row(`Сумма выкупа (выкупается ${f1(C.b*100)}%)`,G,100,'Сколько в среднем выкупают с одного заказа: часть заказов отменяют или не забирают; сюда же входят баллы Ozon')
+    +row('Удержания Ozon, пропорциональные цене',-cut,-(1-C.r)*100,'Комиссия, эквайринг и другие удержания, которые растут вместе с ценой (за вычетом их возвратов)')
+    +row('Налог',-tax,-C.t*100,'3% от выручки P')
+    +row('Логистика, возвраты, упаковка и себестоимость',-C.u,-C.u/G*100,'Расходы на заказанную штуку — от цены не зависят')
+    +row(`Реклама (ДРР ${f1(D)}% от цены заказа)`,-ads,-ads/G*100,'Реклама на один заказ')
+    +row('Маржа на заказ',mar,pct,'',true)
+    +`</tbody></table><div style="font-size:.86em;line-height:1.6">`
+    +`<div style="padding:4px 10px;border-radius:8px;${bg(pct)}"><b>Маржинальность: ${f1(pct)}%</b>${m!=null?` (план ${f1(m)}%)`:''}</div>`;
+  const pre=unitPct(C,P,0);
+  h+=pre<0?`<div>При цене ${fmt(P)} ₽ товар убыточен даже без рекламы (до рекламы ${f1(pre)}%).</div>`
+    :(m!=null&&pre<m)?`<div>При цене ${fmt(P)} ₽ план маржинальности не выходит даже без рекламы (до рекламы ${f1(pre)}%); в ноль — реклама до <b>${f1(pre*C.b)}%</b>.</div>`
+    :`<div>При цене ${fmt(P)} ₽ реклама до <b>${f1((pre-(m||0))*C.b)}%</b>${m!=null?` — план маржинальности, до <b>${f1(pre*C.b)}%</b> — в ноль`:' — в ноль'}.</div>`;
+  if(m!=null){ const pm=unitPriceFor(C,m,D); h+=pm==null?`<div>При ДРР ${f1(D)}% план маржинальности <b>не выходит ни при какой цене</b> — реклама больше, чем остаётся с продажи.</div>`:`<div>При ДРР ${f1(D)}% план маржинальности выходит при цене от <b>${fmt(Math.ceil(pm))} ₽</b>.</div>`; }
+  const p0=unitPriceFor(C,0,D); h+=p0==null?`<div>При ДРР ${f1(D)}% в ноль <b>не выйти ни при какой цене</b>.</div>`:`<div>При ДРР ${f1(D)}% в ноль — при цене <b>${fmt(Math.ceil(p0))} ₽</b>.</div>`;
+  if(U.planQty){ h+=`<div title="Если заказов будет столько, сколько в плане; модель не знает, как цена и реклама меняют спрос">При плане ${fmt(U.planQty)} шт/мес: маржа ≈ <b>${fmt(U.planQty*mar)} ₽</b> в месяц</div>`; }
+  if(U.q7>0){ h+=`<div title="Если заказы останутся на уровне последних 7 дней">При текущих заказах (${fmt(U.q7/7)} шт/день): ≈ <b>${fmt(U.q7/7*30*mar)} ₽</b> за 30 дней</div>`; }
+  h+=`</div></div>`;
+  res.innerHTML=h;
+  // сетка «цена × ДРР»: шаг цены ~5% (1, 2, 5 × 10ᵏ), щелчок — подставить
+  const st=(x=>{ const k=Math.pow(10,Math.floor(Math.log10(x))); return [1,2,5,10].map(v=>v*k).reduce((a,v)=>Math.abs(v-x)<Math.abs(a-x)?v:a); })(Math.max(1,P*0.05));
+  const pp=U.planPrice!=null?Math.round(U.planPrice):null;
+  const prices=[...new Set([-3,-2,-1,0,1,2,3].map(i=>Math.round(P+i*st)).filter(p=>i0(p)).concat(pp!=null?[pp]:[]))].filter(p=>p>0).sort((a,b)=>a-b);
+  function i0(p){ return pp==null||p===Math.round(P)||Math.abs(p-pp)>=st/2; }  // строка сетки рядом с ценой плана не дублирует её
+  const drrs=[...new Set([0,2,4,6,8,10,15,20,Math.round(D*10)/10])].sort((a,b)=>a-b);
+  let g=`<table class="pulsetable" style="font-size:.82em"><thead><tr><th title="Маржинальность, % при цене (строки) и ДРР (столбцы); щелчок — подставить">Цена \\ ДРР</th>${drrs.map(d=>`<th>${f1(d)}%</th>`).join('')}</tr></thead><tbody>`;
+  prices.forEach(p=>{ g+=`<tr><td class="pulsemetric">${fmt(p)} ₽${U.planPrice!=null&&p===Math.round(U.planPrice)?' (план)':''}</td>`;
+    drrs.forEach(d=>{ const v=unitPct(C,p,d), cur=p===Math.round(P)&&d===Math.round(D*10)/10;
+      g+=`<td class="num" style="${bg(v)}cursor:pointer;${cur?'outline:2px solid #544273;font-weight:700':''}" onclick="unitSet(${pid},${p},${d})">${f1(v)}</td>`; });
+    g+='</tr>'; });
+  grid.innerHTML=g+'</tbody></table>';
+}
 async function pulseHtml(pid,offer){
   if(!WEEKISO.length)return '<div class="psub">нет недель</div>';
   // период — недели месяца, дополненные до целого месяца (если 1-е или последнее число вне ISO-недель)
@@ -2070,15 +2189,7 @@ async function pulseHtml(pid,offer){
   const rawStock=new Map();
   stockRows.forEach(r=>{ rawStock.set(r.report_date,(rawStock.get(r.report_date)||0)+Number(r.stock||0)); });
   // начисления по дате заказа (event_date): все начисления по заказам дня, когда бы Ozon их ни провёл
-  const byDayCh=new Map();
-  chargeRows.forEach(c=>{
-    const d=c.event_date; if(!d)return;
-    let g=byDayCh.get(d); if(!g){g={gmv:0,sales:0,pnl:0,revP:0,prop:0,unit:0};byDayCh.set(d,g);}
-    const amt=Number(c.amount||0), qty=Number(c.qty||0), gv=Number(c.gmv||0);
-    g.pnl+=amt; if(PULSE_PROP.has(c.charge_type))g.prop+=amt; else g.unit+=amt;
-    if(c.charge_type==='Выручка'){ g.gmv+=gv; g.sales+=qty; g.revP+=amt; }
-    else if(c.charge_type==='Возврат выручки'){ g.gmv+=gv; g.sales-=qty; g.revP+=amt; }
-  });
+  const byDayCh=pulseByDay(chargeRows);
   const adsByDay=adsMap.get(pid)||new Map();
   // сумма за период по дате заказа: GMV, маржа до рекламы (pnl − себестоимость на дату − налог), реклама, выручка заказов PNL
   const agg=(f,t)=>{
@@ -2091,26 +2202,13 @@ async function pulseHtml(pid,offer){
     return {gmv,pre,ads,rev};
   };
   // Лимиты ДРР — от цены (решение владельца 30.10.2026; до этого — по окну дней, у одинаковых дней лимиты расходились).
-  // Маржа с продажи зависит от цены: удержания Ozon, пропорциональные цене (доля r выкупов после них), налог (t) и расходы на
-  // заказанную штуку u (логистика, доставка, возвраты, упаковка + себестоимость), выкуп b = GMV ÷ выручка заказов.
-  // До рекламы при цене P = r − t − u ÷ (P × b); безубыточный ДРР = до рекламы × b, плановый = (до рекламы − план) × b.
-  // Коэффициенты — медиана 4 недель заказов, закончившихся 8 дней назад (выкупы пришли): одна аномальная неделя не искажает.
-  const med=a=>{ if(!a.length)return null; const b=[...a].sort((x,y)=>x-y), m=b.length>>1; return b.length%2?b[m]:(b[m-1]+b[m])/2; };
+  // Модель — pulseCal / unitPct (общая с «Юнит-экономикой»): до рекламы при цене P = r − t − u ÷ (P × b);
+  // безубыточный ДРР = до рекламы × b, плановый = (до рекламы − план) × b.
   const planPct=PLAN[pid]&&PLAN[pid].margin_pct!=null&&PLAN[pid].plan_qty>0?Number(PLAN[pid].margin_pct):null;
   const planPrice=PLAN[pid]&&PLAN[pid].plan_qty>0?Number(PLAN[pid].price):null;
-  const cal=(()=>{
-    const to=addDaysISO(todayISO,-8), fr=addDaysISO(to,-27), W=[]; let oqAll=0,orAll=0;
-    for(let i=0;i<4;i++){ const f=addDaysISO(fr,i*7); let gmv=0,prop=0,unit=0,revP=0,cogs=0,oq=0,orev=0;
-      for(let k=0;k<7;k++){ const d=addDaysISO(f,k), g=byDayCh.get(d);
-        if(g){ gmv+=g.gmv; prop+=g.prop; unit+=g.unit; revP+=g.revP; cogs+=costAt(pid,d).cost*g.sales; }
-        oq+=byDaySales.get(d)||0; orev+=byDayRev.get(d)||0; }
-      oqAll+=oq; orAll+=orev;
-      if(gmv>0&&oq>0&&orev>0)W.push({b:gmv/orev,r:prop/gmv,t:TAX_RATE*revP/gmv,u:(cogs-unit)/oq}); }
-    const C={ok:W.length>0,from:fr,to,p0:oqAll>0?orAll/oqAll:null};
-    if(C.ok){ C.b=med(W.map(w=>w.b)); C.r=med(W.map(w=>w.r)); C.t=med(W.map(w=>w.t)); C.u=med(W.map(w=>w.u)); }
-    return C; })();
+  const cal=pulseCal(pid,byDayCh,byDaySales,byDayRev,todayISO);
   const limAtPrice=p=>{ const X={ok:cal.ok&&p!=null&&p>0,p};
-    if(X.ok){ X.pre=(cal.r-cal.t-cal.u/(p*cal.b))*100; X.be=Math.max(0,X.pre*cal.b); X.target=planPct==null?null:Math.max(0,(X.pre-planPct)*cal.b); }
+    if(X.ok){ X.pre=unitPct(cal,p,0); X.be=Math.max(0,X.pre*cal.b); X.target=planPct==null?null:Math.max(0,(X.pre-planPct)*cal.b); }
     return X; };
   const days=[];
   for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){ days.push(localISO(new Date(d))); }
