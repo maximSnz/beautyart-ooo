@@ -453,7 +453,6 @@
           <button onclick="startAdsUpload()">Аналитика продвижения</button>
         </div>
       </span>
-      <button id="btnExcel" onclick="exportPlanExcel()">📥 Excel</button>
       <input type="file" id="chargesInput" accept=".csv" style="display:none" onchange="importCharges(this.files[0])">
       <input type="date" id="adsDate" style="display:none" onchange="onAdsDate(this.value)">
       <button id="btnAdsFile" class="hide" onclick="document.getElementById('adsInput').click()">📄 Файл за <span id="adsDateLabel"></span></button>
@@ -473,8 +472,7 @@
     <div class="tip" id="tip"></div>
   </div>
 </div>
- <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="../beautyart-home/auth.js?v=20261021"></script>
+ <script src="../beautyart-home/auth.js?v=20261021"></script>
 <script>
 function toggleNav(btn){const item=btn.closest('.nav-item');const wasOpen=item.classList.contains('open');document.querySelectorAll('.nav-item.open').forEach(i=>i.classList.remove('open'));if(!wasOpen)item.classList.add('open');}
 document.addEventListener('click',(e)=>{if(!e.target.closest('.nav-item')){document.querySelectorAll('.nav-item.open').forEach(i=>i.classList.remove('open'));}});
@@ -1349,26 +1347,6 @@ async function renderKpiPnl(gid){
   if(elRev) elRev.textContent=rev!=null? fmt(rev):'—';
   if(elQty) elQty.textContent=any? fmt(qty):'—';
 }
-async function exportPlanExcel(){
-  if(typeof XLSX==='undefined'){alert('Библиотека Excel не загрузилась — проверьте интернет и обновите страницу.');return;}
-  const btn=document.getElementById('btnExcel'); btn.disabled=true; btn.textContent='⏃ Формирование…';
-  try{
-    const data=await computeOrderTemps();
-    const tISO=localISO(new Date());
-    const yIsWe=isWeekend(addDaysISO(tISO,-1));
-    const baseLbl=yIsWe?'пред. 2 выходных':'3 будн. дня';
-    const wb=XLSX.utils.book_new();
-    for(const [gid,gname] of [['m1','Илья'],['m2','Ольга']]){
-      const list=(data[gid]||[]).slice().sort((a,b)=>a.devCatch-b.devCatch);
-      const rowsOut=list.map(r=>({'Артикул':r.offer,['Средние заказы ('+baseLbl+')']:Math.round(r.avg),'Заказы вчера':r.yest,'Требуемые заказы':Math.round(r.rcExp),'Отклонение':Math.round(r.devCatch)}));
-      const ws=XLSX.utils.json_to_sheet(rowsOut);
-      ws['!cols']=[{wch:24},{wch:26},{wch:14},{wch:17},{wch:12}];
-      XLSX.utils.book_append_sheet(wb,ws,gname);
-    }
-    XLSX.writeFile(wb,`plan_orders_${tISO}.xlsx`);
-  }catch(e){alert('Ошибка экспорта: '+e.message);}
-  finally{btn.disabled=false;btn.textContent='📥 Excel';}
-}
 function renderCharges(pid,rows,ads){
   ads=ads||0;
   if(!rows||!rows.length)return '<div class="psub">нет начислений за период</div>';
@@ -2067,7 +2045,7 @@ async function pulseHtml(pid,offer){
   const start=wStart<mStart?wStart:mStart, end=wEnd>mEnd?wEnd:mEnd;
   const first=localISO(start), last=localISO(end);
   const todayISO=localISO(new Date());
-  // данные — с запасом: лимиты ДРР каждого дня таблицы (28 дней до «за 8 дней до него») и потолок 4 недели назад
+  // данные — с запасом: лимиты ДРР дней таблицы и маржинальность до рекламы 4 недели назад
   const from=addDaysISO(first<todayISO?first:todayISO,-64);
   const o=encodeURIComponent(offer);
   const [salesRows,stockRows,chargeRows,lastRow,adsMap,temps]=await Promise.all([
@@ -2168,7 +2146,7 @@ async function pulseHtml(pid,offer){
   const drrZone=(v,L)=>{ if(v==null)return null; if(!isFinite(v))return 'red'; if(!L.ok)return null; if(v>L.be)return 'red'; if(L.target!=null&&v>L.target)return 'yellow'; return 'green'; };
   const ZBG={red:'background:rgba(227,61,120,0.38);',yellow:'background:rgba(253,224,71,0.45);',green:'background:rgba(22,163,74,0.30);'};
   const drrBg=(v,L)=>{ if(v!=null&&!isFinite(v))return 'background:rgba(227,61,120,0.45);'; const z=drrZone(v,L); return z?ZBG[z]:''; };
-  // «Что делать» — по последним 7 прошедшим дням: зоны ДРР, заказы к плану, цена к плану, потолок до рекламы сейчас и 4 недели назад
+  // «Что делать» — по последним 7 прошедшим дням: зоны ДРР, заказы к плану, цена к плану, маржинальность до рекламы сейчас и 4 недели назад
   const verdict=(()=>{
     const idx=days.map((iso,i)=>i).filter(i=>days[i]<todayISO&&days[i]>=addDaysISO(todayISO,-7));
     const z={red:0,yellow:0,green:0,none:0};
@@ -2184,20 +2162,21 @@ async function pulseHtml(pid,offer){
     if(z.red+z.yellow+z.green)facts.push(`реклама за 7 дн: 🔴 ${z.red} · 🟡 ${z.yellow} · 🟢 ${z.green} дн.`);
     if(ordPct!=null)facts.push(`заказы ${fmt(q)} шт — ${fmt(ordPct)}% плана`);
     if(price7!=null)facts.push(`цена ${fmt(price7)} ₽${planPrice!=null?` (план ${fmt(planPrice)} ₽)`:''}`);
-    if(lim.ok)facts.push(`потолок до рекламы ${f1(lim.pre)}%${prev.ok?` (4 нед. назад ${f1(prev.pre)}%)`:''}${planPct!=null?`, план ${f1(planPct)}%`:''}`);
+    const per=L=>`заказы ${ddmm(L.from)}–${ddmm(L.to)}`;
+    if(lim.ok)facts.push(`маржинальность до рекламы ${f1(lim.pre)}% (${per(lim)})${prev.ok?`, 4 нед. назад ${f1(prev.pre)}% (${per(prev)})`:''}${planPct!=null?`, план маржинальности ${f1(planPct)}%`:''}`);
     const lt=lim.ok?(lim.target!=null?lim.target:lim.be):null;
     let act,lvl;
     if(!lim.ok){ act='Лимиты рекламы не рассчитаны — мало выкупов за 4 недели.'; lvl='none'; }
     else if(lim.pre<0){ act='Товар убыточен ещё до рекламы — реклама только увеличивает убыток. Смотрите цену и расходы (комиссия, логистика, себестоимость).'; lvl='red'; }
-    else if(planPct!=null&&lim.pre<planPct){ act=`План маржинальности не выйдет даже без рекламы: потолок ${f1(lim.pre)}% ниже плана ${f1(planPct)}%. Смотрите цену${priceLow?' — она ниже плана':''} и расходы или пересмотрите план.`; lvl='red'; }
-    else if(z.red+z.yellow>=2&&recentOk){ act=`Реклама уже в лимите последние 3 дня (до этого выше лимита ${z.red+z.yellow-recentBad} дн.) — маржинальность за 7 дн. отстаёт: в окне ещё дни с дорогой рекламой и невыкупленные заказы. Держите ДРР ≤${f1(lt)}% и проверьте через неделю.`; lvl='green'; }
+    else if(planPct!=null&&lim.pre<planPct){ act=`План маржинальности не выйдет даже без рекламы: маржинальность до рекламы ${f1(lim.pre)}% (${per(lim)}) ниже плана ${f1(planPct)}%. Смотрите цену${priceLow?' — она ниже плана':''} и расходы или пересмотрите план.`; lvl='red'; }
+    else if(z.red+z.yellow>=2&&recentOk){ act=`Реклама уже в лимите последние 3 дня (до этого выше лимита ${z.red+z.yellow-recentBad} дн.) — маржинальность за 7 дн. отстаёт: в окне ещё дни с дорогой рекламой и невыкупленные заказы. Держите ДРР не выше ${f1(lt)}% и проверьте через неделю.`; lvl='green'; }
     else if(z.red>=3){ act=`Сократите рекламу: ДРР выше безубыточного (${f1(lim.be)}%) ${z.red} дн. из 7 — реклама съедает всю маржу.`; lvl='red'; }
     else if(z.red+z.yellow>=4){
       act=(drop!=null&&drop>=2)
-        ?`Реклама выше планового лимита (≤${f1(lt)}%), потому что потолок до рекламы снизился с ${f1(prev.pre)}% до ${f1(lim.pre)}%${priceLow?' — цена ниже плана, вероятная причина':''}. Сначала смотрите ${priceLow?'цену':'цену и расходы'}, затем — рекламу.`
-        :`Реклама выше планового лимита (≤${f1(lt)}%): снизьте её${priceLow?' или верните цену к плану':' или поднимите цену'}.`;
+        ?`Реклама выше планового лимита (${f1(lt)}%), потому что маржинальность до рекламы снизилась с ${f1(prev.pre)}% (${per(prev)}) до ${f1(lim.pre)}% (${per(lim)})${priceLow?' — цена ниже плана, вероятная причина':''}. Сначала смотрите ${priceLow?'цену':'цену и расходы'}, затем — рекламу.`
+        :`Реклама выше планового лимита (${f1(lt)}%): снизьте её${priceLow?' или верните цену к плану':' или поднимите цену'}.`;
       lvl='yellow'; }
-    else if(ordPct!=null&&ordPct<90){ act=`Реклама в лимите, заказов ${fmt(ordPct)}% плана — есть запас: рекламу можно добавить до ≤${f1(lt)}%.`; lvl='green'; }
+    else if(ordPct!=null&&ordPct<90){ act=`Реклама в лимите, заказов ${fmt(ordPct)}% плана — есть запас: рекламу можно добавить до ${f1(lt)}%.`; lvl='green'; }
     else { act='В норме: реклама в лимите'+(ordPct!=null?`, заказы ${fmt(ordPct)}% плана`:'')+'.'; lvl='green'; }
     const bc={red:'#E33D78',yellow:'#eab308',green:'#16a34a',none:'#94a3b8'}[lvl];
     return `<div style="border-left:4px solid ${bc};background:#f8f9fb;padding:6px 10px;margin:4px 0 8px;font-size:.86em;color:#1C0D2E"><b>Что делать:</b> ${esc(act)}<div style="color:#64748b;margin-top:2px">${esc(facts.join(' · '))}</div></div>`;
@@ -2238,13 +2217,10 @@ async function pulseHtml(pid,offer){
       +(lim.target!=null?`;\n• плановый ДРР = (${f1(lim.pre)}% − план маржинальности ${f1(lim.planPct)}%) × ${f1(lim.buy*100)}% = ${f1(lim.target)}%.`:'.\n• планового лимита нет — нет плана маржинальности на месяц.')
       +`\n\nЗелёный — до планового лимита, жёлтый — в плюсе, но ниже плана, красный — реклама съедает всю маржу (убыток). Лимиты дня — в ячейке под ДРР: у дней старше 8 дней — по факту (маржинальность до рекламы и выкуп 7 дней по этот день, цвет согласуется с маржинальностью за 7 дн.), у последних 7 дней и будущих — последние известные (эти, сверху). Подробно — наведите на ячейку.`
     :'Лимиты не рассчитаны: нет выкупов по заказам за 4 недели до последних 7 дней.';
-  h+=`<tr><td class="pulsemetric" title="${T('Сколько процентов от выручки заказов дня ушло на рекламу (рычаг 2 — реклама): реклама дня ÷ выручка заказов дня, как на главной.\n\n'+limTip)}">ДРР, %${lim.ok?` <span style="font-weight:400;color:#94a3b8">≤${lim.target!=null?f1(lim.target)+' / ':''}${f1(lim.be)}</span>`:''}</td>`;
+  h+=`<tr><td class="pulsemetric" title="${T('Сколько процентов от выручки заказов дня ушло на рекламу (рычаг 2 — реклама): реклама дня ÷ выручка заказов дня, как на главной.\n\n'+limTip)}">ДРР, %${lim.ok?` <span style="font-weight:400;color:#94a3b8">${lim.target!=null?f1(lim.target)+' / ':''}${f1(lim.be)}</span>`:''}</td>`;
   drrVals.forEach((v,i)=>{ const L=dayLim[i];
-    const lt=L.ok?`<div style="font-size:.78em;color:#64748b;line-height:1.1">(≤${L.target!=null?f1(L.target)+'/':''}${f1(L.be)})</div>`:'';
-    h+=`<td class="num" style="${drrBg(v,L)}"${L.ok?` title="ДРР дня и лимиты: ≤ плановый${L.target!=null?' '+f1(L.target)+'%':' — нет плана'} / безубыточный ${f1(L.be)}% — ${L.fact?`по факту заказов ${ddmm(L.from)}–${ddmm(L.to)}`:`последние известные: заказы ${ddmm(L.from)}–${ddmm(L.to)}, медиана 4 недель`} (маржинальность до рекламы ${f1(L.pre)}%, выкуп ${f1(L.buy*100)}%)"`:''}>${v==null?'—':(isFinite(v)?f1(v):'∞')}${lt}</td>`; });
-  h+='</tr>';
-  h+=`<tr><td class="pulsemetric" title="${T('Экономика самого товара при этой цене — сколько остаётся с продаж до рекламы.\n\nЗа 7 дней по эту дату, по дате заказа: все начисления Ozon по заказам этих дней (продажа, комиссия, логистика, возвраты) − себестоимость − налог 3%, делённое на сумму выкупов по ценам (GMV).\n\nМеняется от цены, тарифов Ozon и себестоимости, не от рекламы. Это потолок: больше этого реклама забрать не может.\n\nЦвет — к плану маржинальности: зелёный — не ниже плана (есть место для рекламы), жёлтый — план не выйдет даже без рекламы, красный — убыток до рекламы.')}">Маржинальность до рекламы (7 дн), %</td>`;
-  roll.forEach(r=>{ const v=r?r.pre:null; h+=`<td class="num" style="${marginBg(v)}">${v==null?'—':f1(v)}</td>`; });
+    const lt=L.ok?`<div style="font-size:.78em;color:#64748b;line-height:1.1">(${L.target!=null?f1(L.target)+'/':''}${f1(L.be)})</div>`:'';
+    h+=`<td class="num" style="${drrBg(v,L)}"${L.ok?` title="ДРР дня и лимиты: плановый${L.target!=null?' '+f1(L.target)+'%':' — нет плана'} / безубыточный ${f1(L.be)}% — ${L.fact?`по факту заказов ${ddmm(L.from)}–${ddmm(L.to)}`:`последние известные: заказы ${ddmm(L.from)}–${ddmm(L.to)}, медиана 4 недель`} (маржинальность до рекламы ${f1(L.pre)}%, выкуп ${f1(L.buy*100)}%)"`:''}>${v==null?'—':(isFinite(v)?f1(v):'∞')}${lt}</td>`; });
   h+='</tr>';
   h+=`<tr><td class="pulsemetric" title="${T('Итог: что дают цена и реклама вместе — маржинальность до рекламы минус реклама.\n\nЗа 7 дней по эту дату, по дате заказа; реклама — расходы этих 7 дней.\n\nСемь дней вместо одного — потому что за день заказов мало и цифра прыгает. Последние 7 дней (*) — неокончательно: выкупы ещё приходят, цифра обычно занижена.\n\nЦвет — к плану маржинальности: зелёный — план выполняется, жёлтый — в плюсе, но ниже плана, красный — убыток.')}">Маржинальность (7 дн), %</td>`;
   roll.forEach(r=>{ const v=r?r.net:null; h+=`<td class="num" style="${marginBg(v)}">${v==null?'—':f1(v)}</td>`; });
