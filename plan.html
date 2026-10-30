@@ -2108,7 +2108,7 @@ async function loadUnit(pid){
       +`<label>Цена заказа, ₽ ${inp('unitP',P0,1)}</label><label>ДРР, % ${inp('unitD',D0,0.5)}</label>`
       +`<button onclick="unitSet(${pid},${P0},${D0})">Как сейчас (${fmt(P0)} ₽, ${f1(D0)}%)</button>`
       +(U.planPrice!=null?`<button onclick="unitSet(${pid},${Math.round(U.planPrice)},null)">Цена плана (${fmt(U.planPrice)} ₽)</button>`:'')
-      +`</div><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start"><div id="unitres_${pid}"></div><div id="unitgrid_${pid}"></div></div>`
+      +`</div><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start"><div id="unitres_${pid}"></div><div id="unitgrid_${pid}"></div><div id="unitinfo_${pid}" style="font-size:.86em;line-height:1.6;max-width:420px"></div></div>`
       +`<div class="psub" style="margin-top:6px;color:#94a3b8">Модель не знает, как цена и реклама меняют число заказов, — это проверяйте SMART-гипотезой. Маржинальность — от суммы выкупов, как в факте (CF).</div>`;
     unitCalc(pid);
   }catch(e){
@@ -2124,12 +2124,12 @@ function unitCalc(pid){
   const U=UNIT[pid]; if(!U||!U.C.ok)return; const C=U.C;
   const P=Number(document.getElementById('unitP_'+pid).value), D=Number(document.getElementById('unitD_'+pid).value)||0;
   const res=document.getElementById('unitres_'+pid), grid=document.getElementById('unitgrid_'+pid);
-  if(!(P>0)){ res.innerHTML='<div class="psub">Введите цену больше 0.</div>'; grid.innerHTML=''; return; }
+  if(!(P>0)){ res.innerHTML='<div class="psub">Введите цену больше 0.</div>'; grid.innerHTML=''; document.getElementById('unitinfo_'+pid).innerHTML=''; return; }
   const m=U.planPct;
   const bg=v=>v<0?'background:rgba(227,61,120,0.30);':(m!=null&&v<m?'background:rgba(253,224,71,0.45);':'background:rgba(22,163,74,0.30);');
   const G=P*C.b, cut=G*(1-C.r), tax=G*C.t, ads=P*D/100, mar=G*(C.r-C.t)-C.u-ads, pct=mar/G*100;
   const row=(n,v,share,tip,b)=>`<tr${b?' style="font-weight:700"':''}><td style="text-align:left" title="${esc(tip||'')}">${n}</td><td class="num">${v<0?'−':''}${fmt2(Math.abs(Math.round(v*100)/100))} ₽</td><td class="num" style="color:#64748b">${share==null?'':f1(share)+'%'}</td></tr>`;
-  // расчёт и выводы — столбцом слева, матрица «цена × ДРР» — справа (блок ниже по высоте)
+  // слева — расчёт на 1 заказ, в середине — матрица «цена × ДРР», справа — выводы (блок ниже по высоте)
   let h=`<div><table class="pulsetable" style="font-size:.86em"><thead><tr><th style="text-align:left">На 1 заказ</th><th>₽</th><th>% выкупа</th></tr></thead><tbody>`
     +row('Цена заказа',P,null,'Цена, которую видит покупатель при заказе')
     +row(`Сумма выкупа (выкупается ${f1(C.b*100)}%)`,G,100,'Сколько в среднем выкупают с одного заказа: часть заказов отменяют или не забирают; сюда же входят баллы Ozon')
@@ -2138,7 +2138,9 @@ function unitCalc(pid){
     +row('Логистика, возвраты, упаковка и себестоимость',-C.u,-C.u/G*100,'Расходы на заказанную штуку — от цены не зависят')
     +row(`Реклама (ДРР ${f1(D)}% от цены заказа)`,-ads,-ads/G*100,'Реклама на один заказ')
     +row('Маржа на заказ',mar,pct,'',true)
-    +`</tbody></table><div style="font-size:.86em;line-height:1.6;margin-top:6px;max-width:460px">`
+    +`</tbody></table></div>`;
+  res.innerHTML=h;
+  h=''
     +`<div style="padding:4px 10px;border-radius:8px;${bg(pct)}"><b>Маржинальность: ${f1(pct)}%</b>${m!=null?` (план ${f1(m)}%)`:''}</div>`;
   const pre=unitPct(C,P,0);
   h+=pre<0?`<div>При цене ${fmt(P)} ₽ товар убыточен даже без рекламы (до рекламы ${f1(pre)}%).</div>`
@@ -2148,8 +2150,7 @@ function unitCalc(pid){
   const p0=unitPriceFor(C,0,D); h+=p0==null?`<div>При ДРР ${f1(D)}% в ноль <b>не выйти ни при какой цене</b>.</div>`:`<div>При ДРР ${f1(D)}% в ноль — при цене <b>${fmt(Math.ceil(p0))} ₽</b>.</div>`;
   if(U.planQty){ h+=`<div title="Если заказов будет столько, сколько в плане; модель не знает, как цена и реклама меняют спрос">При плане ${fmt(U.planQty)} шт/мес: маржа ≈ <b>${fmt(U.planQty*mar)} ₽</b> в месяц</div>`; }
   if(U.q7>0){ h+=`<div title="Если заказы останутся на уровне последних 7 дней">При текущих заказах (${fmt(U.q7/7)} шт/день): ≈ <b>${fmt(U.q7/7*30*mar)} ₽</b> за 30 дней</div>`; }
-  h+=`</div></div>`;
-  res.innerHTML=h;
+  document.getElementById('unitinfo_'+pid).innerHTML=h;
   // сетка «цена × ДРР»: шаг цены ~5% (1, 2, 5 × 10ᵏ), щелчок — подставить
   const st=(x=>{ const k=Math.pow(10,Math.floor(Math.log10(x))); return [1,2,5,10].map(v=>v*k).reduce((a,v)=>Math.abs(v-x)<Math.abs(a-x)?v:a); })(Math.max(1,P*0.05));
   const pp=U.planPrice!=null?Math.round(U.planPrice):null;
