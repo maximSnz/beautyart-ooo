@@ -52,7 +52,11 @@ for(const path of [`/api/client/statistics/expense?dateFrom=${D}&dateTo=${D}`,`/
 const db=await (await fetch(`${SB}/rest/v1/ozon_ad_spend?spend_date=eq.${D}&select=offer_id,amount&order=offer_id&limit=5000`,{headers:SR})).json();
 const dbSku={};let dbSum=0;db.forEach(x=>{dbSku[x.offer_id]=(dbSku[x.offer_id]||0)+Number(x.amount);dbSum+=Number(x.amount);});
 console.log(`\nВ базе (CSV) за день: SKU ${Object.keys(dbSku).length}`);
-const ids=camps.map(c=>String(c.id));
+// только кампании с расходом за день (быстрый метод statistics/expense) — отчёты по SKU Ozon формирует в очереди, все подряд — слишком долго
+const ex=await perf(`/api/client/statistics/expense?dateFrom=${D}&dateTo=${D}`);
+const spent=new Set();String(ex.text||'').split('\n').slice(1).forEach(l=>{const c=l.split(';');if(c.length>3&&Number(String(c[3]).replace(',','.'))>0)spent.add(String(c[0]).trim());});
+const ids=camps.map(c=>String(c.id)).filter(id=>spent.has(id));
+console.log(`Кампаний с расходом за день: ${ids.length} из ${camps.length}`);
 const apiSku={};let reports=0,fails=0,heads=new Set(),typesSeen={};
 for(let i=0;i<ids.length;i+=10){
   const part=ids.slice(i,i+10);
