@@ -2243,10 +2243,17 @@ async function pulseHtml(pid,offer){
   const stockVals=days.map(iso=>{ const v=rawStock.get(iso); return v==null?null:v; });
   const priceVals=days.map(iso=>{ const q=byDaySales.get(iso)||0; return q>0?(byDayRev.get(iso)||0)/q:null; });
   // маржинальность за 7 дней по дату (по дате заказа): до рекламы и после; реклама — по дате расхода
+  // свежие 7 дней (окно не «созрело»: выкупы ещё приходят, факт занижен) — оценка по модели (решение владельца 30.10.2026):
+  // маржинальность при фактических цене и ДРР тех же 7 дней (unitPct); неполный факт — в подсказке
+  const matureTo=addDaysISO(todayISO,-8);
   const roll=days.map(iso=>{
     if(iso>=todayISO)return null;
-    const a=agg(addDaysISO(iso,-6),iso);
-    return a.gmv>0?{pre:a.pre/a.gmv*100,net:(a.pre-a.ads)/a.gmv*100}:null;
+    const f=addDaysISO(iso,-6), a=agg(f,iso), fact=a.gmv>0?{pre:a.pre/a.gmv*100,net:(a.pre-a.ads)/a.gmv*100}:null;
+    if(iso<=matureTo)return fact;
+    let q=0; for(let d=f;d<=iso;d=addDaysISO(d,1))q+=byDaySales.get(d)||0;
+    if(!cal.ok||!(q>0&&a.rev>0))return fact;
+    const P=a.rev/q, D=a.ads/a.rev*100;
+    return {pre:unitPct(cal,P,0),net:unitPct(cal,P,D),est:true,P,D,fact:fact?fact.net:null};
   });
   // ДРР — как на главной: реклама дня ÷ выручка PNL заказов того же дня (product_sales.revenue)
   // лимит дня — от цены этого дня (решение владельца 30.10.2026: одна цена — один лимит); нет заказов в день — последняя известная
@@ -2282,7 +2289,7 @@ async function pulseHtml(pid,offer){
   const T=s=>s.replace(/"/g,'&quot;');
   let h='<div class="pulsewrap"><table class="pulsetable"><thead><tr><th>Параметр</th>';
   days.forEach(iso=>{
-    const prov=iso<todayISO&&(nowMs-parseW(iso).getTime())<7*86400000;
+    const prov=iso<todayISO&&iso>matureTo;
     h+=prov?`<th title="предварительно: выкупы и возвраты по заказам этого дня ещё приходят — маржинальность уточнится сама">${ddmm(iso)}*</th>`:`<th>${ddmm(iso)}</th>`;
   });
   h+='</tr></thead><tbody>';
@@ -2318,18 +2325,20 @@ async function pulseHtml(pid,offer){
       +`При цене:\n`+tipPrices.map(p=>{ const X=limAtPrice(p); return `  ${fmt(p)} ₽ — до рекламы ${f1(X.pre)}%, лимиты ${X.target!=null?f1(X.target)+' / ':''}${f1(X.be)}%`; }).join('\n')
       +`\n\nЗелёный — до планового лимита, жёлтый — прибыльно, но ниже плана, красный — маржинальность ниже ${NET_FLOOR}%: убыток по чистой прибыли.`
     :'Лимиты не рассчитаны: мало заказов и выкупов за 4 недели до последних 7 дней.';
-  h+=`<tr><td class="pulsemetric" title="${T('Сколько процентов от выручки заказов дня ушло на рекламу (рычаг 2 — реклама): реклама дня ÷ выручка заказов дня, как на главной.\n\n'+limTip)}">ДРР, %${lim.ok?` <span style="font-weight:400;color:#94a3b8">${lim.target!=null?f1(lim.target)+' / ':''}${f1(lim.be)}</span>`:''}</td>`;
+  h+=`<tr><td class="pulsemetric" title="${T('Сколько процентов от выручки заказов дня ушло на рекламу (рычаг 2 — реклама): реклама дня ÷ выручка заказов дня, как на главной.\n\n'+limTip)}">ДРР, %</td>`;
   drrVals.forEach((v,i)=>{ const X=dayLim[i];
     const lt=X.ok?`<div style="font-size:.78em;color:#64748b;line-height:1.1">(${X.target!=null?f1(X.target)+'/':''}${f1(X.be)})</div>`:'';
     h+=`<td class="num" style="${drrBg(v,X)}"${X.ok?` title="ДРР дня и лимиты при цене ${fmt(X.p)} ₽${days[i]>=todayISO||priceVals[i]==null?' (текущая)':''}: плановый ${X.target!=null?f1(X.target)+'%':'— нет плана'} / безубыточный ${f1(X.be)}% (маржинальность до рекламы при этой цене ${f1(X.pre)}%)"`:''}>${v==null?'—':(isFinite(v)?f1(v):'∞')}${lt}</td>`; });
   h+='</tr>';
-  h+=`<tr><td class="pulsemetric" title="${T('Итог: что дают цена и реклама вместе — маржинальность до рекламы минус реклама.\n\nЗа 7 дней по эту дату, по дате заказа; реклама — расходы этих 7 дней.\n\nСемь дней вместо одного — потому что за день заказов мало и цифра прыгает. Последние 7 дней (*) — неокончательно: выкупы ещё приходят, цифра обычно занижена.\n\nЦвет — к плану маржинальности: зелёный — план выполняется, жёлтый — от 5% до плана, красный — ниже 5%: убыток по чистой прибыли.')}">Маржинальность (7 дн), %</td>`;
-  roll.forEach(r=>{ const v=r?r.net:null; h+=`<td class="num" style="${marginBg(v)}">${v==null?'—':f1(v)}</td>`; });
+  h+=`<tr><td class="pulsemetric" title="${T('Итог: что дают цена и реклама вместе — маржинальность до рекламы минус реклама.\n\nЗа 7 дней по эту дату, по дате заказа; реклама — расходы этих 7 дней.\n\nСемь дней вместо одного — потому что за день заказов мало и цифра прыгает. Последние 7 дней (*, «≈», курсив) — оценка по модели при фактических цене и ДРР этих дней: факт там ещё неполный (выкупы приходят) и занижен; неполный факт — в подсказке ячейки.\n\nЦвет — к плану маржинальности: зелёный — план выполняется, жёлтый — от 5% до плана, красный — ниже 5%: убыток по чистой прибыли.')}">Маржинальность (7 дн), %</td>`;
+  roll.forEach(r=>{ const v=r?r.net:null;
+    if(r&&r.est){ h+=`<td class="num" style="${marginBg(v)}font-style:italic" title="Оценка по модели: цена ${fmt(r.P)} ₽ и ДРР ${f1(r.D)}% за эти 7 дней (как в «Юнит-экономике»). Неполный факт: ${r.fact==null?'—':f1(r.fact)+'%'} — выкупы по этим заказам ещё приходят, факт пока занижен">≈${f1(v)}</td>`; return; }
+    h+=`<td class="num" style="${marginBg(v)}">${v==null?'—':f1(v)}</td>`; });
   h+='</tr>';
   h+=`<tr><td class="pulsemetric" title="${T('Остаток на складах Ozon на конец дня, шт (сумма по всем складам).')}">Остатки, шт</td>`;
   stockVals.forEach(v=>{ h+=`<td class="num" style="${stockBg(v)}">${v==null?'—':fmt(v)}</td>`; });
   h+='</tr>';
-  h+='</tbody></table><div class="psub" style="margin-top:6px">* — предварительный день (последние 7 дней): выкупы и возвраты по заказам ещё приходят, маржинальность за 7 дней с этими днями уточнится сама. ДРР: рядом с названием — лимиты при текущей цене (средняя за 7 дней); в ячейке — лимиты при цене этого дня (одна цена — один лимит).</div></div>';
+  h+='</tbody></table><div class="psub" style="margin-top:6px">* — свежий день (последние 7 дней): выкупы и возвраты по заказам ещё приходят, поэтому маржинальность за 7 дней — оценка по модели («≈», курсив); через 8 дней её заменит факт. ДРР: в ячейке под значением — лимиты при цене этого дня (плановый/безубыточный; одна цена — один лимит).</div></div>';
   return h;
 }
 function arcPath(cx,cy,rO,rI,a0,a1){
