@@ -1,7 +1,8 @@
 // Ночная загрузка из API Ozon вместо CSV (этап 3, решения 22.10.2026 — ROADMAP). Запускается после ozon-products-sync.
 // Делает за вчерашний день (по Москве) то же, что кнопки CSV:
 //   weekly.html «Заказы»: product_sales, снимок stock_history, deviation_history (computeDay), недельные факты qty/rev;
-//   plan.html «Начисления»: ozon_charges и пересчёт CF (syncPnl → sales_plan_weeks, cf_daily).
+//   plan.html «Начисления»: ozon_charges и пересчёт CF (syncPnl → sales_plan_weeks, cf_daily);
+//   plan.html «Аналитика продвижения»: расход рекламы по SKU → ozon_ad_spend (Ozon Performance API, с 30.10.2026).
 //   plan.html fixHypotheses: фиксация факта SMART-гипотез после дедлайна (product_protocol) — с 22.10.2026 только здесь.
 // Режимы: WRITE=1 — запись в базу; иначе ПРОВЕРКА: всё считается и сверяется с базой, в базу ничего не пишется.
 // Репозиторий публичный — в лог только счётчики и расхождения в процентах; рублей, штук и артикулов в логе нет.
@@ -268,6 +269,56 @@ if(chRows.length){await sbWrite('DELETE',`ozon_charges?charge_date=eq.${D}`);awa
 const postRows=[...new Map(posts.map(p=>[p.posting_number,{posting_number:p.posting_number,order_number:p.order_number||null,order_day:mskDay(p.in_process_at||p.created_at)}])).values()].concat(fetched);
 if(cacheTable&&postRows.length)await sbWrite('POST','ozon_postings?on_conflict=posting_number',postRows);
 
+// ===== 5б. Реклама: Ozon Performance API → ozon_ad_spend (как импорт CSV «Аналитика продвижения») =====
+// Расход по SKU за D и D−1 (статистика за день досчитывается — позавчера каждую ночь перезаписывается окончательными цифрами).
+// Отчёты по SKU Ozon формирует в очереди — заказываем только по кампаниям с расходом (быстрый statistics/expense), по 10 за запрос.
+// Сверка 30.10.2026: ООО 27.10 — 24 из 24 SKU, ИП 25.10 — итог 0,000% (в CSV ещё строки с расходом 0 — API их не отдаёт).
+console.log('\n5б. Реклама',el());
+const ADS_DAYS=[addDays(D,-1),D], apiAds=[];
+if(!process.env.OZON_PERF_CLIENT_ID){note('Реклама: ключей Performance API нет — пропущено');console.log('  ключей Performance API нет — шаг пропущен');}
+else{
+  const PERF='https://api-performance.ozon.ru';let PT='';
+  const perf=async(path,{method='GET',body,raw}={})=>{for(let a=0;a<5;a++){let r,t;
+      try{r=await fetch(PERF+path,{method,headers:{Authorization:'Bearer '+PT,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(60000)});
+        t=raw?Buffer.from(await r.arrayBuffer()):await r.text();}catch(e){await sleep(2000*(a+1));continue;}
+      if(r.status===429||r.status>=500){await sleep(3000*(a+1));continue;}
+      if(r.status!==200)throw new Error(`Performance ${path.split('?')[0]}: HTTP ${r.status} ${raw?'':String(t).slice(0,150)}`);
+      return raw?t:(()=>{try{return JSON.parse(t);}catch(e){return t;}})();}
+    throw new Error(`Performance ${path.split('?')[0]}: нет ответа`);};
+  const tk=await (await fetch(PERF+'/api/client/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:process.env.OZON_PERF_CLIENT_ID,client_secret:process.env.OZON_PERF_CLIENT_SECRET,grant_type:'client_credentials'})})).json();
+  if(!tk.access_token)throw new Error('Performance: токен не получен');
+  PT=tk.access_token;
+  const ex=await perf(`/api/client/statistics/expense?dateFrom=${ADS_DAYS[0]}&dateTo=${ADS_DAYS[1]}`);
+  const spent=new Set();String(ex).split('\n').slice(1).forEach(l=>{const c=l.split(';');if(c.length>3&&Number(String(c[3]).replace(',','.'))>0)spent.add(String(c[0]).trim());});
+  const ids=[...spent];const sum=new Map();let reports=0;
+  const isoOf=v=>{v=String(v).trim();let m=v.match(/^(\d{2})\.(\d{2})\.(\d{4})/);if(m)return `${m[3]}-${m[2]}-${m[1]}`;m=v.match(/^(\d{4})-(\d{2})-(\d{2})/);return m?m[0]:null;};
+  for(let i=0;i<ids.length;i+=10){
+    const r=await perf('/api/client/statistics',{method:'POST',body:{campaigns:ids.slice(i,i+10),dateFrom:ADS_DAYS[0],dateTo:ADS_DAYS[1],groupBy:'DATE'}});
+    const uuid=r.UUID||r.uuid;if(!uuid)throw new Error('Performance: отчёт не заказан');
+    let st='';for(let k=0;k<100&&st!=='OK';k++){await sleep(3000);st=(await perf(`/api/client/statistics/${uuid}`)).state;if(st==='ERROR')throw new Error('Performance: отчёт с ошибкой');}
+    if(st!=='OK')throw new Error('Performance: отчёт не готов за 5 минут');
+    const buf=await perf(`/api/client/statistics/report?UUID=${uuid}`,{raw:true});reports++;
+    let txt=buf.toString('utf8');
+    if(buf[0]===0x50&&buf[1]===0x4b){const {execSync}=await import('node:child_process');fs.writeFileSync('/tmp/ads.zip',buf);
+      execSync('rm -rf /tmp/ads && mkdir -p /tmp/ads && cd /tmp/ads && unzip -o -q ../ads.zip');txt=fs.readdirSync('/tmp/ads').map(f=>fs.readFileSync('/tmp/ads/'+f,'utf8')).join('\n');}
+    let hdr=null;
+    txt.split('\n').forEach(line=>{const c=line.split(';').map(x=>x.replace(/^"|"$/g,'').trim());
+      if(c.some(x=>/^sku$/i.test(x))&&c.some(x=>/^расход/i.test(x))){hdr=c;return;}
+      if(!hdr||c.length!==hdr.length)return;
+      const sku=c[hdr.findIndex(x=>/^sku$/i.test(x))],day=isoOf(c[hdr.findIndex(x=>/^(день|дата)$/i.test(x))]),amt=Number(String(c[hdr.findIndex(x=>/^расход/i.test(x))]).replace(/\s/g,'').replace(',','.'));
+      if(/^\d+$/.test(sku)&&ADS_DAYS.includes(day)&&Number.isFinite(amt)){const k=sku+'|'+day;sum.set(k,(sum.get(k)||0)+amt);}});
+  }
+  sum.forEach((v,k)=>{const [offer_id,spend_date]=k.split('|');if(Math.abs(v)>=0.005)apiAds.push({offer_id,spend_date,amount:r2(v),updated_at:new Date().toISOString()});});
+  for(const d of ADS_DAYS){
+    const dbA=await sbAll(`ozon_ad_spend?spend_date=eq.${d}&select=offer_id,amount&order=offer_id`);
+    if(dbA.length)cmp(`реклама ${d} по SKU (сверка с базой)`,sumBy(apiAds.filter(r=>r.spend_date===d),r=>r.offer_id,r=>r.amount),sumBy(dbA.filter(r=>Number(r.amount)!==0),r=>r.offer_id,r=>Number(r.amount)),0.05);
+  }
+  const unk=apiAds.filter(r=>!SKU_PID.has(String(r.offer_id))).length;
+  console.log(`  кампаний с расходом ${ids.length}, отчётов ${reports}, строк SKU×день ${apiAds.length}${unk?`, SKU не из активных товаров ${unk}`:''}`);
+  note(`Реклама: ${ADS_DAYS.map(d=>`${d.slice(8,10)}.${d.slice(5,7)} — ${nf(apiAds.filter(r=>r.spend_date===d).reduce((a,r)=>a+r.amount,0))} ₽`).join(', ')} (кампаний с расходом ${ids.length})`);
+  for(const d of ADS_DAYS){await sbWrite('DELETE',`ozon_ad_spend?spend_date=eq.${d}`);const rows=apiAds.filter(r=>r.spend_date===d);if(rows.length)await sbWrite('POST','ozon_ad_spend?on_conflict=offer_id,spend_date',rows);}
+}
+
 // ===== 6. Пересчёт CF (syncPnl из plan.html) → sales_plan_weeks, cf_daily =====
 console.log('\n6. Пересчёт CF',el());
 const prov=[...new Set((await sbAll('sales_plan_weeks?cost_provisional=eq.true&select=week&order=week')).map(x=>x.week))];
@@ -279,7 +330,8 @@ const chByDay=new Map();
 for(let i=0;i<chDays.length;i+=8)await Promise.all(chDays.slice(i,i+8).map(async d=>chByDay.set(d,await sbAll(`ozon_charges?charge_date=eq.${d}&select=offer_id,charge_date,charge_type,amount,qty,price&order=row_key`))));
 const dbCharges=chDays.flatMap(d=>chByDay.get(d)||[]);
 console.log('  начисления периода прочитаны',el());
-const ads=await sbAll(`ozon_ad_spend?spend_date=gte.${first}&spend_date=lte.${last}&select=offer_id,spend_date,amount&order=spend_date,offer_id`);
+const ads=(await sbAll(`ozon_ad_spend?spend_date=gte.${first}&spend_date=lte.${last}&select=offer_id,spend_date,amount&order=spend_date,offer_id`))
+  .filter(x=>!(apiAds.length&&ADS_DAYS.includes(x.spend_date))).concat(apiAds.length?apiAds:[]);                 // дни рекламы из API — из API
 const adsMap=new Map();ads.forEach(x=>{const pid=SKU_PID.get(String(x.offer_id))||OFFER_PID.get(x.offer_id);if(!pid)return;let m=adsMap.get(pid);if(!m){m=new Map();adsMap.set(pid,m);}m.set(x.spend_date,(m.get(x.spend_date)||0)+Number(x.amount||0));});
 function syncPnl(rows){
   const day=new Map();

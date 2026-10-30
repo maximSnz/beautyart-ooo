@@ -17,10 +17,10 @@ async function lastValue(table,col){
   try{const r=await fetch(`${SB}/rest/v1/${table}?select=${col}&order=${col}.desc.nullslast&limit=1`,{headers:SR,signal:AbortSignal.timeout(30000)});
     if(!r.ok)return null;const j=await r.json();return j[0]?.[col]??null;}catch(e){return null;}
 }
-// свежесть: заказы/начисления/остатки/маржа — по вчера; реклама (CSV утром) — не старше позавчера; спрос — не старше суток
+// свежесть: заказы/начисления/остатки/маржа/реклама — по вчера (реклама из API с 30.10.2026); спрос — не старше суток
 async function freshness(){
   const f=[['заказы','product_sales','sale_date',YEST],['начисления','ozon_charges','charge_date',YEST],['остатки','stock_history','report_date',YEST],
-           ['маржа CF','cf_daily','day',YEST],['реклама','ozon_ad_spend','spend_date',addDays(YEST,-1)]];
+           ['маржа CF','cf_daily','day',YEST],['реклама','ozon_ad_spend','spend_date',YEST]];
   const out=[];let bad=0;
   for(const [name,t,c,need] of f){const v=await lastValue(t,c);const ok=v&&String(v).slice(0,10)>=need;if(!ok)bad++;out.push(`${ok?'':'⚠️'}${name} ${dm(v&&String(v).slice(0,10))}`);}
   const cd=await lastValue('cluster_demand','updated_at');const cdOk=cd&&(Date.now()-new Date(cd).getTime())<26*3600e3;if(!cdOk)bad++;

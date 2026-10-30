@@ -1,0 +1,25 @@
+name: ozon-ads-backfill
+# Разовая догрузка рекламы (Ozon Performance API) в ozon_ad_spend — недостающие дни по вчера. Только ручной запуск.
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Дни через запятую (ГГГГ-ММ-ДД); пусто — все дни после последнего с рекламой в базе, по вчера'
+        required: false
+        default: ''
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Ozon Performance API -> ozon_ad_spend
+        run: node scripts/ozon_ads_backfill.mjs
+        env:
+          DAYS: ${{ github.event.inputs.days }}
+          OZON_PERF_CLIENT_ID: ${{ secrets.OZON_PERF_CLIENT_ID }}
+          OZON_PERF_CLIENT_SECRET: ${{ secrets.OZON_PERF_CLIENT_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

@@ -1,5 +1,5 @@
 name: ozon-daily-load
-# Ночная загрузка из API Ozon вместо CSV (заказы, остатки, отклонения, начисления, пересчёт CF) — после ozon-products-sync.
+# Ночная загрузка из API Ozon вместо CSV (заказы, остатки, отклонения, начисления, реклама, пересчёт CF) — после ozon-products-sync.
 # Запись в базу — только если переменная репозитория OZON_LOAD_WRITE = 1 (Settings → Variables) или при ручном запуске с write=1;
 # иначе режим проверки: всё считается и сверяется с базой, в базу ничего не пишется.
 on:
@@ -22,7 +22,7 @@ jobs:
   load:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,6 +34,8 @@ jobs:
           WRITE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.write || vars.OZON_LOAD_WRITE || '0' }}
           OZON_CLIENT_ID: ${{ secrets.OZON_CLIENT_ID }}
           OZON_API_KEY: ${{ secrets.OZON_API_KEY }}
+          OZON_PERF_CLIENT_ID: ${{ secrets.OZON_PERF_CLIENT_ID }}
+          OZON_PERF_CLIENT_SECRET: ${{ secrets.OZON_PERF_CLIENT_SECRET }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       - name: Telegram — сводка владельцу (всегда, даже при ошибке)
