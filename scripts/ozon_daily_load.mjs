@@ -354,11 +354,11 @@ async function marginAggPeriod(pid,from,to){
     if(c.charge_type==='Выручка'){g.gmv+=price*qty;g.sales+=qty;g.revP+=amt;}else if(c.charge_type==='Возврат выручки'){g.gmv+=price*qty;g.sales-=qty;g.revP+=amt;}});
   const ad=new Map();(await sbAll(`ozon_ad_spend?spend_date=gte.${from}&spend_date=lte.${to}&select=offer_id,spend_date,amount&order=spend_date,offer_id`)).forEach(x=>{
     if((SKU_PID.get(String(x.offer_id))||OFFER_PID.get(x.offer_id))===pid)ad.set(x.spend_date,(ad.get(x.spend_date)||0)+Number(x.amount||0));});
-  let pnl=0,gmv=0,sales=0,revP=0,cnt=0,ads=0,d=from;
-  while(d<=to){const g=map.get(d);if(g&&g.gmv>0){pnl+=g.pnl;gmv+=g.gmv;sales+=g.sales;revP+=g.revP||0;cnt++;}ads+=ad.get(d)||0;d=addDays(d,1);}
+  let pnl=0,gmv=0,sales=0,revP=0,cogs=0,cnt=0,ads=0,d=from;
+  while(d<=to){const g=map.get(d);if(g&&g.gmv>0){pnl+=g.pnl;gmv+=g.gmv;sales+=g.sales;revP+=g.revP||0;cogs+=costAt(pid,d).cost*g.sales;cnt++;}ads+=ad.get(d)||0;d=addDays(d,1);}
   if(!cnt||gmv<=0)return null;
-  const cost=COST[pid]||0, tax=TAX_RATE*revP;
-  return {pct:Math.round(((pnl-cost*sales-ads-tax)/gmv*100)*100)/100,from,to,days:cnt};
+  const tax=TAX_RATE*revP;                                                        // себестоимость — на дату (costAt), как syncPnl (с 30.10.2026)
+  return {pct:Math.round(((pnl-cogs-ads-tax)/gmv*100)*100)/100,from,to,days:cnt};
 }
 const adsDay=new Map();
 const hasAds=async d=>{if(!adsDay.has(d))adsDay.set(d,(await sbAll(`ozon_ad_spend?spend_date=eq.${d}&select=spend_date&order=offer_id`)).length>0);return adsDay.get(d);};

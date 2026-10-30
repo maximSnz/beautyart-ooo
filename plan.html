@@ -131,7 +131,6 @@
  .psectitle{font-weight:700;color:#544273;font-size:.85em;margin-bottom:8px}
  .sec-head{cursor:pointer;user-select:none}
  .sec-caret{display:inline-block;margin-right:6px}
- .protowrap{max-width:1100px}
  .pulsewrap{overflow-x:auto}
  .pulsemetric{color:#544273;font-weight:700}
  .pulsetable{width:auto;min-width:0;font-size:.82em;border-collapse:collapse}
@@ -1746,7 +1745,6 @@ async function fetchChargesMap(pid,from,to){
   }
   return map;
 }
-function marginOfDay(map,pid,d){const g=map.get(d);if(!g||g.gmv<=0)return null;const cost=COST[pid]||0;return Math.round(((g.pnl-cost*g.sales)/g.gmv*100)*100)/100;}
 async function ordersForDay(pid,iso){const m=await fetchSalesMap(pid,iso,iso);return m.get(iso)||0;}
 async function ordersAvgWeekdays(pid,from,to){
   const m=await fetchSalesMap(pid,from,to);
@@ -1766,17 +1764,16 @@ async function marginAggPeriod(pid,fromISO,toISO){
   const map=await fetchChargesMap(pid,fromISO,toISO);
   const adsMap=await loadAdSpend(fromISO,toISO);
   const adsByDay=adsMap.get(pid)||new Map();
-  let pnl=0,gmv=0,sales=0,revP=0,cnt=0,ads=0,d=fromISO;
+  let pnl=0,gmv=0,sales=0,revP=0,cogs=0,cnt=0,ads=0,d=fromISO;
   while(d<=toISO){
     const g=map.get(d);
-    if(g&&g.gmv>0){pnl+=g.pnl;gmv+=g.gmv;sales+=g.sales;revP+=g.revP||0;cnt++;}
+    if(g&&g.gmv>0){pnl+=g.pnl;gmv+=g.gmv;sales+=g.sales;revP+=g.revP||0;cogs+=costAt(pid,d).cost*g.sales;cnt++;}
     ads+=adsByDay.get(d)||0;
     d=addDaysISO(d,1);
   }
   if(!cnt||gmv<=0)return null;
-  const cost=COST[pid]||0;
-  const tax=TAX_RATE*revP;
-  return {pct:Math.round(((pnl-cost*sales-ads-tax)/gmv*100)*100)/100,from:fromISO,to:toISO,days:cnt};
+  const tax=TAX_RATE*revP;  // себестоимость — на дату (costAt), как syncPnl
+  return {pct:Math.round(((pnl-cogs-ads-tax)/gmv*100)*100)/100,from:fromISO,to:toISO,days:cnt};
 }
 async function loadSmartBase(pid){
   const el=document.getElementById('smartbase_'+pid);
@@ -2032,61 +2029,73 @@ function toggleSection(id){
 async function loadPulse(pid){
   const offer=(BYID[pid]||{}).offer_id;
   const box=document.getElementById('pulsetbl_'+pid);
-  if(!WEEKISO.length){ if(box)box.innerHTML='<div class="psub">нет недель</div>'; return; }
-  const start=parseW(WEEKISO[0]);
-  const end=weekEnd(parseW(WEEKISO[WEEKISO.length-1]));
+  try{ if(box)box.innerHTML=await pulseHtml(pid,offer); }
+  catch(e){
+    if(box)box.innerHTML=`<div class="psub" style="color:#E33D78">Ошибка загрузки: ${esc(e.message)}. Сверните и раскройте блок, чтобы повторить.</div>`;
+    const el=document.getElementById('pulse_'+pid); if(el)delete el.dataset.loaded;
+  }
+}
+// постраничное чтение; сортировка — по уникальному ключу; ошибка сервера — исключение (не молча неполные данные)
+async function pulseFetch(path){
+  let out=[],off=0;
+  while(true){
+    const r=await fetch(SUPABASE_URL+`/rest/v1/${path}&limit=1000&offset=${off}`,{headers:HD});
+    if(!r.ok)throw new Error(path.split('?')[0]+' HTTP '+r.status);
+    const j=await r.json(); out=out.concat(j); if(j.length<1000)break; off+=1000;
+  }
+  return out;
+}
+async function pulseHtml(pid,offer){
+  if(!WEEKISO.length)return '<div class="psub">нет недель</div>';
+  // период — недели месяца, дополненные до целого месяца (если 1-е или последнее число вне ISO-недель)
+  const [py,pm]=MONTH.split('-').map(Number);
+  const mStart=new Date(py,pm-1,1), mEnd=new Date(py,pm,0);
+  const wStart=parseW(WEEKISO[0]), wEnd=weekEnd(parseW(WEEKISO[WEEKISO.length-1]));
+  const start=wStart<mStart?wStart:mStart, end=wEnd>mEnd?wEnd:mEnd;
   const first=localISO(start), last=localISO(end);
-  let salesRows=[],off=0;
-  while(true){
-    const r=await fetch(SUPABASE_URL+`/rest/v1/product_sales?offer_id=eq.${encodeURIComponent(offer)}&sale_date=gte.${first}&sale_date=lte.${last}&select=sale_date,qty&order=sale_date.asc,warehouse_name.asc&limit=1000&offset=${off}`,{headers:HD});
-    if(!r.ok)break;
-    const j=await r.json(); salesRows=salesRows.concat(j); if(j.length<1000)break; off+=1000;
-  }
-  const byDaySales=new Map();
-  salesRows.forEach(r=>{ byDaySales.set(r.sale_date,(byDaySales.get(r.sale_date)||0)+Number(r.qty||0)); });
-  let stockRows=[],off2=0;
-  while(true){
-    const r=await fetch(SUPABASE_URL+`/rest/v1/stock_history?offer_id=eq.${encodeURIComponent(offer)}&report_date=gte.${first}&report_date=lte.${last}&select=report_date,stock&order=report_date.asc&limit=1000&offset=${off2}`,{headers:HD});
-    if(!r.ok)break;
-    const j=await r.json(); stockRows=stockRows.concat(j); if(j.length<1000)break; off2+=1000;
-  }
+  const o=encodeURIComponent(offer);
+  const [salesRows,stockRows,chargeRows,lastRow,adsMap,temps]=await Promise.all([
+    pulseFetch(`product_sales?offer_id=eq.${o}&sale_date=gte.${first}&sale_date=lte.${last}&select=sale_date,qty,revenue&order=sale_date.asc,warehouse_name.asc`),
+    pulseFetch(`stock_history?offer_id=eq.${o}&report_date=gte.${first}&report_date=lte.${last}&select=report_date,stock&order=report_date.asc,warehouse_name.asc`),
+    pulseFetch(`ozon_charges?offer_id=eq.${o}&event_date=gte.${first}&event_date=lte.${last}&select=event_date,charge_type,amount,qty,price&order=row_key`),
+    fetch(SUPABASE_URL+'/rest/v1/product_sales?select=sale_date&order=sale_date.desc&limit=1',{headers:HD}).then(r=>{if(!r.ok)throw new Error('product_sales HTTP '+r.status);return r.json();}),
+    loadAdSpend(first,last),
+    computeOrderTemps()
+  ]);
+  // последний загруженный день заказов (по всем товарам): до него день без строк = 0 заказов, не «нет данных»
+  const lastSale=lastRow.length?lastRow[0].sale_date:'';
+  const byDaySales=new Map(), byDayRev=new Map();
+  salesRows.forEach(r=>{ byDaySales.set(r.sale_date,(byDaySales.get(r.sale_date)||0)+Number(r.qty||0)); byDayRev.set(r.sale_date,(byDayRev.get(r.sale_date)||0)+Number(r.revenue||0)); });
   const rawStock=new Map();
   stockRows.forEach(r=>{ rawStock.set(r.report_date,(rawStock.get(r.report_date)||0)+Number(r.stock||0)); });
-  let chargeRows=[],off3=0;
-  while(true){
-    const r=await fetch(SUPABASE_URL+`/rest/v1/ozon_charges?offer_id=eq.${encodeURIComponent(offer)}&event_date=gte.${first}&event_date=lte.${last}&select=event_date,charge_type,amount,qty,price&order=row_key&limit=1000&offset=${off3}`,{headers:HD});
-    if(!r.ok)break;
-    const j=await r.json(); chargeRows=chargeRows.concat(j); if(j.length<1000)break; off3+=1000;
-  }
   const byDayCh=new Map();
   chargeRows.forEach(c=>{
     const d=c.event_date; if(!d)return;
-    let g=byDayCh.get(d); if(!g){g={gmv:0,sales:0,pnl:0,revg:0,revP:0};byDayCh.set(d,g);}
+    let g=byDayCh.get(d); if(!g){g={gmv:0,sales:0,pnl:0,revP:0};byDayCh.set(d,g);}
     const amt=Number(c.amount||0), qty=Number(c.qty||0), price=Number(c.price||0);
     g.pnl+=amt;
-    if(c.charge_type==='Выручка'){ g.gmv+=price*qty; g.sales+=qty; g.revg+=price*qty; g.revP+=amt; }
+    if(c.charge_type==='Выручка'){ g.gmv+=price*qty; g.sales+=qty; g.revP+=amt; }
     else if(c.charge_type==='Возврат выручки'){ g.gmv+=price*qty; g.sales-=qty; g.revP+=amt; }
   });
   const days=[];
   for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){ days.push(localISO(new Date(d))); }
-  const salesVals=days.map(iso=>{ const v=byDaySales.get(iso); return v==null?null:v; });
+  const salesVals=days.map(iso=>{ const v=byDaySales.get(iso); return v!=null?v:(iso<=lastSale?0:null); });
   const stockVals=days.map(iso=>{ const v=rawStock.get(iso); return v==null?null:v; });
-  const adsMap=await loadAdSpend(first,last);
   const adsByDay=adsMap.get(pid)||new Map();
-  const cost=COST[pid]||0;
+  // маржинальность по дате заказа; себестоимость — на дату (как syncPnl)
   const marginVals=days.map(iso=>{
     const g=byDayCh.get(iso);
     const ads=adsByDay.get(iso)||0;
     if(!g||g.gmv<=0) return null;
-    return (g.pnl-cost*g.sales-ads-TAX_RATE*g.revP)/g.gmv*100;
+    return (g.pnl-costAt(pid,iso).cost*g.sales-ads-TAX_RATE*g.revP)/g.gmv*100;
   });
+  // ДРР — как на главной: реклама дня ÷ выручка PNL заказов того же дня (product_sales.revenue)
   const drrVals=days.map(iso=>{
     const ads=adsByDay.get(iso)||0;
     if(ads===0) return null;
-    const g=byDayCh.get(iso);
-    const revg=g?g.revg:0;
-    if(!revg||revg<=0) return Infinity;
-    return ads/revg*100;
+    const rev=byDayRev.get(iso)||0;
+    if(rev<=0) return (iso<=lastSale)?Infinity:null;
+    return ads/rev*100;
   });
   const salesNums=salesVals.filter(v=>v!=null);
   const sMn=salesNums.length?Math.min(...salesNums):0, sMx=salesNums.length?Math.max(...salesNums):0;
@@ -2098,22 +2107,19 @@ async function loadPulse(pid){
   const mMn=mNums.length?Math.min(...mNums):0, mMx=mNums.length?Math.max(...mNums):1;
   const marginBg=v=>{ if(v==null)return ''; if(v<0)return 'background:rgba(227,61,120,.18);'; const t=(mMx===mMn)?0.5:(v-mMn)/(mMx-mMn); return `background:rgba(22,163,74,${(0.06+0.44*t).toFixed(2)});`; };
   const nowMs=new Date().getTime();
+  const todayISO=localISO(new Date());
   let h='<div class="pulsewrap"><table class="pulsetable"><thead><tr><th>Параметр</th>';
   days.forEach(iso=>{
-    const prov=(nowMs-parseW(iso).getTime())<7*86400000;
+    const prov=iso<todayISO&&(nowMs-parseW(iso).getTime())<7*86400000;
     h+=prov?`<th title="предварительно: начисления за этот день ещё доезжают (логистика, возвраты и отмены приходят с задержкой); значение уточнится само">${ddmm(iso)}*</th>`:`<th>${ddmm(iso)}</th>`;
   });
   h+='</tr></thead><tbody>';
-  const temps=await computeOrderTemps();
   const trow=(temps[matrixOf(offer)]||[]).find(x=>x.offer===offer);
-  const rpDay=trow?trow.rp:null;
-  const rcDay=trow?trow.rc:null;
-  const todayISO=localISO(new Date());
   h+='<tr><td class="pulsemetric">Заказы, шт</td>';
   salesVals.forEach((v,idx)=>{
     const iso=days[idx];
     if(v!=null){ h+=`<td class="num" style="${salesBg(v)}">${fmt(v)}</td>`; return; }
-    if(iso>todayISO){
+    if(iso>=todayISO){
       const p=BYID[pid];
       const planDay=p?dayShare(p,iso,'sales'):null;
       const inMonth=iso.slice(0,7)===MONTH;
@@ -2129,7 +2135,7 @@ async function loadPulse(pid){
   h+='<tr><td class="pulsemetric">Остатки, шт</td>';
   stockVals.forEach(v=>{ h+=`<td class="num" style="${stockBg(v)}">${v==null?'—':fmt(v)}</td>`; });
   h+='</tr>';
-  h+='<tr><td class="pulsemetric">Маржинальность, %</td>';
+  h+='<tr><td class="pulsemetric" title="Маржа заказов этого дня (все начисления по ним, по дате заказа) ÷ GMV; не равна дневной марже главной и карт Шухарта — там по дате начисления">Маржинальность (по дате заказа), %</td>';
   marginVals.forEach(v=>{ h+=`<td class="num" style="${marginBg(v)}">${v==null?'—':f1(v)}</td>`; });
   h+='</tr>';
   const DRR_TARGET=5, DRR_MAX_DIST=30;
@@ -2145,7 +2151,7 @@ async function loadPulse(pid){
   drrVals.forEach(v=>{ h+=`<td class="num" style="${drrBg(v)}">${v==null?'—':(isFinite(v)?f1(v):'∞')}</td>`; });
   h+='</tr>';
   h+='</tbody></table><div class="psub" style="margin-top:6px">* — предварительный день (последние 7 дней): маржинальность уточняется по мере доезда начислений. Дни старше 7 дней устойчивы; редкие поздние возвраты возможны и по ним — это нормальная ревизия.</div></div>';
-  if(box)box.innerHTML=h;
+  return h;
 }
 function arcPath(cx,cy,rO,rI,a0,a1){
   const p=(r,a)=>[cx+r*Math.cos(a),cy+r*Math.sin(a)];
