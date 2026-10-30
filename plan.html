@@ -2095,11 +2095,15 @@ async function pulseHtml(pid,offer){
     return {gmv,pre,ads,rev};
   };
   // лимиты ДРР товара (в долях выручки заказов, как ДРР на странице): безубыточный = маржинальность до рекламы × выкуп,
-  // плановый = (маржинальность до рекламы − план маржинальности) × выкуп; выкуп = GMV ÷ выручка заказов
-  const L=agg(limFrom,limTo);
-  const lim={ok:L.gmv>0&&L.rev>0};
+  // плановый = (маржинальность до рекламы − план маржинальности) × выкуп; выкуп = GMV ÷ выручка заказов.
+  // Обе величины — медиана 4 недель окна: одна неделя с аномальными начислениями не обнуляет лимит (решение 30.10.2026)
+  const med=a=>{ if(!a.length)return null; const b=[...a].sort((x,y)=>x-y), m=b.length>>1; return b.length%2?b[m]:(b[m-1]+b[m])/2; };
+  const limWeeks=[0,1,2,3].map(i=>{ const f=addDaysISO(limFrom,i*7), t=addDaysISO(f,6), a=agg(f,t);
+    return {f,t,pre:a.gmv>0?a.pre/a.gmv*100:null,buy:a.gmv>0&&a.rev>0?a.gmv/a.rev:null}; });
+  const preW=limWeeks.map(w=>w.pre).filter(v=>v!=null), buyW=limWeeks.map(w=>w.buy).filter(v=>v!=null);
+  const lim={ok:preW.length>0&&buyW.length>0};
   if(lim.ok){
-    lim.pre=L.pre/L.gmv*100; lim.buy=L.gmv/L.rev;
+    lim.pre=med(preW); lim.buy=med(buyW);
     lim.be=Math.max(0,lim.pre*lim.buy);
     const pl=PLAN[pid]; lim.planPct=pl&&pl.margin_pct!=null&&pl.plan_qty>0?Number(pl.margin_pct):null;
     lim.target=lim.planPct==null?null:Math.max(0,(lim.pre-lim.planPct)*lim.buy);
@@ -2173,7 +2177,9 @@ async function pulseHtml(pid,offer){
   priceVals.forEach(v=>{ h+=`<td class="num" style="${priceBg(v)}">${v==null?'—':fmt(v)}</td>`; });
   h+='</tr>';
   const limTip=lim.ok
-    ?`Лимиты товара — по заказам ${ddmm(limFrom)}–${ddmm(limTo)} (выкупы по ним уже пришли):\n• маржинальность до рекламы — ${f1(lim.pre)}% от суммы выкупов (GMV);\n• выкупается ${f1(lim.buy*100)}% выручки заказов;\n• безубыточный ДРР = ${f1(lim.pre)}% × ${f1(lim.buy*100)}% = ${f1(lim.be)}%`
+    ?`Лимиты товара — по заказам ${ddmm(limFrom)}–${ddmm(limTo)} (выкупы по ним уже пришли), медиана 4 недель — одна неудачная неделя не искажает лимит:\n`
+      +limWeeks.map(w=>`  ${ddmm(w.f)}–${ddmm(w.t)}: до рекламы ${w.pre==null?'—':f1(w.pre)+'%'}, выкуп ${w.buy==null?'—':f1(w.buy*100)+'%'}`).join('\n')
+      +`\n• маржинальность до рекламы (медиана) — ${f1(lim.pre)}% от суммы выкупов (GMV);\n• выкупается (медиана) ${f1(lim.buy*100)}% выручки заказов;\n• безубыточный ДРР = ${f1(lim.pre)}% × ${f1(lim.buy*100)}% = ${f1(lim.be)}%`
       +(lim.target!=null?`;\n• плановый ДРР = (${f1(lim.pre)}% − план маржинальности ${f1(lim.planPct)}%) × ${f1(lim.buy*100)}% = ${f1(lim.target)}%.`:'.\n• планового лимита нет — нет плана маржинальности на месяц.')
       +`\n\nЗелёный — до планового лимита, жёлтый — в плюсе, но ниже плана, красный — реклама съедает всю маржу (убыток).`
     :'Лимиты не рассчитаны: нет выкупов по заказам за 4 недели до последних 7 дней.';
