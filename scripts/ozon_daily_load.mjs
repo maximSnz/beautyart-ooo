@@ -456,6 +456,54 @@ if(!WRITE){ // проверка переноса: пересчитать уже 
   Object.entries(why).sort().forEach(([k,v])=>console.log(`    расхождение — ${k}: ${v}`));
 }
 
+// ===== 8. Лимиты ДРР от цены → product_drr_limits (pulseCal / unitPct из plan.html, «Рука на пульсе», 1:1) =====
+// Для вкладки «Протокол работ» на главной (31.10.2026): цена — средняя за 7 дней до сегодня, план маржинальности — месяц дня D.
+// Нет таблицы (SQL не запущен) — предупреждение, загрузка не падает.
+console.log('\n8. Лимиты ДРР',el());
+if(!SNAPSHOT){console.log('  день ≠ вчера — пропущено');}
+else try{
+  const NET_FLOOR=5, OZON_COMM_EDGE=300, OZON_COMM={low:23,high:51};
+  const PULSE_PROP=new Set(['Выручка','Баллы за скидки','Возврат выручки','Вознаграждение за продажу','Возврат вознаграждения','Эквайринг','Программы партнёров','Продвижение бренда']);
+  const med=a=>{const b=[...a].sort((x,y)=>x-y),m=b.length>>1;return b.length%2?b[m]:(b[m-1]+b[m])/2;};
+  const calTo=addDays(TODAY,-8), calFrom=addDays(calTo,-27), p7From=addDays(TODAY,-7), p7To=addDays(TODAY,-1);
+  const sl=await sbAll(`product_sales?sale_date=gte.${calFrom}&sale_date=lte.${p7To}&select=sale_date,offer_id,qty,revenue&order=sale_date,offer_id,warehouse_name`);
+  const SQ=new Map(),SR_=new Map();sl.forEach(x=>{const k=x.offer_id+'|'+x.sale_date;SQ.set(k,(SQ.get(k)||0)+Number(x.qty||0));SR_.set(k,(SR_.get(k)||0)+Number(x.revenue||0));});
+  const planM=new Map((await sbAll(`sales_plan?month=eq.${D.slice(0,7)}&select=product_id,plan_qty,margin_pct&order=product_id`)).map(x=>[x.product_id,x]));
+  const sumQR=(o,f,t)=>{let q=0,r=0;for(let d=f;d<=t;d=addDays(d,1)){q+=SQ.get(o+'|'+d)||0;r+=SR_.get(o+'|'+d)||0;}return {q,r};};
+  // начисления по дате заказа из представления ozon_charges_by_event — по неделям (как pulseCharges), не больше 3 товаров одновременно
+  const todo=active.filter(p=>sumQR(p.offer_id,calFrom,calTo).q>0);
+  const limRows=[];let noCal=0,qi=0;
+  await Promise.all([0,1,2].map(async()=>{ while(qi<todo.length){ const p=todo[qi++],pid=p.product_id,o=p.offer_id;
+    const ch=[];for(let w=0;w<4;w++){const f=addDays(calFrom,w*7);ch.push(...await sbAll(`ozon_charges_by_event?offer_id=eq.${encodeURIComponent(o)}&event_date=gte.${f}&event_date=lte.${addDays(f,6)}&select=event_date,charge_type,amount,qty,gmv&order=event_date,charge_type`));}
+    // pulseByDay
+    const byDay=new Map();ch.forEach(c=>{const d=c.event_date;if(!d)return;let g=byDay.get(d);if(!g){g={gmv:0,sales:0,pnl:0,revP:0,prop:0,unit:0,comm:0};byDay.set(d,g);}
+      const amt=Number(c.amount||0),qty=Number(c.qty||0),gv=Number(c.gmv||0);g.pnl+=amt;if(PULSE_PROP.has(c.charge_type))g.prop+=amt;else g.unit+=amt;
+      if(c.charge_type==='Вознаграждение за продажу'||c.charge_type==='Возврат вознаграждения')g.comm+=amt;
+      if(c.charge_type==='Выручка'){g.gmv+=gv;g.sales+=qty;g.revP+=amt;}else if(c.charge_type==='Возврат выручки'){g.gmv+=gv;g.sales-=qty;g.revP+=amt;}});
+    // pulseCal
+    const W=[];let oqAll=0,orAll=0;
+    for(let i=0;i<4;i++){const f=addDays(calFrom,i*7);let gmv=0,prop=0,unit=0,revP=0,cogs=0,oq=0,orev=0,comm=0;
+      for(let k=0;k<7;k++){const d=addDays(f,k),g=byDay.get(d);if(g){gmv+=g.gmv;prop+=g.prop;unit+=g.unit;revP+=g.revP;comm+=g.comm;cogs+=costAt(pid,d).cost*g.sales;}
+        oq+=SQ.get(o+'|'+d)||0;orev+=SR_.get(o+'|'+d)||0;}
+      oqAll+=oq;orAll+=orev;
+      if(gmv>0&&oq>0&&orev>0)W.push({b:gmv/orev,r:prop/gmv,t:TAX_RATE*revP/gmv,u:(cogs-unit)/oq,c:-comm/gmv});}
+    if(!W.length){noCal++;continue;}
+    const C={b:med(W.map(w=>w.b)),r:med(W.map(w=>w.r)),t:med(W.map(w=>w.t)),u:med(W.map(w=>w.u))},p0=oqAll>0?orAll/oqAll:null;
+    const c=med(W.map(w=>w.c)),own=p0!=null&&p0>OZON_COMM_EDGE?'high':'low';
+    C.r0=C.r+c;C.comm={low:own==='low'?c:OZON_COMM.low/100,high:own==='high'?c:OZON_COMM.high/100};
+    // цена — средняя за 7 дней (как priceNow в pulseHtml); unitPct при ДРР 0 = маржинальность до рекламы
+    const s7=sumQR(o,p7From,p7To),P=s7.q>0?s7.r/s7.q:p0;
+    const pre=((C.r0-(P<=OZON_COMM_EDGE?C.comm.low:C.comm.high))-C.t-C.u/(P*C.b))*100;
+    const pl=planM.get(pid),planPct=pl&&pl.margin_pct!=null&&Number(pl.plan_qty)>0?Number(pl.margin_pct):null;
+    const r4=x=>x==null?null:Math.round(x*1e4)/1e4;
+    limRows.push({product_id:pid,day:TODAY,price:r2(P),pre_pct:r4(pre),plan_pct:planPct,drr_plan:planPct==null?null:r4(Math.max(0,(pre-planPct)*C.b)),
+      drr_be:r4(Math.max(0,(pre-NET_FLOOR)*C.b)),b:r4(C.b),r0:r4(C.r0),comm_low:r4(C.comm.low),comm_high:r4(C.comm.high),t:r4(C.t),u:r4(C.u),cal_from:calFrom,cal_to:calTo});
+  }}));
+  console.log(`  товаров с продажами в ${calFrom}…${calTo}: ${todo.length}, лимиты: ${limRows.length}, без начислений: ${noCal}`);
+  await sbWrite('POST','product_drr_limits?on_conflict=product_id,day',limRows);
+  note(`Лимиты ДРР: ${limRows.length} товаров`);
+}catch(e){console.log('  ⚠️ лимиты ДРР:',e.message.slice(0,160));note(`⚠️ Лимиты ДРР не посчитаны: ${e.message.slice(0,100)}`);}
+
 if(!WRITE){console.log('\nРежим проверки — в базу НЕ записано. Было бы выполнено:');PLANNED.forEach(x=>console.log('  '+x));}
 note(`Время: ${Math.round((Date.now()-T0)/60000)} мин`);
 console.log('\nГотово.');
