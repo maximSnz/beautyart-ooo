@@ -1427,7 +1427,14 @@ async function upsertPPM(pid,patch){
   }
   await fetch(SUPABASE_URL+'/rest/v1/product_plan_meta?on_conflict=product_id,month',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},body:JSON.stringify({product_id:pid,month:MONTH,weekday:next.weekday,protocol:next.protocol,work_date:next.work_date})});
 }
-async function setWorkDate(pid,val){ await upsertPPM(pid,{work_date:val||null}); render(); }
+// ручной перенос даты работы → журнал product_work_date_log (главная показывает переносы точками 📅; 31.10.2026).
+// Нет таблицы или ошибка записи — перенос всё равно сохраняется, журнал пропускается
+async function setWorkDate(pid,val){
+  const old=(PPM[pid]&&PPM[pid].work_date)||null,nw=val||null;
+  await upsertPPM(pid,{work_date:nw});
+  if(old!==nw)fetch(SUPABASE_URL+'/rest/v1/product_work_date_log',{method:'POST',headers:{...HD,'Content-Type':'application/json',Prefer:'return=minimal'},body:JSON.stringify({product_id:pid,old_date:old,new_date:nw,user_email:(window.BA_AUTH&&BA_AUTH.email())||null})}).catch(e=>console.warn('work_date_log:',e.message));
+  render();
+}
 async function editWeek(pid,week,metric){
   const rec=(WD[pid]&&WD[pid][metric]&&WD[pid][metric][week])?WD[pid][metric][week]:{forecast:null};
   const val=prompt(`Прогноз на ${week} (пусто = авторасчёт):`, rec.forecast==null?'':rec.forecast);
