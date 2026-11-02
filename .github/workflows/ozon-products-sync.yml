@@ -2,11 +2,18 @@ name: ozon-products-sync
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'   # 00:00 UTC = 03:00 Мск, один раз в сутки
+    - cron: '0 22 * * *'   # 22:00 UTC = 01:00 Мск, раз в сутки: GitHub задерживает плановые запуски на часы — встаём в очередь раньше
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      # день заказа по UTC кончается в 03:00 Мск — раньше 03:05 Мск ждём, иначе ночная загрузка возьмёт неполный вчерашний день
+      - name: Wait until 03:05 Msk
+        if: github.event_name == 'schedule'
+        run: |
+          if [ "$(date -u +%H)" -ge 21 ]; then
+            s=$(( $(date -u -d 'tomorrow 00:05' +%s) - $(date -u +%s) )); echo "Ждём $((s/60)) мин до 03:05 Мск"; sleep $s
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20' }
