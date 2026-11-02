@@ -2155,7 +2155,7 @@ async function loadUnit(pid){
       +`<label>Цена заказа, ₽ ${inp('unitP',P0,1)}</label><label>ДРР, % ${inp('unitD',D0,0.5)}</label>`
       +`<button onclick="unitSet(${pid},${P0},${D0})" title="Цена и ДРР вчерашнего дня — как последняя колонка «Руки на пульсе»">${U.dayISO&&U.dayISO!==U.y?ddmm(U.dayISO):'Вчера'} (${fmt(P0)} ₽, ${f1(D0)}%)</button>`
       +(U.planPrice!=null?`<button onclick="unitSet(${pid},${Math.round(U.planPrice)},null)">Цена плана (${fmt(U.planPrice)} ₽)</button>`:'')
-      +`</div><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start"><div id="unitres_${pid}"></div><div id="unitgrid_${pid}"></div><div id="unitinfo_${pid}" style="font-size:.86em;line-height:1.6;max-width:420px"></div></div>`
+      +`</div><div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start"><div id="unitres_${pid}" style="flex:0 0 auto"></div><div id="unitgrid_${pid}" style="flex:0 0 auto"></div><div id="unitinfo_${pid}" style="flex:1 1 230px;min-width:230px;max-width:420px;font-size:.86em;line-height:1.6"></div></div>`
       +`<div class="psub" style="margin-top:6px;color:#94a3b8">Модель не знает, как цена и реклама меняют число заказов, — это проверяйте SMART-гипотезой. Маржинальность — от суммы выкупов, как в факте (CF). Ниже ${NET_FLOOR}% — убыток для компании по чистой прибыли (красный).</div>`;
     unitCalc(pid);
   }catch(e){
@@ -2175,7 +2175,7 @@ function unitCalc(pid){
   const m=U.planPct;
   const bg=v=>v<NET_FLOOR?'background:rgba(227,61,120,0.30);':(m!=null&&v<m?'background:rgba(253,224,71,0.45);':'background:rgba(22,163,74,0.30);');
   const cr=unitComm(C,P), r=unitR(C,P), G=P*C.b, com=G*cr, cut=G*(1-C.r0), tax=G*C.t, ads=P*D/100, mar=G*(r-C.t)-C.u-ads, pct=mar/G*100;
-  const row=(n,v,share,tip,b)=>`<tr${b?' style="font-weight:700"':''}><td style="text-align:left" title="${esc(tip||'')}">${n}</td><td class="num">${v<0?'−':''}${fmt2(Math.abs(Math.round(v*100)/100))} ₽</td><td class="num" style="color:#64748b">${share==null?'':f1(share)+'%'}</td></tr>`;
+  const row=(n,v,share,tip,b)=>`<tr${b?' style="font-weight:700"':''}><td style="text-align:left;white-space:normal;min-width:140px;max-width:190px" title="${esc(tip||'')}">${n}</td><td class="num">${v<0?'−':''}${fmt2(Math.abs(Math.round(v*100)/100))} ₽</td><td class="num" style="color:#64748b">${share==null?'':f1(share)+'%'}</td></tr>`;
   // слева — расчёт на 1 заказ, в середине — матрица «цена × ДРР», справа — выводы (блок ниже по высоте)
   let h=`<div><table class="pulsetable" style="font-size:.86em"><thead><tr><th style="text-align:left">На 1 заказ</th><th>₽</th><th>% выкупа</th></tr></thead><tbody>`
     +row('Цена заказа',P,null,'Цена, которую видит покупатель при заказе')
@@ -2217,7 +2217,9 @@ function unitCalc(pid){
       g+=`<td class="num${a14?' unitavg':a28?' unitavg28':''}" style="${bg(v)}cursor:pointer;${cur?'outline:2px solid #544273;font-weight:700':''}"${tip?` title="${tip}"`:''} onclick="unitSet(${pid},${p},${d})">${f1(v)}</td>`; });
     g+='</tr>'; });
   const leg=[p14!=null&&d14!=null?`<span style="color:#E33D78">■</span> ${t14}`:'',p28!=null&&d28!=null?`<span style="color:#2f6fa3">■</span> ${t28}`:''].filter(Boolean);
-  grid.innerHTML=g+'</tbody></table>'+(leg.length?`<div class="psub" style="margin-top:4px">Пульсируют: ${leg.join('; ')}. Рамка — введённые цена и ДРР.</div>`:'');
+  // подпись — подписью таблицы (caption): ширина = ширине матрицы, длинный текст не выталкивает выводы под матрицу (02.11.2026)
+  if(leg.length)g=g.replace('<thead>',`<caption style="caption-side:bottom;text-align:left;color:#544273;padding-top:4px;white-space:normal">Пульсируют: ${leg.join('; ')}. Рамка — введённые цена и ДРР.</caption><thead>`);
+  grid.innerHTML=g+'</tbody></table>';
 }
 const PULSE_TREND={};
 // линия тренда «Руки на пульсе»: точки — под центрами колонок дней (по заголовкам), шкала — по значениям, плану и 5%
