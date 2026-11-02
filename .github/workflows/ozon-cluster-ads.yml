@@ -1,0 +1,36 @@
+name: ozon-cluster-ads
+# Разовая выгрузка: среднесуточные заказы FBO по кластерам за период → CSV в Telegram администратору. Только чтение, только ручной запуск.
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: 'Начало периода (ГГГГ-ММ-ДД)'
+        required: true
+        default: '2026-07-01'
+      to:
+        description: 'Конец периода (ГГГГ-ММ-ДД)'
+        required: true
+        default: '2026-07-31'
+      offers:
+        description: 'Артикулы через запятую'
+        required: true
+        default: 'BAG-BLK-30L-30,BAG-BLK-30L-60,BAG-BLK-30L-90,BAG-BLK-35L-30,BAG-BLK-35L-60,BAG-BLK-35L-90,BAG-PUR-60L-30,BAG-PUR-60L-60,BAG-PUR-60L-90'
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Ozon FBO orders by cluster -> Telegram (read-only)
+        run: node scripts/ozon_cluster_ads.mjs
+        env:
+          ENTITY: 'ООО'
+          FROM: ${{ github.event.inputs.from }}
+          TO: ${{ github.event.inputs.to }}
+          OFFERS: ${{ github.event.inputs.offers }}
+          OZON_CLIENT_ID: ${{ secrets.OZON_CLIENT_ID }}
+          OZON_API_KEY: ${{ secrets.OZON_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
