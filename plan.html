@@ -117,6 +117,7 @@
  .anaflag{margin-right:3px}
  tr.famrow td{font-weight:700;background:rgba(84,66,115,.06)}
  tr.famrow td.okey{cursor:pointer}
+ .famtog{cursor:pointer;padding:0 6px 0 2px;display:inline-block}
  .famcnt{font-weight:400;opacity:.6}
  tr.famchild td.okey{padding-left:22px}
  tr.rowrestock td{font-weight:900;-webkit-text-stroke:.8px currentColor;paint-order:stroke fill;letter-spacing:.2px}
@@ -2009,7 +2010,7 @@ function protoBlock(pid,offer){
 }
 function toggleSection(id){
   // «Юнит-экономика» и «Рука на пульсе» раскрываются и сворачиваются вместе (решение владельца 30.10.2026)
-  const pair=id.match(/^(unit|pulse)_(\d+)$/);
+  const pair=id.match(/^(unit|pulse)_(.+)$/);
   if(pair){ const el=document.getElementById(id); if(!el)return; const open=el.classList.contains('hide');
     ['unit_','pulse_'].forEach(p=>setSection(p+pair[2],open)); return; }
   setSection(id,document.getElementById(id)&&document.getElementById(id).classList.contains('hide'));
@@ -2024,17 +2025,16 @@ function setSection(id,open){
   }
   if(open&&id.indexOf('unit_')===0&&!el.dataset.loaded){
     el.dataset.loaded='1';
-    loadUnit(Number(id.slice(5)));
+    const k=id.slice(5); loadUnit(/^\d+$/.test(k)?Number(k):k);
   }
   if(open&&id.indexOf('pulse_')===0&&!el.dataset.loaded){
     el.dataset.loaded='1';
-    loadPulse(Number(id.slice(6)));
+    const k=id.slice(6); loadPulse(/^\d+$/.test(k)?Number(k):k);
   }
 }
 async function loadPulse(pid){
-  const offer=(BYID[pid]||{}).offer_id;
-  const box=document.getElementById('pulsetbl_'+pid);
-  try{ if(box){ box.innerHTML=await pulseHtml(pid,offer); pulseTrend(pid); } }
+  const box=document.getElementById('pulsetbl_'+pid), G=PROTO_GROUPS[pid];
+  try{ if(box){ box.innerHTML=G?(WEEKISO.length?pulseRender(await pulseGroupData(pid,G.key,G.members)):'<div class="psub">нет недель</div>'):await pulseHtml(pid,(BYID[pid]||{}).offer_id); pulseTrend(pid); } }
   catch(e){
     if(box)box.innerHTML=`<div class="psub" style="color:#E33D78">Ошибка загрузки: ${esc(e.message)}. Сверните и раскройте блок, чтобы повторить.</div>`;
     const el=document.getElementById('pulse_'+pid); if(el)delete el.dataset.loaded;
@@ -2123,30 +2123,36 @@ const unitPriceFor=(C,m,D)=>{
   const hi=at(C.r0-C.comm.high); if(hi!=null)return Math.max(hi,OZON_COMM_EDGE+1);
   return null; };
 const UNIT={};
-async function loadUnit(pid){
+// модель юнит-экономики товара (коэффициенты, вчера, средние за 14 дней и 4 недели) — для товара и для размеров группы
+async function unitModel(pid){
   const offer=(BYID[pid]||{}).offer_id;
+  const todayISO=localISO(new Date()), from=addDaysISO(todayISO,-35), y=addDaysISO(todayISO,-1), w7=addDaysISO(todayISO,-7), w14=addDaysISO(todayISO,-14), w28=addDaysISO(todayISO,-28);
+  const o=encodeURIComponent(offer);
+  const [salesRows,chargeRows,adsMap]=await Promise.all([
+    pulseFetch(`product_sales?offer_id=eq.${o}&sale_date=gte.${from}&sale_date=lte.${y}&select=sale_date,qty,revenue&order=sale_date.asc,warehouse_name.asc`),
+    pulseCharges(o,from,addDaysISO(todayISO,-8)),
+    loadAdSpend(w28,y)
+  ]);
+  const byDaySales=new Map(), byDayRev=new Map();
+  salesRows.forEach(r=>{ byDaySales.set(r.sale_date,(byDaySales.get(r.sale_date)||0)+Number(r.qty||0)); byDayRev.set(r.sale_date,(byDayRev.get(r.sale_date)||0)+Number(r.revenue||0)); });
+  const C=pulseCal(pid,pulseByDay(chargeRows),byDaySales,byDayRev,todayISO);
+  // старт калькулятора — вчера, как последняя колонка «Руки на пульсе» (решение владельца 02.11.2026; до этого — средняя за 7 дней);
+  // нет заказов вчера — последний день с заказами за 14 дней. Средняя за 14 дней — пульсирующая ячейка матрицы
+  // средние за 14 дней и за 4 недели — две пульсирующие ячейки матрицы (розовая и голубая; 02.11.2026)
+  const ads=adsMap.get(pid)||new Map(); let q7=0,q14=0,r14=0,a14=0,q28=0,r28=0,a28=0;
+  for(let d=w28;d<=y;d=addDaysISO(d,1)){ const q=byDaySales.get(d)||0, r=byDayRev.get(d)||0, a=ads.get(d)||0;
+    q28+=q; r28+=r; a28+=a; if(d>=w14){ q14+=q; r14+=r; a14+=a; } if(d>=w7)q7+=q; }
+  let dy=y; while(dy>=w14&&!(byDaySales.get(dy)>0))dy=addDaysISO(dy,-1);
+  const qy=byDaySales.get(dy)||0, ry=byDayRev.get(dy)||0;
+  const pl=PLAN[pid]&&PLAN[pid].plan_qty>0?PLAN[pid]:null;
+  const U=UNIT[pid]={C,q14,dayISO:qy>0?dy:null,py:qy>0?ry/qy:C.p0,dy:ry>0?(ads.get(dy)||0)/ry*100:0,p14:q14>0?r14/q14:null,d14:r14>0?a14/r14*100:null,w14,p28:q28>0?r28/q28:null,d28:r28>0?a28/r28*100:null,w28,y,q7,planPct:pl&&pl.margin_pct!=null?Number(pl.margin_pct):null,planPrice:pl?Number(pl.price):null,planQty:pl?Number(pl.plan_qty):null};
+  return U;
+}
+async function loadUnit(pid){
+  if(PROTO_GROUPS[pid])return loadGroupUnit(pid);
   const box=document.getElementById('unitbox_'+pid);
   try{
-    const todayISO=localISO(new Date()), from=addDaysISO(todayISO,-35), y=addDaysISO(todayISO,-1), w7=addDaysISO(todayISO,-7), w14=addDaysISO(todayISO,-14), w28=addDaysISO(todayISO,-28);
-    const o=encodeURIComponent(offer);
-    const [salesRows,chargeRows,adsMap]=await Promise.all([
-      pulseFetch(`product_sales?offer_id=eq.${o}&sale_date=gte.${from}&sale_date=lte.${y}&select=sale_date,qty,revenue&order=sale_date.asc,warehouse_name.asc`),
-      pulseCharges(o,from,addDaysISO(todayISO,-8)),
-      loadAdSpend(w28,y)
-    ]);
-    const byDaySales=new Map(), byDayRev=new Map();
-    salesRows.forEach(r=>{ byDaySales.set(r.sale_date,(byDaySales.get(r.sale_date)||0)+Number(r.qty||0)); byDayRev.set(r.sale_date,(byDayRev.get(r.sale_date)||0)+Number(r.revenue||0)); });
-    const C=pulseCal(pid,pulseByDay(chargeRows),byDaySales,byDayRev,todayISO);
-    // старт калькулятора — вчера, как последняя колонка «Руки на пульсе» (решение владельца 02.11.2026; до этого — средняя за 7 дней);
-    // нет заказов вчера — последний день с заказами за 14 дней. Средняя за 14 дней — пульсирующая ячейка матрицы
-    // средние за 14 дней и за 4 недели — две пульсирующие ячейки матрицы (розовая и голубая; 02.11.2026)
-    const ads=adsMap.get(pid)||new Map(); let q7=0,q14=0,r14=0,a14=0,q28=0,r28=0,a28=0;
-    for(let d=w28;d<=y;d=addDaysISO(d,1)){ const q=byDaySales.get(d)||0, r=byDayRev.get(d)||0, a=ads.get(d)||0;
-      q28+=q; r28+=r; a28+=a; if(d>=w14){ q14+=q; r14+=r; a14+=a; } if(d>=w7)q7+=q; }
-    let dy=y; while(dy>=w14&&!(byDaySales.get(dy)>0))dy=addDaysISO(dy,-1);
-    const qy=byDaySales.get(dy)||0, ry=byDayRev.get(dy)||0;
-    const pl=PLAN[pid]&&PLAN[pid].plan_qty>0?PLAN[pid]:null;
-    const U=UNIT[pid]={C,dayISO:qy>0?dy:null,py:qy>0?ry/qy:C.p0,dy:ry>0?(ads.get(dy)||0)/ry*100:0,p14:q14>0?r14/q14:null,d14:r14>0?a14/r14*100:null,w14,p28:q28>0?r28/q28:null,d28:r28>0?a28/r28*100:null,w28,y,q7,planPct:pl&&pl.margin_pct!=null?Number(pl.margin_pct):null,planPrice:pl?Number(pl.price):null,planQty:pl?Number(pl.plan_qty):null};
+    const U=await unitModel(pid), C=U.C;
     if(!C.ok){ box.innerHTML='<div class="psub">Модель не рассчитана: мало заказов и выкупов за 4 недели до последних 7 дней.</div>'; return; }
     const P0=Math.round(U.py), D0=Math.round(U.dy*10)/10;
     const inp=(id,v,st)=>`<input type="number" id="${id}_${pid}" value="${v}" step="${st}" min="0" oninput="unitCalc(${pid})" style="width:90px">`;
@@ -2246,6 +2252,10 @@ function pulseTrend(pid){
 }
 async function pulseHtml(pid,offer){
   if(!WEEKISO.length)return '<div class="psub">нет недель</div>';
+  return pulseRender(await pulseData(pid,offer));
+}
+// данные «Руки на пульсе» по товару — отдельно от отрисовки: группа перчаток собирается из размеров (решение владельца 02.11.2026)
+async function pulseData(pid,offer){
   // период — недели месяца, дополненные до целого месяца (если 1-е или последнее число вне ISO-недель)
   const [py,pm]=MONTH.split('-').map(Number);
   const mStart=new Date(py,pm-1,1), mEnd=new Date(py,pm,0);
@@ -2255,7 +2265,7 @@ async function pulseHtml(pid,offer){
   const start=wStart<prev10?wStart:prev10, end=wEnd>mEnd?wEnd:mEnd;
   const first=localISO(start), last=localISO(end);
   const todayISO=localISO(new Date());
-  // данные — с запасом: маржинальность за 7 дней (с first − 6) и коэффициенты лимитов (4 недели до «8 дней назад»)
+  // данные — с запасом: маржинальность за 4 дня (с first − 6) и коэффициенты лимитов (4 недели до «8 дней назад»)
   const calFrom=addDaysISO(todayISO,-35), winFrom=addDaysISO(first,-6), from=calFrom<winFrom?calFrom:winFrom;
   const o=encodeURIComponent(offer);
   const [salesRows,stockRows,chargeRows,lastRow,adsMap,temps]=await Promise.all([
@@ -2275,15 +2285,15 @@ async function pulseHtml(pid,offer){
   // начисления по дате заказа (event_date): все начисления по заказам дня, когда бы Ozon их ни провёл
   const byDayCh=pulseByDay(chargeRows);
   const adsByDay=adsMap.get(pid)||new Map();
-  // сумма за период по дате заказа: GMV, маржа до рекламы (pnl − себестоимость на дату − налог), реклама, выручка заказов PNL
+  // сумма за период по дате заказа: GMV, маржа до рекламы (pnl − себестоимость на дату − налог), реклама, выручка и шт заказов PNL
   const agg=(f,t)=>{
-    let gmv=0,pre=0,ads=0,rev=0;
+    let gmv=0,pre=0,ads=0,rev=0,q=0;
     for(let d=f;d<=t;d=addDaysISO(d,1)){
       const g=byDayCh.get(d);
       if(g){ gmv+=g.gmv; pre+=g.pnl-costAt(pid,d).cost*g.sales-TAX_RATE*g.revP; }
-      ads+=adsByDay.get(d)||0; rev+=byDayRev.get(d)||0;
+      ads+=adsByDay.get(d)||0; rev+=byDayRev.get(d)||0; q+=byDaySales.get(d)||0;
     }
-    return {gmv,pre,ads,rev};
+    return {gmv,pre,ads,rev,q};
   };
   // Лимиты ДРР — от цены (решение владельца 30.10.2026; до этого — по окну дней, у одинаковых дней лимиты расходились).
   // Модель — pulseCal / unitPct (общая с «Юнит-экономикой»): до рекламы при цене P = r − t − u ÷ (P × b);
@@ -2299,29 +2309,24 @@ async function pulseHtml(pid,offer){
   const salesVals=days.map(iso=>{ const v=byDaySales.get(iso); return v!=null?v:(iso<=lastSale?0:null); });
   const stockVals=days.map(iso=>{ const v=rawStock.get(iso); return v==null?null:v; });
   const priceVals=days.map(iso=>{ const q=byDaySales.get(iso)||0; return q>0?(byDayRev.get(iso)||0)/q:null; });
-  // маржинальность за 7 дней по дату (по дате заказа): до рекламы и после; реклама — по дате расхода
-  // маржинальность по дате заказа за период f…t (решение владельца 30.10.2026): основное значение — окно 4 дня, в скобках — день.
-  // Период «созрел» (t не позже 8 дней назад: выкупы пришли) — факт; свежий — оценка по модели при фактических цене и ДРР периода
-  // (unitPct; факт там занижен — выкупы ещё приходят, неполный факт — в подсказке)
+  // маржинальность по дате заказа за период f…t: день и окно 4 дня (тренд). Период «созрел» (t не позже 8 дней назад: выкупы пришли) —
+  // факт; свежий — оценка по модели при фактических цене и ДРР периода (unitPct; неполный факт — в подсказке)
   const matureTo=addDaysISO(todayISO,-8);
   const marOf=(f,t)=>{
     if(t>=todayISO)return null;
     const a=agg(f,t), fact=a.gmv>0?(a.pre-a.ads)/a.gmv*100:null;
     if(t<=matureTo)return fact==null?null:{net:fact};
-    let q=0; for(let d=f;d<=t;d=addDaysISO(d,1))q+=byDaySales.get(d)||0;
-    if(!cal.ok||!(q>0&&a.rev>0))return fact==null?null:{net:fact};
-    const P=a.rev/q, D=a.ads/a.rev*100;
+    if(!cal.ok||!(a.q>0&&a.rev>0))return fact==null?null:{net:fact};
+    const P=a.rev/a.q, D=a.ads/a.rev*100;
     return {net:unitPct(cal,P,D),est:true,P,D,fact};
   };
   const roll=days.map(iso=>marOf(addDaysISO(iso,-3),iso)), dayMar=days.map(iso=>marOf(iso,iso));
-  // ДРР — как на главной: реклама дня ÷ выручка PNL заказов того же дня (product_sales.revenue)
-  // лимит дня — от цены этого дня (решение владельца 30.10.2026: одна цена — один лимит); нет заказов в день — последняя известная
-  // цена; сегодня и будущие — текущая (средняя за 7 дней)
-  let q7=0,r7=0; for(let d=addDaysISO(todayISO,-7);d<todayISO;d=addDaysISO(d,1)){ q7+=byDaySales.get(d)||0; r7+=byDayRev.get(d)||0; }
+  // ДРР — как на главной: реклама дня ÷ выручка PNL заказов того же дня; лимит дня — от цены этого дня (одна цена — один лимит);
+  // нет заказов в день — последняя известная цена; сегодня и будущие — текущая (средняя за 7 дней)
+  let q7=0,r7=0,q14=0; for(let d=addDaysISO(todayISO,-14);d<todayISO;d=addDaysISO(d,1)){ const q=byDaySales.get(d)||0; q14+=q; if(d>=addDaysISO(todayISO,-7)){ q7+=q; r7+=byDayRev.get(d)||0; } }
   const price7=q7>0?r7/q7:null, priceNow=price7!=null?price7:cal.p0;
   let lastP=cal.p0;
   const dayLim=days.map((iso,i)=>{ if(iso>=todayISO)return limAtPrice(priceNow); if(priceVals[i]!=null)lastP=priceVals[i]; return limAtPrice(lastP); });
-  const lim=limAtPrice(priceNow);
   const tipPrices=[...new Set([priceNow-20,priceNow-10,priceNow,priceNow+10,priceNow+20,planPrice].filter(p=>p!=null&&p>0).map(p=>Math.round(p)))].sort((a,b)=>a-b);
   const drrVals=days.map(iso=>{
     const ads=adsByDay.get(iso)||0;
@@ -2330,49 +2335,6 @@ async function pulseHtml(pid,offer){
     if(rev<=0) return (iso<=lastSale)?Infinity:null;
     return ads/rev*100;
   });
-  const salesNums=salesVals.filter(v=>v!=null);
-  const sMn=salesNums.length?Math.min(...salesNums):0, sMx=salesNums.length?Math.max(...salesNums):0;
-  const salesBg=v=>{ if(v==null||!salesNums.length)return ''; const t=(sMx===sMn)?0.5:(v-sMn)/(sMx-sMn); return `background:rgba(22,163,74,${(0.06+0.44*t).toFixed(2)});`; };
-  const stockNums=stockVals.filter(v=>v!=null);
-  const kMn=stockNums.length?Math.min(...stockNums):0, kMx=stockNums.length?Math.max(...stockNums):0;
-  const stockBg=v=>{ if(v==null||!stockNums.length)return ''; const t=(kMx===kMn)?0.5:(v-kMn)/(kMx-kMn); return `background:rgba(227,61,120,${(0.44-0.38*t).toFixed(2)});`; };
-  // маржинальность — относительно плана: зелёный — не ниже плана, жёлтый — от 5% до плана, красный — ниже 5% (убыток по чистой прибыли)
-  const marginBg=v=>{ if(v==null)return ''; if(v<NET_FLOOR)return 'background:rgba(227,61,120,0.30);'; if(planPct!=null&&v<planPct)return 'background:rgba(253,224,71,0.45);'; return 'background:rgba(22,163,74,0.30);'; };
-
-  const priceBg=v=>(v==null||planPrice==null)?'':(v<planPrice*0.98?'background:rgba(227,61,120,.14);':'');
-  // ДРР: зелёный — до планового лимита, жёлтый — до безубыточного (маржинальность 5%), красный — выше (убыток по чистой прибыли)
-  const drrZone=(v,L)=>{ if(v==null)return null; if(!isFinite(v))return 'red'; if(!L.ok)return null; if(v>L.be)return 'red'; if(L.target!=null&&v>L.target)return 'yellow'; return 'green'; };
-  const ZBG={red:'background:rgba(227,61,120,0.38);',yellow:'background:rgba(253,224,71,0.45);',green:'background:rgba(22,163,74,0.30);'};
-  const drrBg=(v,L)=>{ if(v!=null&&!isFinite(v))return 'background:rgba(227,61,120,0.45);'; const z=drrZone(v,L); return z?ZBG[z]:''; };
-  const nowMs=new Date().getTime();
-  const T=s=>s.replace(/"/g,'&quot;');
-  let h='<div class="pulsewrap"><table class="pulsetable"><thead><tr><th>Параметр</th>';
-  days.forEach(iso=>{
-    const prov=iso<todayISO&&iso>matureTo;
-    h+=prov?`<th title="предварительно: выкупы и возвраты по заказам этого дня ещё приходят — маржинальность уточнится сама">${ddmm(iso)}*</th>`:`<th>${ddmm(iso)}</th>`;
-  });
-  h+='</tr></thead><tbody>';
-  const trow=(temps[matrixOf(offer)]||[]).find(x=>x.offer===offer);
-  h+=`<tr><td class="pulsemetric" title="${T('Сколько штук заказали за день (до выкупа и отмен).\n\nС сегодняшнего дня — план дня / догоняющий темп: сколько нужно заказов в день, чтобы выйти на план месяца (выходной × 0,7).')}">Заказы, шт</td>`;
-  salesVals.forEach((v,idx)=>{
-    const iso=days[idx];
-    if(v!=null){ h+=`<td class="num" style="${salesBg(v)}">${fmt(v)}</td>`; return; }
-    if(iso>=todayISO){
-      const p=BYID[pid];
-      const planDay=p?dayShare(p,iso,'sales'):null;
-      const inMonth=iso.slice(0,7)===MONTH;
-      const catchDay=(inMonth&&trow)?trow.rc*(isWeekend(iso)?0.7:1):null;
-      if(planDay==null&&catchDay==null){ h+=`<td class="num" style="${salesBg(v)}">—</td>`; return; }
-      const cell=planDay!=null?(catchDay!=null?`${fmt(planDay)}/${fmt(catchDay)}`:`${fmt(planDay)}`):`${fmt(catchDay)}`;
-      h+=`<td class="num factcell" title="Плановый темп / догоняющий темп дня, шт (выходные ×0,7)">${cell}</td>`;
-      return;
-    }
-    h+=`<td class="num" style="${salesBg(v)}">—</td>`;
-  });
-  h+='</tr>';
-  h+=`<tr><td class="pulsemetric" title="${T('Средняя цена заказа за день: выручка заказов ÷ штуки (рычаг 1 — цена).\n\n'+(planPrice!=null?`Цена в плане — ${fmt(planPrice)} ₽; розовым — ниже плана больше чем на 2%.`:'Плана на месяц нет.'))}">Цена заказа, ₽</td>`;
-  priceVals.forEach(v=>{ h+=`<td class="num" style="${priceBg(v)}">${v==null?'—':fmt(v)}</td>`; });
-  h+='</tr>';
   const limTip=cal.ok
     ?`Лимиты считаются от цены дня — одна цена, один лимит. Коэффициенты — медиана 4 недель заказов ${ddmm(cal.from)}–${ddmm(cal.to)} (выкупы по ним уже пришли):\n`
       +`• комиссия Ozon — ${f1(cal.comm.low*100)}% суммы выкупов при цене до ${OZON_COMM_EDGE} ₽ включительно, ${f1(cal.comm.high*100)}% — выше;\n`
@@ -2384,26 +2346,186 @@ async function pulseHtml(pid,offer){
       +`При цене:\n`+tipPrices.map(p=>{ const X=limAtPrice(p); return `  ${fmt(p)} ₽ — до рекламы ${f1(X.pre)}%, лимиты ${X.target!=null?f1(X.target)+' / ':''}${f1(X.be)}%`; }).join('\n')
       +`\n\nЗелёный — до планового лимита, жёлтый — прибыльно, но ниже плана, красный — маржинальность ниже ${NET_FLOOR}%: убыток по чистой прибыли.`
     :'Лимиты не рассчитаны: мало заказов и выкупов за 4 недели до последних 7 дней.';
-  h+=`<tr><td class="pulsemetric" title="${T('Сколько процентов от выручки заказов дня ушло на рекламу (рычаг 2 — реклама): реклама дня ÷ выручка заказов дня, как на главной.\n\n'+limTip)}">ДРР, %</td>`;
-  drrVals.forEach((v,i)=>{ const X=dayLim[i];
-    const lt=X.ok?`<div style="font-size:.78em;color:#64748b;line-height:1.1">(${X.target!=null?f1(X.target)+'/':''}${f1(X.be)})</div>`:'';
-    h+=`<td class="num" style="${drrBg(v,X)}"${X.ok?` title="ДРР дня и лимиты при цене ${fmt(X.p)} ₽${days[i]>=todayISO||priceVals[i]==null?' (текущая)':''}: плановый ${X.target!=null?f1(X.target)+'%':'— нет плана'} / безубыточный ${f1(X.be)}% (маржинальность до рекламы при этой цене ${f1(X.pre)}%)"`:''}>${v==null?'—':(isFinite(v)?f1(v):'∞')}${lt}</td>`; });
-  h+='</tr>';
-  // маржинальность — за день (решение владельца 30.10.2026: колонка = один день, цвет согласуется с ДРР дня); окно 4 дня — строкой «Тренд»
-  h+=`<tr><td class="pulsemetric" title="${T('Итог дня: что дали цена и реклама этого дня — маржинальность до рекламы минус реклама, по дате заказа (все начисления по заказам дня).\n\nПоследние 7 дней (*, «≈», курсив) — оценка по модели при фактических цене и ДРР дня: факт там ещё неполный (выкупы приходят) и занижен; неполный факт — в подсказке ячейки.\n\nЦвет — к плану маржинальности: зелёный — план выполняется, жёлтый — от 5% до плана, красный — ниже 5%: убыток по чистой прибыли.')}">Маржинальность, %</td>`;
-  const tipM=x=>x&&x.est?`оценка по модели: цена ${fmt(x.P)} ₽, ДРР ${f1(x.D)}%; неполный факт ${x.fact==null?'—':f1(x.fact)+'%'} (выкупы ещё приходят)`:'факт';
-  dayMar.forEach((dm,i)=>{ const v=dm?dm.net:null, r=roll[i];
-    const title=dm?`День: ${f1(v)}% — ${tipM(dm)}${r?`\nЗа 4 дня по эту дату: ${f1(r.net)}% — ${tipM(r)}`:''}`:'';
-    h+=`<td class="num" style="${marginBg(v)}${dm&&dm.est?'font-style:italic':''}"${title?` title="${esc(title)}"`:''}>${v==null?'—':(dm.est?'≈':'')+f1(v)}</td>`; });
-  h+='</tr>';
+  // будущие дни строки «Заказы»: план дня и догоняющий темп
+  const trow=(temps[matrixOf(offer)]||[]).find(x=>x.offer===offer);
+  const futureOrders=iso=>{ const p=BYID[pid]; const inMonth=iso.slice(0,7)===MONTH;
+    return {planDay:p?dayShare(p,iso,'sales'):null,catchDay:(inMonth&&trow)?trow.rc*(isWeekend(iso)?0.7:1):null}; };
+  return {key:String(pid),pid,offer,label:offer,days,todayISO,matureTo,lastSale,planPct,planPrice,salesVals,stockVals,priceVals,drrVals,dayLim,dayMar,roll,limTip,futureOrders,
+    agg,marOf,cal,q14,byDaySales,byDayRev,adsByDay};
+}
+// группа перчаток (решение владельца 02.11.2026): заказы, выручка, реклама, остатки — суммы размеров; цена = Σ выручки ÷ Σ шт;
+// ДРР = Σ рекламы ÷ Σ выручки; лимиты ДРР — лимиты размеров при цене дня, взвешенные выручкой размера за день (нет выручки — заказами
+// за 14 дней); маржинальность — созревшие периоды: Σ (маржа до рекламы − реклама) ÷ Σ GMV; свежие — оценки размеров, взвешенные
+// ожидаемой суммой выкупа (выручка × доля выкупа b); план маржинальности — по плановой выручке, цена плана — Σ q × p ÷ Σ q
+async function pulseGroupData(gkey,famKey,members){
+  const S=[]; for(const p of members)S.push(await pulseData(p.product_id,p.offer_id));  // по очереди: у каждого размера до 3 запросов начислений
+  const d0=S[0], days=d0.days, todayISO=d0.todayISO, lastSale=d0.lastSale;
+  const sumNN=arr=>{ const v=arr.filter(x=>x!=null); return v.length?v.reduce((a,b)=>a+b,0):null; };
+  const at=(fn,iso)=>S.reduce((a,s)=>a+(fn(s).get(iso)||0),0);
+  const salesVals=days.map((iso,i)=>sumNN(S.map(s=>s.salesVals[i]))), stockVals=days.map((iso,i)=>sumNN(S.map(s=>s.stockVals[i])));
+  const priceVals=days.map(iso=>{ const q=at(s=>s.byDaySales,iso); return q>0?at(s=>s.byDayRev,iso)/q:null; });
+  const drrVals=days.map(iso=>{ const ads=at(s=>s.adsByDay,iso); if(ads===0)return null; const rev=at(s=>s.byDayRev,iso); if(rev<=0)return iso<=lastSale?Infinity:null; return ads/rev*100; });
+  let pq=0,pqp=0,pqpm=0; members.forEach(p=>{ const pl=PLAN[p.product_id]; if(pl&&pl.plan_qty>0){ pq+=pl.plan_qty; pqp+=pl.plan_qty*pl.price; pqpm+=pl.plan_qty*pl.price*Number(pl.margin_pct||0); } });
+  const planPct=pqp>0?pqpm/pqp:null, planPrice=pq>0?pqp/pq:null;
+  const dayLim=days.map((iso,i)=>{ let W=0,pre=0,be=0,tg=0,tgOk=true;
+    S.forEach(s=>{ const L=s.dayLim[i]; if(!L||!L.ok)return; const w=(iso<todayISO?(s.byDayRev.get(iso)||0):0)||s.q14||0; if(!(w>0))return;
+      W+=w; pre+=w*L.pre; be+=w*L.be; if(L.target==null)tgOk=false; else tg+=w*L.target; });
+    return W>0?{ok:true,p:priceVals[i],pre:pre/W,be:be/W,target:tgOk?tg/W:null,grp:true}:{ok:false}; });
+  const marOf=(f,t)=>{
+    if(t>=todayISO)return null;
+    let num=0,den=0,est=false,fn=0,fd=0,q=0,rev=0,ads=0;
+    S.forEach(s=>{ const m=s.marOf(f,t), a=s.agg(f,t); q+=a.q; rev+=a.rev; ads+=a.ads; if(a.gmv>0){ fn+=a.pre-a.ads; fd+=a.gmv; } if(!m)return;
+      if(m.est){ const W=a.rev*s.cal.b; if(W>0){ num+=m.net*W; den+=W; est=true; } } else if(a.gmv>0){ num+=(a.pre-a.ads)*100; den+=a.gmv; } });
+    if(!(den>0))return null;
+    return est?{net:num/den,est:true,P:q>0?rev/q:null,D:rev>0?ads/rev*100:0,fact:fd>0?fn/fd*100:null}:{net:num/den};
+  };
+  const roll=days.map(iso=>marOf(addDaysISO(iso,-3),iso)), dayMar=days.map(iso=>marOf(iso,iso));
+  const futureOrders=iso=>{ const f=S.map(s=>s.futureOrders(iso)); return {planDay:sumNN(f.map(x=>x.planDay)),catchDay:sumNN(f.map(x=>x.catchDay))}; };
+  const limTip='Лимиты группы — лимиты размеров при цене дня, взвешенные выручкой размера за день (нет выручки — заказами за 14 дней). '
+    +'Формула и коэффициенты каждого размера — в подсказке строки «ДРР» размера (▸ раскрывает размеры).'
+    +`\n\nЗелёный — до планового лимита, жёлтый — прибыльно, но ниже плана, красный — маржинальность ниже ${NET_FLOOR}%: убыток по чистой прибыли.`;
+  return {key:gkey,pid:gkey,offer:famKey,label:famKey,days,todayISO,matureTo:d0.matureTo,lastSale,planPct,planPrice,salesVals,stockVals,priceVals,drrVals,dayLim,dayMar,roll,limTip,futureOrders,sizes:S};
+}
+// раскрыть / свернуть строки размеров под строкой показателя группы
+function pulseSub(cls,el){ const rows=document.querySelectorAll('tr.'+cls); const open=rows.length&&rows[0].style.display==='none';
+  rows.forEach(r=>{ r.style.display=open?'':'none'; }); if(el)el.textContent=open?'▾':'▸'; }
+function pulseRender(D){
+  const {days,todayISO,matureTo}=D, isG=!!D.sizes, T=s=>s.replace(/"/g,'&quot;');
+  const fam=isG?D.label:'', short=s=>isG&&s.offer.indexOf(fam)===0?s.offer.slice(fam.length).replace(/^-/,''):s.offer;
+  const safe=String(D.key).replace(/[^A-Za-z0-9]/g,'_');
+  // строки показателей; у группы — ▸ в названии и скрытые строки размеров под ней
+  const rowOrders=(X,lbl,cls)=>{
+    const nums=X.salesVals.filter(v=>v!=null), mn=nums.length?Math.min(...nums):0, mx=nums.length?Math.max(...nums):0;
+    const bg=v=>{ if(v==null||!nums.length)return ''; const t=(mx===mn)?0.5:(v-mn)/(mx-mn); return `background:rgba(22,163,74,${(0.06+0.44*t).toFixed(2)});`; };
+    let h=`<tr${cls}>${lbl}`;
+    X.salesVals.forEach((v,idx)=>{ const iso=days[idx];
+      if(v!=null){ h+=`<td class="num" style="${bg(v)}">${fmt(v)}</td>`; return; }
+      if(iso>=todayISO){ const {planDay,catchDay}=X.futureOrders(iso);
+        if(planDay==null&&catchDay==null){ h+=`<td class="num">—</td>`; return; }
+        const cell=planDay!=null?(catchDay!=null?`${fmt(planDay)}/${fmt(catchDay)}`:`${fmt(planDay)}`):`${fmt(catchDay)}`;
+        h+=`<td class="num factcell" title="Плановый темп / догоняющий темп дня, шт (выходные ×0,7)">${cell}</td>`; return; }
+      h+=`<td class="num">—</td>`; });
+    return h+'</tr>'; };
+  const rowPrice=(X,lbl,cls)=>{ const bg=v=>(v==null||X.planPrice==null)?'':(v<X.planPrice*0.98?'background:rgba(227,61,120,.14);':'');
+    let h=`<tr${cls}>${lbl}`; X.priceVals.forEach(v=>{ h+=`<td class="num" style="${bg(v)}">${v==null?'—':fmt(v)}</td>`; }); return h+'</tr>'; };
+  // ДРР: зелёный — до планового лимита, жёлтый — до безубыточного (маржинальность 5%), красный — выше (убыток по чистой прибыли)
+  const drrZone=(v,L)=>{ if(v==null)return null; if(!isFinite(v))return 'red'; if(!L.ok)return null; if(v>L.be)return 'red'; if(L.target!=null&&v>L.target)return 'yellow'; return 'green'; };
+  const ZBG={red:'background:rgba(227,61,120,0.38);',yellow:'background:rgba(253,224,71,0.45);',green:'background:rgba(22,163,74,0.30);'};
+  const drrBg=(v,L)=>{ if(v!=null&&!isFinite(v))return 'background:rgba(227,61,120,0.45);'; const z=drrZone(v,L); return z?ZBG[z]:''; };
+  const rowDrr=(X,lbl,cls)=>{ let h=`<tr${cls}>${lbl}`;
+    X.drrVals.forEach((v,i)=>{ const L=X.dayLim[i];
+      const lt=L.ok?`<div style="font-size:.78em;color:#64748b;line-height:1.1">(${L.target!=null?f1(L.target)+'/':''}${f1(L.be)})</div>`:'';
+      const tip=L.ok?(L.grp?`ДРР дня и лимиты группы (взвешенные по размерам): плановый ${L.target!=null?f1(L.target)+'%':'— нет плана'} / безубыточный ${f1(L.be)}%; до рекламы ${f1(L.pre)}%`
+        :`ДРР дня и лимиты при цене ${fmt(L.p)} ₽${days[i]>=todayISO||X.priceVals[i]==null?' (текущая)':''}: плановый ${L.target!=null?f1(L.target)+'%':'— нет плана'} / безубыточный ${f1(L.be)}% (маржинальность до рекламы при этой цене ${f1(L.pre)}%)`):'';
+      h+=`<td class="num" style="${drrBg(v,L)}"${tip?` title="${tip}"`:''}>${v==null?'—':(isFinite(v)?f1(v):'∞')}${lt}</td>`; });
+    return h+'</tr>'; };
+  // маржинальность — за день (колонка = один день, цвет согласуется с ДРР дня); окно 4 дня — подсказка и строка «Тренд»
+  const marginBg=(v,pp)=>{ if(v==null)return ''; if(v<NET_FLOOR)return 'background:rgba(227,61,120,0.30);'; if(pp!=null&&v<pp)return 'background:rgba(253,224,71,0.45);'; return 'background:rgba(22,163,74,0.30);'; };
+  const tipM=x=>x&&x.est?`оценка по модели: цена ${x.P==null?'—':fmt(x.P)} ₽, ДРР ${f1(x.D)}%; неполный факт ${x.fact==null?'—':f1(x.fact)+'%'} (выкупы ещё приходят)`:'факт';
+  const rowMargin=(X,lbl,cls)=>{ let h=`<tr${cls}>${lbl}`;
+    X.dayMar.forEach((dm,i)=>{ const v=dm?dm.net:null, r=X.roll[i];
+      const title=dm?`День: ${f1(v)}% — ${tipM(dm)}${r?`\nЗа 4 дня по эту дату: ${f1(r.net)}% — ${tipM(r)}`:''}`:'';
+      h+=`<td class="num" style="${marginBg(v,X.planPct)}${dm&&dm.est?'font-style:italic':''}"${title?` title="${esc(title)}"`:''}>${v==null?'—':(dm.est?'≈':'')+f1(v)}</td>`; });
+    return h+'</tr>'; };
+  const rowStock=(X,lbl,cls)=>{ const nums=X.stockVals.filter(v=>v!=null), mn=nums.length?Math.min(...nums):0, mx=nums.length?Math.max(...nums):0;
+    const bg=v=>{ if(v==null||!nums.length)return ''; const t=(mx===mn)?0.5:(v-mn)/(mx-mn); return `background:rgba(227,61,120,${(0.44-0.38*t).toFixed(2)});`; };
+    let h=`<tr${cls}>${lbl}`; X.stockVals.forEach(v=>{ h+=`<td class="num" style="${bg(v)}">${v==null?'—':fmt(v)}</td>`; }); return h+'</tr>'; };
+  // строка показателя + (у группы) скрытые строки размеров
+  const metric=(m,name,tip,fn)=>{
+    if(!isG)return fn(D,`<td class="pulsemetric" title="${T(tip)}">${name}</td>`,'');
+    const cls=`ps_${safe}_${m}`;
+    let h=fn(D,`<td class="pulsemetric" title="${T(tip+'\n\n▸ — показать размеры.')}"><span style="cursor:pointer" onclick="pulseSub('${cls}',this)">▸</span> ${name}</td>`,'');
+    D.sizes.forEach(s=>{ h+=fn(s,`<td class="pulsemetric" style="font-weight:400;padding-left:18px" title="${esc(s.offer)}">${esc(short(s))}</td>`,` class="${cls}" style="display:none;background:#fbfafd"`); });
+    return h; };
+  let h='<div class="pulsewrap"><table class="pulsetable"><thead><tr><th>Параметр</th>';
+  days.forEach(iso=>{ const prov=iso<todayISO&&iso>matureTo;
+    h+=prov?`<th title="предварительно: выкупы и возвраты по заказам этого дня ещё приходят — маржинальность уточнится сама">${ddmm(iso)}*</th>`:`<th>${ddmm(iso)}</th>`; });
+  h+='</tr></thead><tbody>';
+  h+=metric('ord','Заказы, шт','Сколько штук заказали за день (до выкупа и отмен).\n\nС сегодняшнего дня — план дня / догоняющий темп: сколько нужно заказов в день, чтобы выйти на план месяца (выходной × 0,7).'+(isG?'\n\nГруппа — сумма размеров.':''),rowOrders);
+  h+=metric('prc','Цена заказа, ₽','Средняя цена заказа за день: выручка заказов ÷ штуки (рычаг 1 — цена).\n\n'+(D.planPrice!=null?`Цена в плане — ${fmt(D.planPrice)} ₽; розовым — ниже плана больше чем на 2%.`:'Плана на месяц нет.')+(isG?' Группа — Σ выручки ÷ Σ шт; цена плана — средняя по плану размеров.':''),rowPrice);
+  h+=metric('drr','ДРР, %','Сколько процентов от выручки заказов дня ушло на рекламу (рычаг 2 — реклама): реклама дня ÷ выручка заказов дня, как на главной.\n\n'+D.limTip,rowDrr);
+  h+=metric('mar','Маржинальность, %','Итог дня: что дали цена и реклама этого дня — маржинальность до рекламы минус реклама, по дате заказа (все начисления по заказам дня).\n\nПоследние 7 дней (*, «≈», курсив) — оценка по модели при фактических цене и ДРР дня: факт там ещё неполный (выкупы приходят) и занижен; неполный факт — в подсказке ячейки.\n\nЦвет — к плану маржинальности: зелёный — план выполняется, жёлтый — от 5% до плана, красный — ниже 5%: убыток по чистой прибыли.'+(isG?'\n\nГруппа — Σ маржи ÷ Σ суммы выкупов размеров (свежие дни — оценки размеров, взвешенные ожидаемой суммой выкупа); план — по плановой выручке размеров.':''),rowMargin);
   // тренд: маржинальность за 4 дня — линией под днями (рисует pulseTrend после вставки таблицы: нужны позиции колонок)
   h+=`<tr><td class="pulsemetric" title="${T('Тренд маржинальности: за 4 дня по каждую дату — сглаживает дневные скачки и показывает направление.\n\nСплошная линия — факт, пунктир — оценка по модели (свежие дни). Зелёный пунктир — план маржинальности, красный — 5% (ниже — убыток по чистой прибыли). Наведите на точку — значение.')}">Тренд (4 дн), %</td><td colspan="${days.length}" style="padding:0"><div class="pulsetrend" style="position:relative;height:64px"></div></td></tr>`;
-  PULSE_TREND[pid]={pts:days.map((iso,i)=>roll[i]?{iso,v:roll[i].net,est:!!roll[i].est}:null),plan:planPct};
-  h+=`<tr><td class="pulsemetric" title="${T('Остаток на складах Ozon на конец дня, шт (сумма по всем складам).')}">Остатки, шт</td>`;
-  stockVals.forEach(v=>{ h+=`<td class="num" style="${stockBg(v)}">${v==null?'—':fmt(v)}</td>`; });
-  h+='</tr>';
-  h+='</tbody></table><div class="psub" style="margin-top:6px">* — свежий день (последние 7 дней): выкупы и возвраты по заказам ещё приходят, поэтому маржинальность дня и тренд — оценка по модели («≈», курсив); через 8 дней её заменит факт. ДРР: в ячейке под значением — лимиты при цене этого дня (плановый/безубыточный; одна цена — один лимит).</div></div>';
+  PULSE_TREND[D.key]={pts:days.map((iso,i)=>D.roll[i]?{iso,v:D.roll[i].net,est:!!D.roll[i].est}:null),plan:D.planPct};
+  h+=metric('stk','Остатки, шт','Остаток на складах Ozon на конец дня, шт (сумма по всем складам)'+(isG?'; группа — сумма размеров.':'.'),rowStock);
+  h+='</tbody></table><div class="psub" style="margin-top:6px">* — свежий день (последние 7 дней): выкупы и возвраты по заказам ещё приходят, поэтому маржинальность дня и тренд — оценка по модели («≈», курсив); через 8 дней её заменит факт. ДРР: в ячейке под значением — лимиты при цене этого дня (плановый/безубыточный; одна цена — один лимит).'+(isG?' ▸ у названия строки — размеры группы.':'')+'</div></div>';
   return h;
+}
+// группа перчаток в протоколе (решение владельца 02.11.2026): щелчок по артикулу группы — юнит-экономика и «Рука на пульсе» группы,
+// ▸ — размеры; рекомендации, гипотезы, начисления и заметки — в протоколах размеров
+const PROTO_GROUPS={};
+function groupProtoBlock(gk,famKey,n){
+  return `<div class="protohead">Группа ${esc(famKey)}-* • ${n} размеров — общие юнит-экономика и «Рука на пульсе»; рекомендации, гипотезы, начисления и заметки — в протоколах размеров (▸ у артикула группы)</div>
+<div class="psection"><div class="psectitle sec-head" onclick="toggleSection('unit_${gk}')"><span class="sec-caret" id="caret_unit_${gk}">▸</span>🧮 Юнит-экономика группы</div><div class="hide" id="unit_${gk}"><div id="unitbox_${gk}" class="psub">загрузка…</div></div></div>
+<div class="psection"><div class="psectitle sec-head" onclick="toggleSection('pulse_${gk}')"><span class="sec-caret" id="caret_pulse_${gk}">▸</span>🩺 Рука на пульсе группы</div><div class="hide" id="pulse_${gk}"><div id="pulsetbl_${gk}" class="psub">загрузка…</div></div></div>`;
+}
+// юнит-экономика группы: маленькие карточки размеров (своя цена и ДРР, по умолчанию — вчера) складываются в общую — средний заказ
+// группы = Σ долей размеров × значения на заказ; доля — заказы размера за 14 дней ÷ заказы группы (решения владельца 02.11.2026)
+const GUNIT={};
+async function loadGroupUnit(gk){
+  const G=PROTO_GROUPS[gk], box=document.getElementById('unitbox_'+gk);
+  try{
+    const all=[]; for(const p of G.members)all.push({p,U:await unitModel(p.product_id)});  // по очереди: у каждого размера до 3 запросов начислений
+    const ok=all.filter(x=>x.U.C.ok), W=ok.reduce((a,x)=>a+(x.U.q14||0),0);
+    if(!ok.length){ box.innerHTML='<div class="psub">Модель не рассчитана ни для одного размера: мало заказов и выкупов за 4 недели.</div>'; return; }
+    const items=GUNIT[gk]=ok.map(x=>({p:x.p,U:x.U,w:W>0?(x.U.q14||0)/W:1/ok.length}));
+    const fam=G.key, short=o=>o.indexOf(fam)===0?o.slice(fam.length).replace(/^-/,''):o;
+    const skipped=all.filter(x=>!x.U.C.ok).map(x=>short(x.p.offer_id));
+    const cards=items.map((it,i)=>{ const U=it.U, P0=Math.round(U.py), D0=Math.round(U.dy*10)/10, id=`${gk}_${i}`;
+      return `<div style="border:1px solid rgba(84,66,115,.15);border-radius:10px;padding:6px 8px;min-width:200px;font-size:.82em">`
+        +`<div style="font-weight:700;color:#544273" title="${esc(it.p.offer_id)}">${esc(short(it.p.offer_id))} <span style="font-weight:400;color:#94a3b8">· доля ${f1(it.w*100)}% (заказы 14 дн)</span></div>`
+        +`<div style="display:flex;gap:6px;align-items:center;margin:4px 0"><input type="number" id="guP_${id}" value="${P0}" step="1" min="0" oninput="groupUnitCalc('${gk}')" style="width:70px" title="Цена заказа, ₽">₽`
+        +`<input type="number" id="guD_${id}" value="${D0}" step="0.5" min="0" oninput="groupUnitCalc('${gk}')" style="width:56px" title="ДРР, %">%`
+        +`<button onclick="document.getElementById('guP_${id}').value=${P0};document.getElementById('guD_${id}').value=${D0};groupUnitCalc('${gk}')" title="Цена и ДРР вчера">${U.dayISO&&U.dayISO!==U.y?ddmm(U.dayISO):'Вчера'}</button></div>`
+        +`<div id="gures_${id}"></div></div>`; }).join('');
+    box.innerHTML=`<div class="psub" style="margin:0 0 8px">Юнит-экономика группы складывается из размеров: у каждого своя цена и ДРР (по умолчанию — вчера), общая — средний заказ группы с долями размеров по заказам за 14 дней. Остальное — по статистике каждого размера (медиана 4 недель созревших заказов).${skipped.length?` Без модели (мало данных): ${esc(skipped.join(', '))}.`:''}</div>`
+      +`<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start"><div id="gutot_${gk}" style="flex:0 0 auto"></div><div id="gugrid_${gk}" style="flex:0 0 auto"></div><div id="guinfo_${gk}" style="flex:1 1 230px;min-width:230px;max-width:420px;font-size:.86em;line-height:1.6"></div></div>`
+      +`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">${cards}</div>`
+      +`<div class="psub" style="margin-top:6px;color:#94a3b8">Модель не знает, как цена и реклама меняют число заказов, — это проверяйте SMART-гипотезой. Маржинальность — от суммы выкупов, как в факте (CF). Ниже ${NET_FLOOR}% — убыток для компании по чистой прибыли (красный).</div>`;
+    groupUnitCalc(gk);
+  }catch(e){
+    if(box)box.innerHTML=`<div class="psub" style="color:#E33D78">Ошибка загрузки: ${esc(e.message)}. Сверните и раскройте блок, чтобы повторить.</div>`;
+    const el=document.getElementById('unit_'+gk); if(el)delete el.dataset.loaded;
+  }
+}
+// значения на 1 заказ размера при цене P и ДРР D (как unitCalc)
+function unitPerOrder(C,P,D){ const cr=unitComm(C,P), r=unitR(C,P), G=P*C.b, ads=P*D/100;
+  return {P,G,com:G*cr,cut:G*(1-C.r0),tax:G*C.t,u:C.u,ads,mar:G*(r-C.t)-C.u-ads}; }
+function groupUnitCalc(gk){
+  const items=GUNIT[gk]; if(!items)return;
+  let pq=0,pqp=0,pqpm=0; items.forEach(it=>{ const U=it.U; if(U.planQty){ pq+=U.planQty; pqp+=U.planQty*U.planPrice; pqpm+=U.planQty*U.planPrice*(U.planPct||0); } });
+  const m=pqp>0?pqpm/pqp:null;
+  const bg=(v,pp)=>v<NET_FLOOR?'background:rgba(227,61,120,0.30);':(pp!=null&&v<pp?'background:rgba(253,224,71,0.45);':'background:rgba(22,163,74,0.30);');
+  const tot={P:0,G:0,com:0,cut:0,tax:0,u:0,ads:0,mar:0}; let monPlan=0,monNow=0;
+  items.forEach((it,i)=>{ const id=`${gk}_${i}`, C=it.U.C;
+    const P=Number(document.getElementById('guP_'+id).value), D=Number(document.getElementById('guD_'+id).value)||0, res=document.getElementById('gures_'+id);
+    if(!(P>0)){ res.innerHTML='введите цену'; it.v=null; return; }
+    const v=it.v=unitPerOrder(C,P,D), pct=v.mar/v.G*100, pre=unitPct(C,P,0), pp=it.U.planPct;
+    Object.keys(tot).forEach(k=>tot[k]+=it.w*v[k]);
+    if(it.U.planQty)monPlan+=it.U.planQty*v.mar; monNow+=it.U.q7/7*30*v.mar;
+    res.innerHTML=`<div style="padding:2px 6px;border-radius:6px;${bg(pct,pp)}"><b>${f1(pct)}%</b>${pp!=null?` (план ${f1(pp)}%)`:''} · ${fmt(v.mar)} ₽/заказ</div>`
+      +`<div style="color:#64748b;margin-top:2px" title="Лимиты ДРР при этой цене: плановый / в ноль по чистой прибыли (${NET_FLOOR}%)">ДРР до ${pp!=null?f1(Math.max(0,(pre-pp)*C.b))+'% план / ':''}${f1(Math.max(0,(pre-NET_FLOOR)*C.b))}% ноль</div>`; });
+  const res=document.getElementById('gutot_'+gk), info=document.getElementById('guinfo_'+gk), grid=document.getElementById('gugrid_'+gk);
+  if(!(tot.G>0)){ res.innerHTML=''; info.innerHTML=''; grid.innerHTML=''; return; }
+  const pct=tot.mar/tot.G*100, D=tot.ads/tot.P*100;
+  const row=(n,v,share,b)=>`<tr${b?' style="font-weight:700"':''}><td style="text-align:left;white-space:normal;min-width:140px;max-width:190px">${n}</td><td class="num">${v<0?'−':''}${fmt2(Math.abs(Math.round(v*100)/100))} ₽</td><td class="num" style="color:#64748b">${share==null?'':f1(share)+'%'}</td></tr>`;
+  res.innerHTML=`<table class="pulsetable" style="font-size:.86em"><thead><tr><th style="text-align:left">Средний заказ группы</th><th>₽</th><th>% выкупа</th></tr></thead><tbody>`
+    +row('Цена заказа',tot.P,null)+row('Сумма выкупа',tot.G,100)+row('Комиссия Ozon',-tot.com,-tot.com/tot.G*100)
+    +row('Прочие удержания и баллы',-tot.cut,-tot.cut/tot.G*100)+row('Налог',-tot.tax,-tot.tax/tot.G*100)
+    +row('Логистика, возвраты, упаковка и себестоимость',-tot.u,-tot.u/tot.G*100)+row(`Реклама (ДРР ${f1(D)}%)`,-tot.ads,-tot.ads/tot.G*100)
+    +row('Маржа на заказ',tot.mar,pct,true)+`</tbody></table>`;
+  info.innerHTML=`<div style="padding:4px 10px;border-radius:8px;${bg(pct,m)}"><b>Маржинальность группы: ${f1(pct)}%</b>${m!=null?` (план ${f1(m)}%)`:''}</div>`
+    +`<div>Средний заказ — сумма размеров с долями по заказам за 14 дней; цену и ДРР меняйте в карточках размеров ниже.</div>`
+    +(pq?`<div title="Если заказов будет столько, сколько в плане размеров">При плане ${fmt(pq)} шт/мес: маржа ≈ <b>${fmt(monPlan)} ₽</b> в месяц</div>`:'')
+    +`<div title="Если заказы размеров останутся на уровне последних 7 дней">При текущих заказах: ≈ <b>${fmt(monNow)} ₽</b> за 30 дней</div>`;
+  // матрица «сдвиг цены всех размеров × ДРР для всех» — только просмотр (менять — в карточках размеров)
+  const shifts=[-15,-10,-5,0,5,10,15], drrs=[...new Set([0,2,4,6,8,10,15,20,Math.round(D*10)/10])].sort((a,b)=>a-b);
+  const val=(s,d)=>{ let mar=0,G=0; items.forEach(it=>{ if(!it.v)return; const v=unitPerOrder(it.U.C,it.v.P*(1+s/100),d); mar+=it.w*v.mar; G+=it.w*v.G; }); return G>0?mar/G*100:null; };
+  let g=`<table class="pulsetable" style="font-size:.82em"><caption style="caption-side:bottom;text-align:left;color:#544273;padding-top:4px;white-space:normal">Маржинальность группы, %: цены всех размеров сдвинуты на % (строки), ДРР у всех один (столбцы). Только просмотр.</caption><thead><tr><th>Цена \\ ДРР</th>${drrs.map(d=>`<th>${f1(d)}%</th>`).join('')}</tr></thead><tbody>`;
+  shifts.forEach(s=>{ g+=`<tr><td class="pulsemetric">${s>0?'+':''}${s}%</td>`; drrs.forEach(d=>{ const v=val(s,d), cur=s===0&&d===Math.round(D*10)/10;
+    g+=`<td class="num" style="${v==null?'':bg(v,m)}${cur?'outline:2px solid #544273;font-weight:700':''}">${v==null?'—':f1(v)}</td>`; }); g+='</tr>'; });
+  grid.innerHTML=g+'</tbody></table>';
 }
 function arcPath(cx,cy,rO,rI,a0,a1){
   const p=(r,a)=>[cx+r*Math.cos(a),cy+r*Math.sin(a)];
@@ -2687,7 +2809,9 @@ renderKpiPnl(g);
     const wsum=(key,w)=>{let t=0,a=false;ms.forEach(p=>{const r=getRec(p.product_id,key,w);if(r.fact!=null){t+=r.fact;a=true;}});return a?t:null;};
     const ratio=(nk,dk,mul)=>{let N=0,Dn=0,a=false;ms.forEach(p=>WEEKISO.forEach(w=>{const n=getRec(p.product_id,nk,w),d=getRec(p.product_id,dk,w);if(n.fact!=null&&d.fact!=null&&d.fact!==0){N+=n.fact;Dn+=d.fact;a=true;}}));return a&&Dn!==0?N/Dn*mul:null;};
     const wratio=(nk,dk,mul,w)=>{let N=0,Dn=0,a=false;ms.forEach(p=>{const n=getRec(p.product_id,nk,w),d=getRec(p.product_id,dk,w);if(n.fact!=null&&d.fact!=null&&d.fact!==0){N+=n.fact;Dn+=d.fact;a=true;}});return a&&Dn!==0?N/Dn*mul:null;};
-    let h=`<tr class="famrow${ana.on?' anareq':''}" data-fam="${f.key}"><td class="num okey" title="Группа перчаток: ${ms.length} поз. — раскрыть размеры${ana.on?' — '+ana.tip:''}" onclick="toggleFam('${f.key}')">${open?'▾':'▸'} ${ana.icons}${esc(f.key)}-* <span class="famcnt">(${ms.length})</span></td>`;
+    // щелчок по артикулу — протокол группы (юнит-экономика и «Рука на пульсе»), ▸ — размеры (решение владельца 02.11.2026)
+    const gk='g_'+f.key.replace(/[^A-Za-z0-9]/g,'_'); PROTO_GROUPS[gk]={key:f.key,members:ms};
+    let h=`<tr class="famrow${ana.on?' anareq':''}" data-fam="${f.key}"><td class="num okey" title="Группа перчаток: ${ms.length} поз. — щелчок: юнит-экономика и «Рука на пульсе» группы; ▸ — размеры${ana.on?' — '+ana.tip:''}" onclick="toggleProto('${gk}')"><span class="famtog" title="Раскрыть размеры" onclick="event.stopPropagation();toggleFam('${f.key}')">${open?'▾':'▸'}</span> ${ana.icons}${esc(f.key)}-* <span class="famcnt">(${ms.length})</span></td>`;
     h+=`<td><span class="datelocked" title="ближайшая дата работы среди размеров">${dates[0]?ddmm(dates[0]):'—'}</span></td>`;
     METRICS.forEach(mt=>{
       let planV,ffV,dev;
@@ -2704,6 +2828,7 @@ renderKpiPnl(g);
       }
     });
     h+='</tr>';
+    if(openProto.has(gk))h+=`<tr class="protorow"><td colspan="${totalCols}"><div class="protowrap">${groupProtoBlock(gk,f.key,ms.length)}</div></td></tr>`;
     if(open)h+=ms.slice().sort((a,b)=>devOf(a)-devOf(b)).map(p=>prodRow(p,true)).join('');
     return h;
   };
