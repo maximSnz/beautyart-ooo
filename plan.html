@@ -1422,7 +1422,9 @@ function gloveFamily(offer){
 }
 let FAMOPEN=new Set();
 function toggleFam(k){ FAMOPEN.has(k)?FAMOPEN.delete(k):FAMOPEN.add(k); render(); }
-function toggleProto(pid){ if(openProto.has(pid))openProto.delete(pid); else openProto.add(pid); render(); }
+function toggleProto(pid){ const open=!openProto.has(pid); if(open)openProto.add(pid); else openProto.delete(pid); render();
+  // у группы перчаток юнит-экономика и «Рука на пульсе» загружаются сразу при открытии протокола (решение владельца 02.11.2026)
+  if(open&&PROTO_GROUPS[pid])setTimeout(()=>{ const el=document.getElementById('unit_'+pid); if(el&&el.classList.contains('hide'))toggleSection('unit_'+pid); },0); }
 async function upsertPPM(pid,patch){
   const cur=PPM[pid]||{weekday:null,protocol:null,work_date:null};
   const next=Object.assign({},cur,patch);
@@ -2473,7 +2475,7 @@ async function loadGroupUnit(gk){
     const fam=G.key, short=o=>o.indexOf(fam)===0?o.slice(fam.length).replace(/^-/,''):o;
     const skipped=all.filter(x=>!x.U.C.ok).map(x=>short(x.p.offer_id));
     const cards=items.map((it,i)=>{ const U=it.U, P0=Math.round(U.py), D0=Math.round(U.dy*10)/10, id=`${gk}_${i}`;
-      return `<div style="border:1px solid rgba(84,66,115,.15);border-radius:10px;padding:6px 8px;min-width:200px;font-size:.82em">`
+      return `<div style="border:1px solid rgba(84,66,115,.15);border-radius:10px;padding:8px 10px;min-width:300px;font-size:12px">`
         +`<div style="font-weight:700;color:#544273" title="${esc(it.p.offer_id)}">${esc(short(it.p.offer_id))} <span style="font-weight:400;color:#94a3b8">· доля ${f1(it.w*100)}% (заказы 14 дн)</span></div>`
         +`<div style="display:flex;gap:6px;align-items:center;margin:4px 0"><input type="number" id="guP_${id}" value="${P0}" step="1" min="0" oninput="groupUnitCalc('${gk}')" style="width:70px" title="Цена заказа, ₽">₽`
         +`<input type="number" id="guD_${id}" value="${D0}" step="0.5" min="0" oninput="groupUnitCalc('${gk}')" style="width:56px" title="ДРР, %">%`
@@ -2498,10 +2500,10 @@ function unitMiniGrid(C,P,D,pp,pId,dId,recalc){
   prices.sort((a,b)=>a-b);
   const dc=Math.round(D*10)/10, drrs=[...new Set([0,3,6,9,12,15,dc])].sort((a,b)=>a-b);
   const bg=v=>v<NET_FLOOR?'background:rgba(227,61,120,0.30);':(pp!=null&&v<pp?'background:rgba(253,224,71,0.45);':'background:rgba(22,163,74,0.30);');
-  let g=`<table class="pulsetable" style="font-size:.72em;margin-top:4px"><thead><tr><th>₽ \\ ДРР</th>${drrs.map(d=>`<th style="padding:1px 3px">${f1(d)}</th>`).join('')}</tr></thead><tbody>`;
-  prices.forEach(p=>{ g+=`<tr><td style="padding:1px 3px">${fmt(p)}</td>`;
+  let g=`<table class="pulsetable" style="font-size:13px;margin-top:6px"><thead><tr><th style="font-size:11px">₽ \\ ДРР</th>${drrs.map(d=>`<th style="padding:3px 6px;font-size:11px">${f1(d)}</th>`).join('')}</tr></thead><tbody>`;
+  prices.forEach(p=>{ g+=`<tr><td style="padding:3px 6px">${fmt(p)}</td>`;
     drrs.forEach(d=>{ const v=unitPct(C,p,d), cur=p===Math.round(P)&&d===dc;
-      g+=`<td class="num" style="${bg(v)}padding:1px 3px;cursor:pointer;${cur?'outline:2px solid #544273;font-weight:700':''}" onclick="document.getElementById('${pId}').value=${p};document.getElementById('${dId}').value=${d};${recalc}">${f1(v)}</td>`; });
+      g+=`<td class="num" style="${bg(v)}padding:3px 6px;cursor:pointer;${cur?'outline:2px solid #544273;font-weight:700':''}" onclick="document.getElementById('${pId}').value=${p};document.getElementById('${dId}').value=${d};${recalc}">${f1(v)}</td>`; });
     g+='</tr>'; });
   return g+'</tbody></table>';
 }
