@@ -1,7 +1,7 @@
 // Разовая выгрузка: среднесуточные заказы FBO по кластерам за период (для дат, которых нет в базе).
 // Только чтение Ozon API. Таблица (CSV) уходит файлом в Telegram администратору; в публичный лог — без цифр продаж.
 // Заказы — как ночная загрузка: /v3/posting/fbo/list, день по UTC от in_process_at, без отменённых.
-// Кластер — склада отгрузки (analytics_data.warehouse_id → /v1/cluster/list). Среднее = шт за период ÷ календарные дни.
+// Кластер — склада отгрузки (analytics_data → product_stocks базы, иначе /v1/cluster/list); база только читается. Среднее = шт за период ÷ календарные дни.
 const OZON='https://api-seller.ozon.ru';
 const H={'Client-Id':process.env.OZON_CLIENT_ID,'Api-Key':process.env.OZON_API_KEY,'Content-Type':'application/json'};
 const ENT=process.env.ENTITY||'ООО';
@@ -26,14 +26,24 @@ async function ozon(path,body){
 const addDays=(d,n)=>{const x=new Date(d+'T00:00:00Z');x.setUTCDate(x.getUTCDate()+n);return x.toISOString().slice(0,10);};
 const DAYS=[];for(let d=FROM;d<=TO;d=addDays(d,1))DAYS.push(d);
 
-// Склады → кластеры
-const WH_ID={}, WH_NAME={};
+// Склады → кластеры: сначала product_stocks базы (как в заявке; /v1/cluster/list не узнаёт крупные РФЦ по ID заказов —
+// июль 2026: 36 складов), затем /v1/cluster/list. Названия сравниваются без различия «-», « » и «_».
+const normWh=s=>String(s||'').trim().toUpperCase().replace(/[\s-]+/g,'_');
+const SB_ID={}, SB_NAME={}, WH_ID={}, WH_NAME={};
+const SH={apikey:process.env.SUPABASE_SERVICE_ROLE_KEY,Authorization:'Bearer '+process.env.SUPABASE_SERVICE_ROLE_KEY};
+for(let off=0;;off+=1000){ // постранично, сортировка по полному ключу
+  const r=await fetch(`${process.env.SUPABASE_URL}/rest/v1/product_stocks?select=warehouse_id,warehouse_name,cluster&order=product_id,warehouse_id&limit=1000&offset=${off}`,{headers:SH,signal:AbortSignal.timeout(30000)});
+  if(!r.ok)throw new Error('product_stocks: HTTP '+r.status);
+  const j=await r.json(); j.forEach(x=>{if(!x.cluster)return;SB_ID[String(x.warehouse_id)]=x.cluster;SB_NAME[normWh(x.warehouse_name)]=x.cluster;});
+  if(j.length<1000)break;
+}
 for(const cluster_type of ['CLUSTER_TYPE_OZON','CLUSTER_TYPE_CIS']){
   const r=await ozon('/v1/cluster/list',{cluster_type,cluster_ids:[]});
-  (r.clusters||[]).forEach(c=>(c.logistic_clusters||[]).forEach(l=>(l.warehouses||[]).forEach(w=>{WH_ID[String(w.warehouse_id)]=c.name;WH_NAME[(w.name||'').trim().toUpperCase()]=c.name;})));
+  (r.clusters||[]).forEach(c=>(c.logistic_clusters||[]).forEach(l=>(l.warehouses||[]).forEach(w=>{WH_ID[String(w.warehouse_id)]=c.name;WH_NAME[normWh(w.name)]=c.name;})));
 }
-if(!Object.keys(WH_ID).length)throw new Error('cluster/list пуст');
-console.log('складов в справочнике кластеров:',Object.keys(WH_ID).length);
+if(!Object.keys(SB_NAME).length&&!Object.keys(WH_ID).length)throw new Error('нет справочника складов');
+console.log('складов: в базе',Object.keys(SB_NAME).length,'| в cluster/list',Object.keys(WH_ID).length);
+const clusterOf=(id,name)=>SB_ID[id]||SB_NAME[normWh(name)]||WH_ID[id]||WH_NAME[normWh(name)];
 
 // Заказы по дням (окно since/to — сутки с запасом, день заказа отбирается по UTC, как в ozon_daily_load)
 const QTY=new Map(), seenPost=new Set(); let unknownWh=new Set();
@@ -45,7 +55,7 @@ for(const D of DAYS){
       const t=p.in_process_at||p.created_at; if(!t||String(t).slice(0,10)!==D)return;
       if(/cancel/i.test(p.status||'')||seenPost.has(p.posting_number))return; seenPost.add(p.posting_number);
       const a=p.analytics_data||{}, wn=(a.warehouse_name||'').trim();
-      let cl=WH_ID[String(a.warehouse_id||'')]||WH_NAME[wn.toUpperCase()];
+      let cl=clusterOf(String(a.warehouse_id||''),wn);
       if(!cl){cl='Не найден кластер: '+(wn||a.warehouse_id||'?');unknownWh.add(wn||String(a.warehouse_id||'?'));}
       (p.products||[]).forEach(pr=>{const o=(pr.offer_id||'').trim().toUpperCase(),q=Number(pr.quantity||0);
         if(!OFFERS.includes(o)||!Number.isFinite(q))return; const k=o+'|'+cl; QTY.set(k,(QTY.get(k)||0)+q);});
@@ -72,7 +82,7 @@ function block(title,val,dp){
 const dm=d=>d.slice(8,10)+'.'+d.slice(5,7)+'.'+d.slice(0,4);
 const head=[[`${ENT} · заказы FBO ${dm(FROM)}–${dm(TO)} (${N} дн.), без отменённых; кластер склада отгрузки; день заказа по UTC`]];
 const rows=[...head,[],...block('Среднесуточные заказы, шт/день (шт за период ÷ '+N+' дн.)',q=>q/N,2),[],...block('Заказов за период, шт',q=>q,0)];
-if(unknownWh.size)rows.push([],['Склады без кластера в справочнике Ozon: '+[...unknownWh].join(', ')]);
+if(unknownWh.size)rows.push([],['Склады без кластера (нет ни в product_stocks, ни в справочнике Ozon): '+[...unknownWh].join(', ')]);
 const csv='﻿'+rows.map(r=>r.map(x=>esc(String(x))).join(';')).join('\r\n');
 
 // Отправка файлом в Telegram
