@@ -2489,6 +2489,22 @@ async function loadGroupUnit(gk){
     const el=document.getElementById('unit_'+gk); if(el)delete el.dataset.loaded;
   }
 }
+// усечённая матрица «цена × ДРР» в карточке размера (решение владельца 02.11.2026: коридоры видны по каждому размеру): цены ±2 шага ~5%
+// (до 1 ₽) и 300 / 301 ₽, если порог комиссии внутри; ДРР 0–15% через 3 и текущий; щелчок подставляет цену и ДРР размера
+function unitMiniGrid(C,P,D,pp,pId,dId,recalc){
+  const st=(x=>{ const k=Math.pow(10,Math.floor(Math.log10(x))); return [1,2,5,10].map(v=>v*k).reduce((a,v)=>Math.abs(v-x)<Math.abs(a-x)?v:a); })(Math.max(1,P*0.05));
+  const prices=[-2,-1,0,1,2].map(i=>Math.round(P+i*st)).filter(p=>p>0);
+  if(prices[0]<=OZON_COMM_EDGE&&prices[prices.length-1]>OZON_COMM_EDGE)[OZON_COMM_EDGE,OZON_COMM_EDGE+1].forEach(p=>{ if(!prices.includes(p))prices.push(p); });
+  prices.sort((a,b)=>a-b);
+  const dc=Math.round(D*10)/10, drrs=[...new Set([0,3,6,9,12,15,dc])].sort((a,b)=>a-b);
+  const bg=v=>v<NET_FLOOR?'background:rgba(227,61,120,0.30);':(pp!=null&&v<pp?'background:rgba(253,224,71,0.45);':'background:rgba(22,163,74,0.30);');
+  let g=`<table class="pulsetable" style="font-size:.72em;margin-top:4px"><thead><tr><th>₽ \\ ДРР</th>${drrs.map(d=>`<th style="padding:1px 3px">${f1(d)}</th>`).join('')}</tr></thead><tbody>`;
+  prices.forEach(p=>{ g+=`<tr><td style="padding:1px 3px">${fmt(p)}</td>`;
+    drrs.forEach(d=>{ const v=unitPct(C,p,d), cur=p===Math.round(P)&&d===dc;
+      g+=`<td class="num" style="${bg(v)}padding:1px 3px;cursor:pointer;${cur?'outline:2px solid #544273;font-weight:700':''}" onclick="document.getElementById('${pId}').value=${p};document.getElementById('${dId}').value=${d};${recalc}">${f1(v)}</td>`; });
+    g+='</tr>'; });
+  return g+'</tbody></table>';
+}
 // значения на 1 заказ размера при цене P и ДРР D (как unitCalc)
 function unitPerOrder(C,P,D){ const cr=unitComm(C,P), r=unitR(C,P), G=P*C.b, ads=P*D/100;
   return {P,G,com:G*cr,cut:G*(1-C.r0),tax:G*C.t,u:C.u,ads,mar:G*(r-C.t)-C.u-ads}; }
@@ -2505,7 +2521,8 @@ function groupUnitCalc(gk){
     Object.keys(tot).forEach(k=>tot[k]+=it.w*v[k]);
     if(it.U.planQty)monPlan+=it.U.planQty*v.mar; monNow+=it.U.q7/7*30*v.mar;
     res.innerHTML=`<div style="padding:2px 6px;border-radius:6px;${bg(pct,pp)}"><b>${f1(pct)}%</b>${pp!=null?` (план ${f1(pp)}%)`:''} · ${fmt(v.mar)} ₽/заказ</div>`
-      +`<div style="color:#64748b;margin-top:2px" title="Лимиты ДРР при этой цене: плановый / в ноль по чистой прибыли (${NET_FLOOR}%)">ДРР до ${pp!=null?f1(Math.max(0,(pre-pp)*C.b))+'% план / ':''}${f1(Math.max(0,(pre-NET_FLOOR)*C.b))}% ноль</div>`; });
+      +`<div style="color:#64748b;margin-top:2px" title="Лимиты ДРР при этой цене: плановый / в ноль по чистой прибыли (${NET_FLOOR}%)">ДРР до ${pp!=null?f1(Math.max(0,(pre-pp)*C.b))+'% план / ':''}${f1(Math.max(0,(pre-NET_FLOOR)*C.b))}% ноль</div>`
+      +unitMiniGrid(C,P,D,pp,`guP_${id}`,`guD_${id}`,`groupUnitCalc('${gk}')`); });
   const res=document.getElementById('gutot_'+gk), info=document.getElementById('guinfo_'+gk), grid=document.getElementById('gugrid_'+gk);
   if(!(tot.G>0)){ res.innerHTML=''; info.innerHTML=''; grid.innerHTML=''; return; }
   const pct=tot.mar/tot.G*100, D=tot.ads/tot.P*100;
