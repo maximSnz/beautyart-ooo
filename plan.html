@@ -338,6 +338,10 @@
  .progval.bad{color:#E33D78;animation:pulseBad 1.2s ease-in-out infinite}
  .progval.n{color:#94a3b8}
  @keyframes pulseBad{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+ /* ячейка средней за 14 дней в матрице «Юнит-экономики» (02.11.2026) */
+ @keyframes unitPulse{0%,100%{box-shadow:inset 0 0 0 2px rgba(227,61,120,.95)}50%{box-shadow:inset 0 0 0 3px rgba(227,61,120,.2)}}
+ td.unitavg{animation:unitPulse 1.4s ease-in-out infinite}
+ @media (prefers-reduced-motion:reduce){ td.unitavg{animation:none;box-shadow:inset 0 0 0 2px #E33D78} }
  .progsub{font-size:.72em;color:#94a3b8}
  .upwrap{position:relative;display:inline-block}
  .upmenu{position:absolute;top:calc(100% + 6px);left:0;background:#fff;border:1px solid rgba(84,66,115,.25);border-radius:8px;padding:4px;display:flex;flex-direction:column;gap:4px;min-width:210px;box-shadow:0 6px 18px rgba(28,13,46,.15);z-index:300}
@@ -2121,27 +2125,31 @@ async function loadUnit(pid){
   const offer=(BYID[pid]||{}).offer_id;
   const box=document.getElementById('unitbox_'+pid);
   try{
-    const todayISO=localISO(new Date()), from=addDaysISO(todayISO,-35), y=addDaysISO(todayISO,-1), w7=addDaysISO(todayISO,-7);
+    const todayISO=localISO(new Date()), from=addDaysISO(todayISO,-35), y=addDaysISO(todayISO,-1), w7=addDaysISO(todayISO,-7), w14=addDaysISO(todayISO,-14);
     const o=encodeURIComponent(offer);
     const [salesRows,chargeRows,adsMap]=await Promise.all([
       pulseFetch(`product_sales?offer_id=eq.${o}&sale_date=gte.${from}&sale_date=lte.${y}&select=sale_date,qty,revenue&order=sale_date.asc,warehouse_name.asc`),
       pulseCharges(o,from,addDaysISO(todayISO,-8)),
-      loadAdSpend(w7,y)
+      loadAdSpend(w14,y)
     ]);
     const byDaySales=new Map(), byDayRev=new Map();
     salesRows.forEach(r=>{ byDaySales.set(r.sale_date,(byDaySales.get(r.sale_date)||0)+Number(r.qty||0)); byDayRev.set(r.sale_date,(byDayRev.get(r.sale_date)||0)+Number(r.revenue||0)); });
     const C=pulseCal(pid,pulseByDay(chargeRows),byDaySales,byDayRev,todayISO);
-    let q7=0,r7=0,a7=0; const ads=adsMap.get(pid)||new Map();
-    for(let d=w7;d<=y;d=addDaysISO(d,1)){ q7+=byDaySales.get(d)||0; r7+=byDayRev.get(d)||0; a7+=ads.get(d)||0; }
+    // старт калькулятора — вчера, как последняя колонка «Руки на пульсе» (решение владельца 02.11.2026; до этого — средняя за 7 дней);
+    // нет заказов вчера — последний день с заказами за 14 дней. Средняя за 14 дней — пульсирующая ячейка матрицы
+    const ads=adsMap.get(pid)||new Map(); let q7=0,q14=0,r14=0,a14=0;
+    for(let d=w14;d<=y;d=addDaysISO(d,1)){ const q=byDaySales.get(d)||0; q14+=q; r14+=byDayRev.get(d)||0; a14+=ads.get(d)||0; if(d>=w7)q7+=q; }
+    let dy=y; while(dy>=w14&&!(byDaySales.get(dy)>0))dy=addDaysISO(dy,-1);
+    const qy=byDaySales.get(dy)||0, ry=byDayRev.get(dy)||0;
     const pl=PLAN[pid]&&PLAN[pid].plan_qty>0?PLAN[pid]:null;
-    const U=UNIT[pid]={C,p7:q7>0?r7/q7:C.p0,d7:r7>0?a7/r7*100:0,q7,planPct:pl&&pl.margin_pct!=null?Number(pl.margin_pct):null,planPrice:pl?Number(pl.price):null,planQty:pl?Number(pl.plan_qty):null};
+    const U=UNIT[pid]={C,dayISO:qy>0?dy:null,py:qy>0?ry/qy:C.p0,dy:ry>0?(ads.get(dy)||0)/ry*100:0,p14:q14>0?r14/q14:null,d14:r14>0?a14/r14*100:null,w14,y,q7,planPct:pl&&pl.margin_pct!=null?Number(pl.margin_pct):null,planPrice:pl?Number(pl.price):null,planQty:pl?Number(pl.plan_qty):null};
     if(!C.ok){ box.innerHTML='<div class="psub">Модель не рассчитана: мало заказов и выкупов за 4 недели до последних 7 дней.</div>'; return; }
-    const P0=Math.round(U.p7), D0=Math.round(U.d7*10)/10;
+    const P0=Math.round(U.py), D0=Math.round(U.dy*10)/10;
     const inp=(id,v,st)=>`<input type="number" id="${id}_${pid}" value="${v}" step="${st}" min="0" oninput="unitCalc(${pid})" style="width:90px">`;
     box.innerHTML=`<div class="psub" style="margin:0 0 8px">Прогноз маржинальности товара при цене и ДРР. Остальное — по статистике заказов ${ddmm(C.from)}–${ddmm(C.to)} (медиана 4 недель, выкупы по ним уже пришли); обновляется каждый день.</div>`
       +`<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:8px;font-size:.86em">`
       +`<label>Цена заказа, ₽ ${inp('unitP',P0,1)}</label><label>ДРР, % ${inp('unitD',D0,0.5)}</label>`
-      +`<button onclick="unitSet(${pid},${P0},${D0})">Как сейчас (${fmt(P0)} ₽, ${f1(D0)}%)</button>`
+      +`<button onclick="unitSet(${pid},${P0},${D0})" title="Цена и ДРР вчерашнего дня — как последняя колонка «Руки на пульсе»">${U.dayISO&&U.dayISO!==U.y?ddmm(U.dayISO):'Вчера'} (${fmt(P0)} ₽, ${f1(D0)}%)</button>`
       +(U.planPrice!=null?`<button onclick="unitSet(${pid},${Math.round(U.planPrice)},null)">Цена плана (${fmt(U.planPrice)} ₽)</button>`:'')
       +`</div><div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start"><div id="unitres_${pid}"></div><div id="unitgrid_${pid}"></div><div id="unitinfo_${pid}" style="font-size:.86em;line-height:1.6;max-width:420px"></div></div>`
       +`<div class="psub" style="margin-top:6px;color:#94a3b8">Модель не знает, как цена и реклама меняют число заказов, — это проверяйте SMART-гипотезой. Маржинальность — от суммы выкупов, как в факте (CF). Ниже ${NET_FLOOR}% — убыток для компании по чистой прибыли (красный).</div>`;
@@ -2190,17 +2198,18 @@ function unitCalc(pid){
   document.getElementById('unitinfo_'+pid).innerHTML=h;
   // сетка «цена × ДРР»: шаг цены ~5% (1, 2, 5 × 10ᵏ), щелчок — подставить
   const st=(x=>{ const k=Math.pow(10,Math.floor(Math.log10(x))); return [1,2,5,10].map(v=>v*k).reduce((a,v)=>Math.abs(v-x)<Math.abs(a-x)?v:a); })(Math.max(1,P*0.05));
-  const pp=U.planPrice!=null?Math.round(U.planPrice):null;
-  const prices=[...new Set([-3,-2,-1,0,1,2,3].map(i=>Math.round(P+i*st)).filter(p=>i0(p)).concat(pp!=null?[pp]:[]))].filter(p=>p>0).sort((a,b)=>a-b);
-  function i0(p){ return pp==null||p===Math.round(P)||Math.abs(p-pp)>=st/2; }  // строка сетки рядом с ценой плана не дублирует её
+  // цены — до 1 ₽; особые строки — цена плана и средняя за 14 дней (её ячейка пульсирует); соседние шаги рядом с ними не дублируют их
+  const pp=U.planPrice!=null?Math.round(U.planPrice):null, p14=U.p14!=null?Math.round(U.p14):null, d14=U.d14!=null?Math.round(U.d14*10)/10:null;
+  const spec=[pp,p14].filter(v=>v!=null);
+  const prices=[...new Set([-3,-2,-1,0,1,2,3].map(i=>Math.round(P+i*st)).filter(p=>p===Math.round(P)||spec.every(x=>Math.abs(p-x)>=st/2)).concat(spec))].filter(p=>p>0).sort((a,b)=>a-b);
   if(prices.length&&prices[0]<=OZON_COMM_EDGE&&prices[prices.length-1]>OZON_COMM_EDGE){ [OZON_COMM_EDGE,OZON_COMM_EDGE+1].forEach(p=>{ if(!prices.includes(p))prices.push(p); }); prices.sort((a,b)=>a-b); }  // скачок комиссии на 300 ₽
-  const drrs=[...new Set([0,2,4,6,8,10,15,20,Math.round(D*10)/10])].sort((a,b)=>a-b);
+  const drrs=[...new Set([0,2,4,6,8,10,15,20,Math.round(D*10)/10].concat(d14!=null?[d14]:[]))].sort((a,b)=>a-b);
   let g=`<table class="pulsetable" style="font-size:.82em"><thead><tr><th title="Маржинальность, % при цене (строки) и ДРР (столбцы); щелчок — подставить">Цена \\ ДРР</th>${drrs.map(d=>`<th>${f1(d)}%</th>`).join('')}</tr></thead><tbody>`;
-  prices.forEach(p=>{ g+=`<tr><td class="pulsemetric">${fmt(p)} ₽${U.planPrice!=null&&p===Math.round(U.planPrice)?' (план)':''}</td>`;
-    drrs.forEach(d=>{ const v=unitPct(C,p,d), cur=p===Math.round(P)&&d===Math.round(D*10)/10;
-      g+=`<td class="num" style="${bg(v)}cursor:pointer;${cur?'outline:2px solid #544273;font-weight:700':''}" onclick="unitSet(${pid},${p},${d})">${f1(v)}</td>`; });
+  prices.forEach(p=>{ g+=`<tr><td class="pulsemetric">${fmt(p)} ₽${p===pp?' (план)':''}${p===p14?' (14 дн)':''}</td>`;
+    drrs.forEach(d=>{ const v=unitPct(C,p,d), cur=p===Math.round(P)&&d===Math.round(D*10)/10, avg=p===p14&&d===d14;
+      g+=`<td class="num${avg?' unitavg':''}" style="${bg(v)}cursor:pointer;${cur?'outline:2px solid #544273;font-weight:700':''}"${avg?` title="Средняя за 14 дней (${ddmm(U.w14)}–${ddmm(U.y)}): цена ${fmt(U.p14)} ₽, ДРР ${f1(U.d14)}%"`:''} onclick="unitSet(${pid},${p},${d})">${f1(v)}</td>`; });
     g+='</tr>'; });
-  grid.innerHTML=g+'</tbody></table>';
+  grid.innerHTML=g+'</tbody></table>'+(p14!=null&&d14!=null?`<div class="psub" style="margin-top:4px">Пульсирует — средняя за 14 дней (${ddmm(U.w14)}–${ddmm(U.y)}): ${fmt(U.p14)} ₽, ДРР ${f1(U.d14)}%; рамка — введённые цена и ДРР.</div>`:'');
 }
 const PULSE_TREND={};
 // линия тренда «Руки на пульсе»: точки — под центрами колонок дней (по заголовкам), шкала — по значениям, плану и 5%
@@ -2231,7 +2240,9 @@ async function pulseHtml(pid,offer){
   const [py,pm]=MONTH.split('-').map(Number);
   const mStart=new Date(py,pm-1,1), mEnd=new Date(py,pm,0);
   const wStart=parseW(WEEKISO[0]), wEnd=weekEnd(parseW(WEEKISO[WEEKISO.length-1]));
-  const start=wStart<mStart?wStart:mStart, end=wEnd>mEnd?wEnd:mEnd;
+  // + последние 10 дней предыдущего месяца — в начале месяца видно, откуда пришли (решение владельца 02.11.2026)
+  const prev10=new Date(py,pm-1,1-10);
+  const start=wStart<prev10?wStart:prev10, end=wEnd>mEnd?wEnd:mEnd;
   const first=localISO(start), last=localISO(end);
   const todayISO=localISO(new Date());
   // данные — с запасом: маржинальность за 7 дней (с first − 6) и коэффициенты лимитов (4 недели до «8 дней назад»)
