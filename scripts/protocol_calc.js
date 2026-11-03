@@ -180,13 +180,25 @@ function gapSel(P,ent){
 }
 // план дня — позиции списка хотя бы по одной причине, в наличии (по всему юрлицу); причины — коды для таблицы плана
 function work(P,ent){
-  const {gap,sel}=gapSel(P,ent),selS=new Set(gap>0?sel:[]);
+  const {gap,dMin,sel}=gapSel(P,ent),selS=new Set(gap>0?sel:[]);
   const why=r=>[r.drop&&'drop',selS.has(r)&&'gap',redY(r)&&'drr',r.deep&&'deep',r.hState!=='hyp'&&'hyp',r.restock&&'restock'].filter(Boolean);
   const list=P.rows.filter(r=>!r.oos&&why(r).length);
-  return {list,why,keys:new Set(list.map(posKey)),counts:{all:list.length,m1:list.filter(r=>r.mgr==='m1').length,m2:list.filter(r=>r.mgr==='m2').length}};
+  return {list,why,gap,dMin,keys:new Set(list.map(posKey)),counts:{all:list.length,m1:list.filter(r=>r.mgr==='m1').length,m2:list.filter(r=>r.mgr==='m2').length}};
 }
+// цифры причин на день фиксации (03.11.2026) — для разбора ячейки в «📊 Статистике»: вчера к плану, остаток и по каждой причине
+const rd=(x,n)=>x==null||!isFinite(x)?(x===Infinity?'inf':null):Math.round(x*10**n)/10**n;
+function info(P,W,r){const o={yest:rd(r.yest,1),planY:rd(r.planY,1),revY:rd(r.revY,0),planRY:rd(r.planRY,0),stock:rd(r.stockNow,0),need:rd(r.stockNeed,0)};
+  const w=W.why(r);
+  if(w.includes('drop'))o.drop={cur:rd(r.cur,1),prev:rd(r.prev,1),revC:rd(r.revC,0),revP:rd(r.revP,0),pct:rd(r.dropPct,1)};
+  if(w.includes('gap'))o.gap={pot:rd(pot(r),0),gap:rd(W.gap,0),min:W.dMin,revAll:rd(P.revAllY,0)};
+  if(w.includes('drr')||r.limY)o.drr={drr:rd(r.drrY,1),ads:rd(r.aY,0),price:r.limY&&r.limY.price?rd(r.limY.price,0):null,plan:r.limY?rd(r.limY.plan,1):null,be:r.limY?rd(r.limY.be,1):null};
+  if(w.includes('deep'))o.deep={q3:rd(r.q3,1),qPlan3:rd(r.qPlan3,1),dev:rd(r.ordDev3,1),price3:rd(r.price3,0),planPrice:rd(r.planPrice,0),drr3:rd(r.drr3,1),plan:r.lim3?rd(r.lim3.plan,1):null,be:r.lim3?rd(r.lim3.be,1):null,days:DEEP_DAYS};
+  if(w.includes('hyp'))o.hyp={state:r.hState,due:r.due||null,deadline:r.hypo?r.hypo.deadline:null,action:r.hypo?String(r.hypo.action||'').slice(0,200):null,wd:r.wd||null,
+    sizes:r.members?r.members.filter(m=>m.hState!=='hyp').map(m=>[m.offer,m.hState]):undefined};
+  if(w.includes('restock'))o.restock={before:r.rs?rd(r.rs.before,0):null,now:r.rs?rd(r.rs.now,0):null,afterZero:r.afterZero||null,days:rd(r.stockDays,1)};
+  return o;}
 // строки таблицы product_protocol_plan за день протокола
-function planRows(P,W,src){return W.list.map(r=>({day:P.todayKey,pos_key:posKey(r),product_id:r.fam?null:r.pid,offer_id:r.offer,mgr:r.mgr,reasons:W.why(r).join(','),y_day:P.yKey,cmp_day:P.pKey,src}));}
+function planRows(P,W,src){return W.list.map(r=>({day:P.todayKey,pos_key:posKey(r),product_id:r.fam?null:r.pid,offer_id:r.offer,mgr:r.mgr,reasons:W.why(r).join(','),y_day:P.yKey,cmp_day:P.pKey,src,info:info(P,W,r)}));}
 root.PROTO={load,work,planRows,gapSel,evalUnit,dropAt,lim,defB,posKey,pot,below,redY,gloveFamily,
   DROP_PCT,DROP_QTY,DEEP_PCT,PRICE_TOL,DEEP_DAYS,DEEP_LO,DEEP_HI,DAY_MIN,UNDER,NET_FLOOR,STOCK_DAYS,HRANK};
 })(typeof window!=='undefined'?window:globalThis);

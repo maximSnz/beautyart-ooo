@@ -515,7 +515,9 @@ else try{
   const P=await PROTO.load(api,{today:TODAY,m1:M1}),W=PROTO.work(P,'ooo'),rows=PROTO.planRows(P,W,'night');
   console.log(`  позиций с планом: ${P.rows.length}, в работе: ${W.counts.all} (m1 ${W.counts.m1}, m2 ${W.counts.m2}), сравнение ${P.yKey} к ${P.pKey}`);
   await sbWrite('DELETE',`product_protocol_plan?day=eq.${TODAY}`,null);
-  await sbWrite('POST','product_protocol_plan?on_conflict=day,pos_key',rows);
+  try{await sbWrite('POST','product_protocol_plan?on_conflict=day,pos_key',rows);}
+  catch(e){if(!/info/.test(e.message))throw e;console.log('  нет колонки info (SQL 2026-11-03_product_protocol_plan_info) — без цифр причин');
+    await sbWrite('POST','product_protocol_plan?on_conflict=day,pos_key',rows.map(({info,...x})=>x));}
   note(`План протокола: ${W.counts.all} позиций (Илья ${W.counts.m1}, Ольга ${W.counts.m2})`);
 }catch(e){console.log('  ⚠️ план протокола:',e.message.slice(0,160));note(`⚠️ План протокола не зафиксирован: ${e.message.slice(0,100)}`);}
 
