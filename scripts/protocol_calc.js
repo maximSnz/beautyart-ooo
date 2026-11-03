@@ -199,6 +199,40 @@ function info(P,W,r){const o={yest:rd(r.yest,1),planY:rd(r.planY,1),revY:rd(r.re
   return o;}
 // строки таблицы product_protocol_plan за день протокола
 function planRows(P,W,src){return W.list.map(r=>({day:P.todayKey,pos_key:posKey(r),product_id:r.fam?null:r.pid,offer_id:r.offer,mgr:r.mgr,reasons:W.why(r).join(','),y_day:P.yKey,cmp_day:P.pKey,src,info:info(P,W,r)}));}
-root.PROTO={load,work,planRows,gapSel,evalUnit,dropAt,lim,defB,posKey,pot,below,redY,gloveFamily,
+// маржа товара за день по дате заказа (03.11.2026, «Позиции по дням» — разница маржи соседних дней) — как окно товара (prItem) и «Рука на
+// пульсе»: созревшие дни (≤ сегодня − 8) — факт (pnl − себестоимость на дату − 3% × выручка P − реклама дня) ÷ по начислениям ozon_charges_by_event;
+// свежие — оценка модели при цене и ДРР дня (pre(P) − ДРР ÷ b) × выручка × b; нет заказов — минус реклама дня. По товарам с планом,
+// размеры перчаток — отдельно (группа = сумма на странице). Дни — P.days (35). Начисления — по неделям, не больше 3 запросов одновременно
+const TAX=0.03;
+async function marginDays(api,P){
+  const units=[];P.rows.forEach(r=>r.members?units.push(...r.members):units.push(r));
+  const days=P.days,from=days[0],to=days[days.length-1],matureTo=keyOf(addDays(dateOf(P.todayKey),-8));
+  const prices=await api.all(`product_prices?product_id=in.(${units.map(u=>u.pid).join(',')})&select=product_id,cost,created_at&order=created_at.asc,product_id.asc`);
+  const CH={};prices.forEach(x=>{(CH[x.product_id]=CH[x.product_id]||[]).push({t:String(x.created_at||'').slice(0,10),c:Number(x.cost||0)});});
+  const costAt=(pid,d)=>{const a=CH[pid];if(!a||!a.length)return 0;let b=null;for(const r of a){if(r.t<=d)b=r;else break;}return (b||a[0]).c;};
+  const ads=await api.all(`ozon_ad_spend?spend_date=gte.${from}&spend_date=lte.${to}&select=offer_id,spend_date,amount&order=offer_id,spend_date`);
+  const KEY=new Map();units.forEach(u=>{if(P.SKU_OF[u.pid])KEY.set(String(P.SKU_OF[u.pid]),u.pid);KEY.set(u.offer,u.pid);});
+  const AD=new Map();ads.forEach(x=>{const pid=KEY.get(String(x.offer_id));if(!pid)return;const k=pid+'|'+x.spend_date;AD.set(k,(AD.get(k)||0)+Number(x.amount||0));});
+  const wk=[];for(let i=0;i<days.length;i+=7)wk.push([days[i],days[Math.min(i+6,days.length-1)]]);
+  const jobs=[];units.forEach(u=>wk.forEach(w=>jobs.push([u,w])));
+  const G=new Map();let ji=0;
+  const get=async q=>{for(let a=0;;a++){try{return await api.all(q);}catch(e){if(a>=2)throw e;await new Promise(r=>setTimeout(r,800*(a+1)));}}};
+  await Promise.all([0,1,2].map(async()=>{while(ji<jobs.length){const [u,[f,t]]=jobs[ji++];
+    (await get(`ozon_charges_by_event?offer_id=eq.${encodeURIComponent(u.offer)}&event_date=gte.${f}&event_date=lte.${t}&select=event_date,charge_type,amount,qty,gmv&order=event_date,charge_type`)).forEach(c=>{
+      const k=u.pid+'|'+c.event_date;let g=G.get(k);if(!g){g={gmv:0,sales:0,pnl:0,revP:0};G.set(k,g);}
+      const amt=Number(c.amount||0),q=Number(c.qty||0),gv=Number(c.gmv||0);g.pnl+=amt;
+      if(c.charge_type==='Выручка'){g.gmv+=gv;g.sales+=q;g.revP+=amt;}else if(c.charge_type==='Возврат выручки'){g.gmv+=gv;g.sales-=q;g.revP+=amt;}});}}));
+  const r2=x=>x==null?null:Math.round(x*100)/100,out=[];
+  units.forEach(u=>days.forEach((d,i)=>{
+    const r=u.rev[i]||0,q=u.ord[i]||0,a=AD.get(u.pid+'|'+d)||0,g=G.get(u.pid+'|'+d);let mar=null,gmv=null,est=false;
+    const fact=()=>{mar=g.pnl-costAt(u.pid,d)*g.sales-TAX*g.revP-a;gmv=g.gmv;};
+    if(d<=matureTo){if(g&&g.gmv>0)fact();else if(q===0){mar=-a;gmv=0;}}
+    else{const L=u.coef&&q>0&&r>0?lim(u.coef,r/q):null;
+      if(L){const pct=L.pre-(a/r*100)/u.coef.b;mar=pct/100*r*u.coef.b;gmv=r*u.coef.b;est=true;}
+      else if(g&&g.gmv>0){fact();est=true;}else if(q===0){mar=-a;gmv=0;est=true;}}
+    out.push({product_id:u.pid,day:d,mar:r2(mar),gmv:r2(gmv),rev:r2(r),est});}));
+  return out;
+}
+root.PROTO={load,work,planRows,marginDays,gapSel,evalUnit,dropAt,lim,defB,posKey,pot,below,redY,gloveFamily,
   DROP_PCT,DROP_QTY,DEEP_PCT,PRICE_TOL,DEEP_DAYS,DEEP_LO,DEEP_HI,DAY_MIN,UNDER,NET_FLOOR,STOCK_DAYS,HRANK};
 })(typeof window!=='undefined'?window:globalThis);

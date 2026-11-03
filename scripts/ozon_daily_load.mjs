@@ -507,12 +507,14 @@ else try{
 // ===== 9. План «Протокола работ» на сегодня → product_protocol_plan (03.11.2026, решение владельца: план дня фиксируется после ночной загрузки) =====
 // Расчёт — общий модуль scripts/protocol_calc.js (копия beautyart-home/protocol_calc.js — правится там, сюда копируется); сравнение просадки —
 // вчера к предыдущему дню того же типа; строки дня заменяются целиком. Только при загрузке за вчера (остатки «на сейчас»).
+let PROTO_P=null,PROTO_API=null;   // расчёт шага 9 — для шага 10
 console.log('\n9. План протокола',el());
 if(!SNAPSHOT)console.log('  пропуск: день загрузки не вчера');
 else try{
   await import('./protocol_calc.js');   // ставит globalThis.PROTO
   const api={all:sbAll,one:async q=>{const r=await fetch(`${SB}/rest/v1/${q}`,{headers:SR});if(!r.ok)throw new Error('Supabase HTTP '+r.status+' '+q.split('?')[0]);return r.json();}};
   const P=await PROTO.load(api,{today:TODAY,m1:M1}),W=PROTO.work(P,'ooo'),rows=PROTO.planRows(P,W,'night');
+  PROTO_P=P;PROTO_API=api;
   console.log(`  позиций с планом: ${P.rows.length}, в работе: ${W.counts.all} (m1 ${W.counts.m1}, m2 ${W.counts.m2}), сравнение ${P.yKey} к ${P.pKey}`);
   await sbWrite('DELETE',`product_protocol_plan?day=eq.${TODAY}`,null);
   try{await sbWrite('POST','product_protocol_plan?on_conflict=day,pos_key',rows);}
@@ -520,6 +522,17 @@ else try{
     await sbWrite('POST','product_protocol_plan?on_conflict=day,pos_key',rows.map(({info,...x})=>x));}
   note(`План протокола: ${W.counts.all} позиций (Илья ${W.counts.m1}, Ольга ${W.counts.m2})`);
 }catch(e){console.log('  ⚠️ план протокола:',e.message.slice(0,160));note(`⚠️ План протокола не зафиксирован: ${e.message.slice(0,100)}`);}
+
+// ===== 10. Маржа товара за день по дате заказа за 35 дней → product_margin_daily (03.11.2026, «Позиции по дням»: разница маржи соседних дней) =====
+// Тот же модуль (PROTO.marginDays): созревшие дни — факт по начислениям, свежие 7 — оценка модели; каждую ночь пересчёт — свежие дни дозревают
+console.log('\n10. Маржа по дате заказа',el());
+if(!PROTO_P)console.log('  пропуск: нет расчёта шага 9');
+else try{
+  const rows=await PROTO.marginDays(PROTO_API,PROTO_P),now=new Date().toISOString();
+  console.log(`  строк: ${rows.length} (оценка модели: ${rows.filter(r=>r.est).length}, без данных: ${rows.filter(r=>r.mar==null).length})`);
+  await sbWrite('POST','product_margin_daily?on_conflict=product_id,day',rows.map(r=>({...r,updated_at:now})));
+  note(`Маржа по дате заказа: ${rows.length} строк`);
+}catch(e){console.log('  ⚠️ маржа по дате заказа:',e.message.slice(0,160));note(`⚠️ Маржа по дате заказа не посчитана: ${e.message.slice(0,100)}`);}
 
 if(!WRITE){console.log('\nРежим проверки — в базу НЕ записано. Было бы выполнено:');PLANNED.forEach(x=>console.log('  '+x));}
 note(`Время: ${Math.round((Date.now()-T0)/60000)} мин`);
