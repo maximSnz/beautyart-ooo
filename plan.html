@@ -1855,7 +1855,7 @@ function dform(n){const a=Math.abs(n)%100,b=a%10;return a>10&&a<20?'дней':b=
   const base=it.baseline_ctx?JSON.parse(it.baseline_ctx):null;
   const fact=it.fact_ctx?JSON.parse(it.fact_ctx):null;
   const legacy=!base||!('orders' in base);
-  const created=ddmm(localISO(new Date(it.created_at)));
+  const cd=new Date(it.created_at), created=ddmm(localISO(cd))+' '+cd.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});  // дата и время постановки (03.11.2026)
   const v=verdict(it);
   let status,cls;
   if(v==null){
@@ -1895,7 +1895,7 @@ function dform(n){const a=Math.abs(n)%100,b=a%10;return a>10&&a<20?'дней':b=
       ${factLine?`<div class="psub">${factLine}</div>`:''}`;
   }
   const kids=(PROTO[it.product_id]||[]).filter(c=>c.parent_id===it.id);
-  const kidsHtml=kids.map(k=>`<div class="pchild"><span class="pdate">${new Date(k.created_at).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit'})}</span><span class="paction">${esc(k.action)}</span></div>`).join('');
+  const kidsHtml=kids.map(k=>`<div class="pchild"><span class="pdate">${new Date(k.created_at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',','')}</span><span class="paction">${esc(k.action)}</span></div>`).join('');
   const canAdd=legacy?(it.fact_dev==null):(it.fact_ctx==null);
   const addForm=canAdd?`<div class="pchildform"><input type="text" id="pca_${it.id}" placeholder="Текст дополнения"><button onclick="addProtoChild(${it.product_id},${it.id})">Сохранить</button></div>`:'';
   return `<div class="pitem" style="border-left-color:${cls==='g'?'#16a34a':cls==='w'?'#d97706':cls==='r'?'#E33D78':'rgba(84,66,115,.25)'}">
