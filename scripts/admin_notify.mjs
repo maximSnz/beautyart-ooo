@@ -1,6 +1,9 @@
-// Telegram-бот администратора (этап 3): сводка владельцу о ночной загрузке и свежести данных.
-// MODE=load  — шаг после ozon-daily-load (всегда, даже при падении): итоги шагов из load_summary.txt + свежесть.
-// MODE=watch — сторож: упала синхронизация товаров / к утру нет успешной загрузки — тревога; при ручном запуске — полный статус.
+// Telegram-бот администратора (этап 3): итоги ночной загрузки и тревоги.
+// С 03.11.2026 (решение владельца) ежедневная сводка не рассылается: итоги пишутся в журнал admin_load_log, бот показывает их
+// по кнопкам меню (Edge Function tg-bot, «Админ → Дата / Лог ошибок»); в Telegram сами по себе уходят только тревоги.
+// MODE=load  — шаг после ozon-daily-load (всегда, даже при падении): итоги шагов из load_summary.txt + свежесть → журнал;
+//              загрузка не удалась или журнал недоступен — сообщение в Telegram.
+// MODE=watch — сторож: упала синхронизация товаров / к утру нет успешной загрузки — тревога (Telegram + журнал); при ручном запуске — полный статус.
 // Сообщение уходит только в Telegram (TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID); в публичный лог цифры не пишутся.
 import fs from 'node:fs';
 const SB=process.env.SUPABASE_URL, SR={apikey:process.env.SUPABASE_SERVICE_ROLE_KEY,Authorization:`Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`};
@@ -31,6 +34,13 @@ async function gh(path){
   const r=await fetch(`https://api.github.com/repos/${REPO}/${path}`,{headers:{Authorization:`Bearer ${process.env.GITHUB_TOKEN}`,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(30000)});
   return r.ok?r.json():null;
 }
+// запись в журнал admin_load_log (sql/2026-11-03_admin_load_log.sql); false — таблицы нет или ошибка
+async function log(row){
+  try{const r=await fetch(`${SB}/rest/v1/admin_load_log`,{method:'POST',headers:{...SR,'Content-Type':'application/json',Prefer:'return=minimal'},
+    body:JSON.stringify(row),signal:AbortSignal.timeout(30000)});console.log('Журнал:',r.ok?'записано':'ошибка HTTP '+r.status);return r.ok;}
+  catch(e){console.log('Журнал: ошибка',e.message);return false;}
+}
+const RUN_URL=process.env.RUN_URL||`${process.env.GITHUB_SERVER_URL||'https://github.com'}/${REPO}/actions/runs/${process.env.GITHUB_RUN_ID||''}`;
 async function send(text){
   const r=await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({chat_id:process.env.TELEGRAM_CHAT_ID,text,parse_mode:'HTML',disable_web_page_preview:true})});
@@ -44,7 +54,9 @@ if(MODE==='load'){
   let lines=[];try{lines=fs.readFileSync('load_summary.txt','utf8').split('\n').filter(Boolean);}catch(e){}
   const head=`${ok?'✅':'❌'} <b>${ENT}</b> · ночная загрузка за ${dm(process.env.DAY||YEST)} — ${ok?'готово':st==='cancelled'?'остановлена (время вышло?)':'ОШИБКА'}${write?'':' (режим проверки)'}`;
   const body=lines.map(esc).join('\n')||(ok?'':'итогов шагов нет — упала в самом начале');
-  await send(`${head}\n${body}\n\n<i>Свежесть:</i> ${fr.text}\n<a href="${process.env.RUN_URL}">лог запуска</a>`);
+  const logged=await log({kind:'load',day:process.env.DAY||YEST,status:st,write,summary:lines.join('\n')||null,freshness:fr.text,run_url:RUN_URL});
+  if(!ok||!logged)await send(`${head}\n${body}\n\n<i>Свежесть:</i> ${fr.text}\n<a href="${RUN_URL}">лог запуска</a>${logged?'':'\n<i>журнал admin_load_log недоступен — сводка отправлена сообщением</i>'}`);
+  else console.log('Загрузка успешна, итоги — в журнале, сообщение не отправлено');
 }else{
   const alerts=[];
   const sync=(await gh('actions/workflows/ozon-products-sync.yml/runs?per_page=1'))?.workflow_runs?.[0];
@@ -53,7 +65,8 @@ if(MODE==='load'){
   if(sync&&sync.status==='completed'&&sync.conclusion!=='success'&&mskDay(sync.created_at)===TODAY)alerts.push(`❌ синхронизация товаров упала (${mskTime(sync.created_at)} Мск) — ночная загрузка не запускалась. <a href="${sync.html_url}">лог</a>`);
   if(!okToday&&EVENT!=='workflow_run')alerts.push(`❌ сегодня нет успешной ночной загрузки${load[0]?` — последняя: ${dm(mskDay(load[0].created_at))} ${mskTime(load[0].created_at)}, ${load[0].conclusion||load[0].status}`:''}`);
   if(fr.bad&&EVENT!=='workflow_run')alerts.push(`⚠️ устаревшие данные: ${fr.text}`);
-  if(alerts.length)await send(`<b>${ENT}</b> · сторож\n${alerts.join('\n')}`);
+  if(alerts.length){await send(`<b>${ENT}</b> · сторож\n${alerts.join('\n')}`);
+    await log({kind:'watch',day:TODAY,status:'alert',summary:alerts.join('\n').replace(/<[^>]+>/g,''),freshness:fr.text,run_url:sync&&alerts[0].includes('синхронизация')?sync.html_url:RUN_URL});}
   else if(EVENT==='workflow_dispatch')await send(`🟢 <b>${ENT}</b> · сторож: всё в порядке\nсинхронизация ${sync?dm(mskDay(sync.created_at))+' '+mskTime(sync.created_at)+' '+(sync.conclusion||sync.status):'—'} · загрузка ${okToday?'сегодня ✅':'—'}\n<i>Свежесть:</i> ${fr.text}`);
   else console.log('Сторож: тревог нет, сообщение не отправлено');
 }
