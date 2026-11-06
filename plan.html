@@ -2938,16 +2938,31 @@ async function applyRowMarks(){
 }
 // встраивание «Руки на пульсе» в окно товара главной (06.11.2026, решение владельца: «Диаграмма | РНП»): plan.html?embed=1&pulse=<артикул
 // или семейство перчаток> — страница грузится как обычно, но показывает только таблицу РНП товара (тот же расчёт, одна копия); высота — родителю
+let tellH=()=>{};
 const EMBED=new URLSearchParams(location.search).get('embed')==='1',EMBED_KEY=new URLSearchParams(location.search).get('pulse')||'';
 if(EMBED){document.body.classList.add('embed');const b=document.createElement('div');b.id='embedBox';b.innerHTML='<div class="psub">загрузка «Руки на пульсе»…</div>';document.body.prepend(b);
-  const st=document.createElement('style');st.textContent='body.embed{background:transparent!important;margin:0;padding:0}body.embed>*:not(#embedBox){display:none!important}#embedBox{padding:4px 2px;color:#1C0D2E;background:#fff;border-radius:10px;overflow-x:auto}';document.head.appendChild(st);
-  const tell=()=>{try{parent.postMessage({type:'ba-pulse-h',key:EMBED_KEY,h:b.scrollHeight},'*');}catch(e){}};new ResizeObserver(tell).observe(b);
+  const st=document.createElement('style');st.textContent='body.embed{background:transparent!important;margin:0;padding:0}body.embed>*:not(#embedBox){display:none!important}#embedBox{padding:4px 2px;color:#1C0D2E;background:#fff;border-radius:10px;overflow-x:auto}#embedBox .pchildform{display:none}#embedHyp{margin-top:10px}';document.head.appendChild(st);
+  tellH=()=>{try{parent.postMessage({type:'ba-pulse-h',key:EMBED_KEY,h:b.scrollHeight},'*');}catch(e){}};new ResizeObserver(tellH).observe(b);
   if(!BA_AUTH.has(SUPABASE_URL))b.innerHTML='<div class="psub">Нет входа — откройте plan.html и войдите (вход общий с главной).</div>';}
 async function embedPulse(){const b=document.getElementById('embedBox');
   let pid=OFFER_PID[EMBED_KEY]||null;
   if(!pid){const ms=ROWS.filter(p=>gloveFamily(p.offer_id)===EMBED_KEY);if(ms.length>1){pid='g_'+EMBED_KEY.replace(/[^A-Za-z0-9]/g,'_');PROTO_GROUPS[pid]=PROTO_GROUPS[pid]||{key:EMBED_KEY,members:ms};}}
   if(!pid){b.innerHTML=`<div class="psub">Товар ${esc(EMBED_KEY)} не найден среди неархивных.</div>`;return;}
-  b.innerHTML=`<div id="pulsetbl_${pid}" class="psub">загрузка…</div>`;await loadPulse(pid);}
+  b.innerHTML=`<div id="pulsetbl_${pid}" class="psub">загрузка…</div><div class="psection" id="embedHyp"><div class="psectitle">🎯 SMART-гипотезы</div><div class="psub">загрузка…</div></div>`;
+  await Promise.all([loadPulse(pid),embedHyp(pid)]);}
+// гипотезы товара в окне РНП главной (06.11.2026, решение владельца: «сразу видеть, что менеджер делал с товаром»): только чтение;
+// гипотезы со сроком контроля или постановкой с начала таблицы РНП (за 10 дней до 1-го числа), новые сверху; у группы перчаток — по размерам
+async function embedHyp(pid){const box=document.getElementById('embedHyp');
+  try{const G=PROTO_GROUPS[pid],ms=G?G.members:[BYID[pid]],ids=ms.map(p=>p.product_id);
+    const [y,m]=MONTH.split('-').map(Number),from=localISO(new Date(y,m-1,1-10));
+    const r=await fetch(SUPABASE_URL+`/rest/v1/product_protocol?product_id=in.(${ids.join(',')})&select=*&order=created_at.asc`,{headers:HD});
+    if(!r.ok)throw new Error('HTTP '+r.status);const rows=await r.json();
+    ids.forEach(id=>{PROTO[id]=rows.filter(x=>x.product_id===id);});   // встраивание: протокол товара — вся история (renderItem берёт дополнения отсюда)
+    const top=id=>PROTO[id].filter(x=>!x.parent_id&&x.deadline&&(x.deadline>=from||String(x.created_at).slice(0,10)>=from)).reverse();
+    const parts=ms.map(p=>{const l=top(p.product_id);return l.length?(G?`<div class="psub" style="margin-top:6px"><b>${esc(p.offer_id)}</b></div>`:'')+l.map(renderItem).join(''):'';}).join('');
+    box.innerHTML=`<div class="psectitle">🎯 SMART-гипотезы с ${ddmm(from)} (новые сверху)</div>`+(parts||'<div class="psub">гипотез за период нет</div>');
+  }catch(e){box.innerHTML=`<div class="psectitle">🎯 SMART-гипотезы</div><div class="psub">Ошибка загрузки гипотез: ${esc(e.message)}</div>`;}
+  tellH();}
 if(BA_AUTH.has(SUPABASE_URL))go();
 </script>
 </body>
