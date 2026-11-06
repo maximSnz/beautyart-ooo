@@ -37,7 +37,7 @@ function evalUnit(u,C){
   // просадка заказов; план дня — вчерашний (выходной × 0,7)
   u.yest=u.ord[C.iy]||0;u.planY=u.plan7[u.plan7.length-1]||0;
   u.revY=u.rev[C.iy]||0;u.planRY=u.planR7[u.planR7.length-1]||0;u.planR7s=u.planR7.reduce((s,x)=>s+x,0);
-  dropAt(u,C.ip);
+  dropAt(u,C.ip,C.ia);
   // ДРР вчера = реклама вчера ÷ выручка PNL вчера; лимиты — от цены дня (нет заказов — средняя за 7 дн, нет — плановая)
   u.drrY=u.revY>0?u.aY/u.revY*100:(u.aY>0?Infinity:null);
   if(u.coef)u.limY=lim(u.coef,u.yest>0?u.revY/u.yest:(u.price7||u.planPrice));
@@ -80,8 +80,9 @@ async function restockInfo(api,yKey,PLAN,mk,products){
 }
 async function pool(keys,f){const out=new Array(keys.length);let i=0;await Promise.all([0,1,2,3,4,5].map(async()=>{while(i<keys.length){const k=i++;out[k]=await f(keys[k]);}}));return out;}
 // загрузка и расчёт позиций. api: {all(path) — все строки постранично, one(path) — один запрос}; today — 'YYYY-MM-DD' (день протокола,
-// данные — за вчера); m1 — RegExp менеджера m1 (matrixOf юрлица); bKey — день сравнения Б (нет — по умолчанию defB)
-async function load(api,{today,m1,bKey}){
+// данные — за вчера); m1 — RegExp менеджера m1 (matrixOf юрлица); bKey — день сравнения Б (нет — по умолчанию defB);
+// aRange / bRange — периоды просадки [с, по] (06.11.2026, ручная правка дня: среднее в день А против среднего Б; Б раньше А) — только просадка
+async function load(api,{today,m1,bKey,aRange,bRange}){
   const tD=dateOf(today),yD=addDays(tD,-1),yKey=keyOf(yD),todayKey=today,mk=yKey.slice(0,7),matrixOf=o=>m1.test(o)?'m1':'m2';
   const days=[];for(let i=34;i>=0;i--)days.push(keyOf(addDays(yD,-i)));   // 35 дней
   const cur7=days.slice(-7);
@@ -115,7 +116,10 @@ async function load(api,{today,m1,bKey}){
   const hasSnap=cur7.map((k,i)=>stockDays[i].length>0),stock=new Map();
   stockDays.forEach((rows,i)=>rows.forEach(x=>{let a=stock.get(x.offer_id);if(!a){a=new Array(7).fill(0);stock.set(x.offer_id,a);}a[i]+=Number(x.stock||0);}));
   const pDef=defB(yKey),pKey=bKey&&DI.has(bKey)&&bKey<yKey?bKey:pDef;
-  const C={i7:cur7.map(k=>DI.get(k)),iy:DI.get(yKey),ip:DI.get(pKey),hasSnap,lastI:hasSnap.lastIndexOf(true)};
+  const idx=r=>days.map((k,i)=>k>=r[0]&&k<=r[1]?i:-1).filter(i=>i>=0);
+  const aR=aRange&&aRange[1]<=yKey&&idx(aRange).length?aRange:[yKey,yKey];
+  const bR=bRange&&bRange[1]<aR[0]&&idx(bRange).length?bRange:[pKey,pKey];
+  const C={i7:cur7.map(k=>DI.get(k)),iy:DI.get(yKey),ip:idx(bR),ia:idx(aR),hasSnap,lastI:hasSnap.lastIndexOf(true)};
   const planDay=(pid,k)=>{const pl=PLAN[k.slice(0,7)+'|'+pid];if(!pl||!(Number(pl.plan_qty)>0))return 0;const [y,m,d]=k.split('-').map(Number);const e=effDays(y,m);return e>0?Number(pl.plan_qty)/e*(isWe(new Date(y,m-1,d))?0.7:1):0;};
   const zeros=n=>new Array(n).fill(0);
   const units=[];
@@ -166,7 +170,7 @@ async function load(api,{today,m1,bKey}){
   // выручка юрлица вчера — все товары (и без плана)
   const revAllY=salesDays[C.iy].reduce((s,x)=>s+Number(x.revenue||0),0);
   const SKU_OF={};Object.entries(SKU_PID).forEach(([sku,pid])=>{SKU_OF[pid]=sku;});
-  return {days,cur7,yKey,todayKey,pKey,pDef,yWe:isWe(yD),revAllY,rows:out,limKey,SKU_OF,hypOk:hyp.ok,hypErr:hyp.err,restockOk:restock.ok};
+  return {days,cur7,yKey,todayKey,pKey:bR[0],pDef,aR,bR,yWe:isWe(yD),revAllY,rows:out,limKey,SKU_OF,hypOk:hyp.ok,hypErr:hyp.err,restockOk:restock.ok};
 }
 const posKey=r=>r.fam?'f:'+r.fam:String(r.pid);
 const pot=r=>Math.max(0,r.planRY-r.revY), below=r=>r.revY<r.planRY, redY=r=>!!(r.limY&&r.drrY!=null&&r.drrY>r.limY.be);
@@ -198,7 +202,10 @@ function info(P,W,r){const o={yest:rd(r.yest,1),planY:rd(r.planY,1),revY:rd(r.re
   if(w.includes('restock'))o.restock={before:r.rs?rd(r.rs.before,0):null,now:r.rs?rd(r.rs.now,0):null,afterZero:r.afterZero||null,days:rd(r.stockDays,1)};
   return o;}
 // строки таблицы product_protocol_plan за день протокола
-function planRows(P,W,src){return W.list.map(r=>({day:P.todayKey,pos_key:posKey(r),product_id:r.fam?null:r.pid,offer_id:r.offer,mgr:r.mgr,reasons:W.why(r).join(','),y_day:P.yKey,cmp_day:P.pKey,src,info:info(P,W,r)}));}
+// периоды не по умолчанию (А ≠ вчера или Б — больше дня) — в a_from / a_to / cmp_to (06.11.2026; ночью не пишутся — колонки могут отсутствовать)
+function planRows(P,W,src){const rng=P.aR[0]!==P.yKey||P.aR[1]!==P.yKey||P.bR[0]!==P.bR[1];
+  return W.list.map(r=>({day:P.todayKey,pos_key:posKey(r),product_id:r.fam?null:r.pid,offer_id:r.offer,mgr:r.mgr,reasons:W.why(r).join(','),y_day:P.yKey,cmp_day:P.bR[0],src,info:info(P,W,r),
+    ...(rng?{a_from:P.aR[0],a_to:P.aR[1],cmp_to:P.bR[1]}:{})}));}
 // маржа товара за день по дате заказа (03.11.2026, «Позиции по дням» — разница маржи соседних дней) — как окно товара (prItem) и «Рука на
 // пульсе»: созревшие дни (≤ сегодня − 8) — факт (pnl − себестоимость на дату − 3% × выручка P − реклама дня) ÷ по начислениям ozon_charges_by_event;
 // свежие — оценка модели при цене и ДРР дня (pre(P) − ДРР ÷ b) × выручка × b; нет заказов — минус реклама дня. По товарам с планом,
