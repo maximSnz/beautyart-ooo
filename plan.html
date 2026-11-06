@@ -3101,13 +3101,13 @@ async function embedMarket(pid){const box=document.getElementById('embedMarket')
     const li=new Map();idx.forEach(x=>{if(!li.has(x.product_id))li.set(x.product_id,x);});
     if(!keys.length)html+=`<div class="psub">Товар не входит ни в одну группу сравнения. Группы из разбора 05–06.11.2026 — 7 категорий; новую можно создать кнопкой ниже.</div>`;
     const repDates=[];
-    for(const k of keys){const M=mem.filter(x=>x.grp_key===k),title=M[0]?.title||k;
+    for(const k of keys){const M=mem.filter(x=>x.grp_key===k),title=M[0]?.title||k,shown=String(title).replace(/^G\d+\.\s*/,'');   // номер G1… из Excel-разбора на экране не показываем (решение владельца 06.11.2026)
       const R=M.map(m=>({m,r:lastRep.get(m.sku)})),rd=R.map(x=>x.r?.report_date).filter(Boolean).sort().pop();
       if(rd)repDates.push(rd);
       const rows=R.map(x=>({...x,v:x.r&&x.r.report_date===rd?mktRepVals(x.r):null})).sort((a,b)=>(b.v?.sum??-1)-(a.v?.sum??-1));
       const S=mktScales(rows.map(x=>x.v));   // шкала цвета — по строкам отчёта группы (как условное форматирование в Excel-разборе)
       const ed=MKT_EDIT.has(k);
-      html+=`<div class="mkgrp">${esc(title)}${rd?` <span class="mkof">· отчёт ${mktD(rd)}</span>`:''} <button class="mkbtn" data-k="${esc(k)}" onclick="mktEditToggle(this.dataset.k,'${pid}')" title="Изменить состав группы: добавить или убрать товар, сменить роль (запись — в базы ИП и ООО)">${ed?'✓ Готово':'✎ Состав'}</button></div>`;
+      html+=`<div class="mkgrp">${esc(shown)}${rd?` <span class="mkof">· отчёт ${mktD(rd)}</span>`:''} <button class="mkbtn" data-k="${esc(k)}" onclick="mktEditToggle(this.dataset.k,'${pid}')" title="Изменить состав группы: добавить или убрать товар, сменить роль (запись — в базы ИП и ООО)">${ed?'✓ Готово':'✎ Состав'}</button></div>`;
       const ourSkus=M.filter(m=>m.role==='our').map(m=>m.sku).filter(s=>skus.includes(s));
       ourSkus.forEach(s=>{const p=ms.find(q=>String(q.raw?.sku)===s),x=p&&li.get(p.product_id);if(!x)return;
         html+=`<div class="mkidx" title="Ценовой индекс Ozon на ${mktD(x.day)}: индекс = наша цена ÷ минимальная">${ms.length>1?esc(p.offer_id)+': ':''}мин. цена такого же товара — у других продавцов Ozon <b>${mktN(x.ozon_min)} ₽</b>${x.ozon_idx?` (индекс ${mktN(x.ozon_idx,2)})`:''} · на других площадках <b>${mktN(x.ext_min)} ₽</b>${x.ext_idx?` (${mktN(x.ext_idx,2)})`:''} · индекс Ozon: ${esc(x.color||'—')}</div>`;});
