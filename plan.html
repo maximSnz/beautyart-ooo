@@ -2941,15 +2941,17 @@ async function applyRowMarks(){
 let tellH=()=>{};
 const EMBED=new URLSearchParams(location.search).get('embed')==='1',EMBED_KEY=new URLSearchParams(location.search).get('pulse')||'';
 if(EMBED){document.body.classList.add('embed');const b=document.createElement('div');b.id='embedBox';b.innerHTML='<div class="psub">загрузка «Руки на пульсе»…</div>';document.body.prepend(b);
-  const st=document.createElement('style');st.textContent='body.embed{background:transparent!important;margin:0;padding:0}body.embed>*:not(#embedBox){display:none!important}#embedBox{padding:4px 2px;color:#1C0D2E;background:#fff;border-radius:10px;overflow-x:auto}#embedBox .pchildform{display:none}#embedHyp{margin-top:10px}';document.head.appendChild(st);
+  const st=document.createElement('style');st.textContent='body.embed{background:transparent!important;margin:0;padding:0}body.embed>*:not(#embedBox){display:none!important}#embedBox{padding:4px 2px;color:#1C0D2E;background:#fff;border-radius:10px;overflow-x:auto}#embedBox .pchildform{display:none}.embedrow{display:flex;gap:14px;align-items:flex-start;margin-top:10px}#embedHyp{flex:0 0 60%;min-width:0}.embedunit{flex:1 1 0;min-width:0;overflow-x:auto}.embedunit [id^=unitbox_]>div:not(:has([id^=unitgrid_],[id^=gugrid_])),.embedunit [id^=unitres_],.embedunit [id^=unitinfo_],.embedunit [id^=gutot_],.embedunit [id^=guinfo_],.embedunit caption{display:none!important}.embedunit [id^=unitbox_]>div.psub:only-child{display:block!important}';document.head.appendChild(st);
   tellH=()=>{try{parent.postMessage({type:'ba-pulse-h',key:EMBED_KEY,h:b.scrollHeight},'*');}catch(e){}};new ResizeObserver(tellH).observe(b);
   if(!BA_AUTH.has(SUPABASE_URL))b.innerHTML='<div class="psub">Нет входа — откройте plan.html и войдите (вход общий с главной).</div>';}
 async function embedPulse(){const b=document.getElementById('embedBox');
   let pid=OFFER_PID[EMBED_KEY]||null;
   if(!pid){const ms=ROWS.filter(p=>gloveFamily(p.offer_id)===EMBED_KEY);if(ms.length>1){pid='g_'+EMBED_KEY.replace(/[^A-Za-z0-9]/g,'_');PROTO_GROUPS[pid]=PROTO_GROUPS[pid]||{key:EMBED_KEY,members:ms};}}
   if(!pid){b.innerHTML=`<div class="psub">Товар ${esc(EMBED_KEY)} не найден среди неархивных.</div>`;return;}
-  b.innerHTML=`<div id="pulsetbl_${pid}" class="psub">загрузка…</div><div class="psection" id="embedHyp"><div class="psectitle">🎯 SMART-гипотезы</div><div class="psub">загрузка…</div></div>`;
-  await Promise.all([loadPulse(pid),embedHyp(pid)]);}
+  // под таблицей (06.11.2026, решение владельца): слева гипотезы (~60% ширины), справа матрица «цена × ДРР» юнит-экономики — без текста
+  b.innerHTML=`<div id="pulsetbl_${pid}" class="psub">загрузка…</div><div class="embedrow"><div class="psection" id="embedHyp"><div class="psectitle">🎯 SMART-гипотезы</div><div class="psub">загрузка…</div></div>`
+    +`<div class="psection embedunit"><div class="psectitle">🧮 Юнит-экономика</div><div id="unitbox_${pid}" class="psub">загрузка…</div></div></div>`;
+  await Promise.all([loadPulse(pid).then(()=>loadUnit(pid)),embedHyp(pid)]);tellH();}   // юнит-экономика — после РНП: не больше 3 запросов начислений одновременно
 // гипотезы товара в окне РНП главной (06.11.2026, решение владельца: «сразу видеть, что менеджер делал с товаром»): только чтение;
 // гипотезы со сроком контроля или постановкой с начала таблицы РНП (за 10 дней до 1-го числа), новые сверху; у группы перчаток — по размерам
 async function embedHyp(pid){const box=document.getElementById('embedHyp');
