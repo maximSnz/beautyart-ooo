@@ -185,7 +185,8 @@ function gapSel(P,ent){
 // план дня — позиции списка хотя бы по одной причине, в наличии (по всему юрлицу); причины — коды для таблицы плана
 function work(P,ent){
   const {gap,dMin,sel}=gapSel(P,ent),selS=new Set(gap>0?sel:[]);
-  const why=r=>[r.drop&&'drop',selS.has(r)&&'gap',redY(r)&&'drr',r.deep&&'deep',r.hState!=='hyp'&&'hyp',r.restock&&'restock'].filter(Boolean);
+  // глубокая аналитика (deep) — не причина с 06.11.2026 (решение владельца: аналитика переходит в автоматический режим); u.deep считается, но в план не идёт
+  const why=r=>[r.drop&&'drop',selS.has(r)&&'gap',redY(r)&&'drr',r.hState!=='hyp'&&'hyp',r.restock&&'restock'].filter(Boolean);
   const list=P.rows.filter(r=>!r.oos&&why(r).length);
   return {list,why,gap,dMin,keys:new Set(list.map(posKey)),counts:{all:list.length,m1:list.filter(r=>r.mgr==='m1').length,m2:list.filter(r=>r.mgr==='m2').length}};
 }
