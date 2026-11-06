@@ -2036,7 +2036,7 @@ function setSection(id,open){
 }
 async function loadPulse(pid){
   const box=document.getElementById('pulsetbl_'+pid), G=PROTO_GROUPS[pid];
-  try{ if(box){ box.innerHTML=G?(WEEKISO.length?pulseRender(await pulseGroupData(pid,G.key,G.members)):'<div class="psub">нет недель</div>'):await pulseHtml(pid,(BYID[pid]||{}).offer_id); pulseTrend(pid); } }
+  try{ if(box){ box.innerHTML=G?(WEEKISO.length?pulseRender(await pulseGroupData(pid,G.key,G.members)):'<div class="psub">нет недель</div>'):await pulseHtml(pid,(BYID[pid]||{}).offer_id); pulseTrend(pid); pulseProtoFill(String(pid)); } }
   catch(e){
     if(box)box.innerHTML=`<div class="psub" style="color:#E33D78">Ошибка загрузки: ${esc(e.message)}. Сверните и раскройте блок, чтобы повторить.</div>`;
     const el=document.getElementById('pulse_'+pid); if(el)delete el.dataset.loaded;
@@ -2391,6 +2391,51 @@ async function pulseGroupData(gkey,famKey,members){
 // раскрыть / свернуть строки размеров под строкой показателя группы
 function pulseSub(cls,el){ const rows=document.querySelectorAll('tr.'+cls); const open=rows.length&&rows[0].style.display==='none';
   rows.forEach(r=>{ r.style.display=open?'':'none'; }); if(el)el.textContent=open?'▾':'▸'; }
+// строка «Протокол» в «Руке на пульсе» (06.11.2026, решение владельца): по дням — значки причин, по которым позиция была в плане дня
+// «Протокола работ» (product_protocol_plan, фиксация с 03.11.2026), зелёная заливка — отметка «выполнено» (product_protocol_done),
+// ✓ — отметка без позиции в плане; щелчок — разбор, как «Позиции по дням» на главной. Ключ позиции — product_id, у группы перчаток 'f:<семейство>'
+const PP_RS={drop:'📉',gap:'🎯',drr:'📣',hyp:'🧪',restock:'▲'}, PP_RN={drop:'просадка заказов',gap:'добор до минимума',drr:'красный ДРР',hyp:'нужна гипотеза',restock:'пополнение'};
+const PP_FROM='2026-11-03', PULSE_PROTO={};
+const ppId=(key,iso)=>'pp_'+String(key).replace(/[^A-Za-z0-9]/g,'_')+'_'+iso.replace(/-/g,'');
+function pulseProtoRow(D){ const pk=D.sizes?'f:'+D.offer:String(D.pid); PULSE_PROTO[D.key]={pk,offer:D.offer,days:D.days,todayISO:D.todayISO,plan:new Map(),done:new Map()};
+  const tip='Протокол работ (главная): по каким причинам позиция была в плане дня — 📉 просадка заказов, 🎯 добор до минимума, 📣 красный ДРР, 🧪 нужна гипотеза, ▲ пополнение.\n\nЗелёная заливка — в этот день отмечено «выполнено»; ✓ — отметка без позиции в плане дня. Щелчок по ячейке — разбор причин.\n\nПлан дня фиксируется с 03.11.2026; раньше — только отметки.'+(D.sizes?'\n\nГруппа перчаток — позиция группы.':'');
+  return `<tr><td class="pulsemetric" title="${tip.replace(/"/g,'&quot;')}">Протокол</td>${D.days.map(iso=>`<td class="num" id="${ppId(D.key,iso)}" style="color:#94a3b8">${iso<=D.todayISO?'…':''}</td>`).join('')}</tr>`; }
+async function pulseProtoFill(key){ const P=PULSE_PROTO[key]; if(!P)return; const f=P.days[0], t=P.days[P.days.length-1], pk=encodeURIComponent(P.pk);
+  let plan=[],done=[],err='';
+  try{ [plan,done]=await Promise.all([
+    pulseFetch(`product_protocol_plan?pos_key=eq.${pk}&day=gte.${f}&day=lte.${t}&select=*&order=day.asc`),
+    pulseFetch(`product_protocol_done?pos_key=eq.${pk}&day=gte.${f}&day=lte.${t}&select=day,offer_id,comment,user_email,updated_at&order=day.asc`)]); }
+  catch(e){ err=e.message; }
+  plan.forEach(x=>P.plan.set(x.day,x)); done.forEach(x=>P.done.set(x.day,x));
+  P.days.forEach(iso=>{ const el=document.getElementById(ppId(key,iso)); if(!el)return; if(iso>P.todayISO){ el.textContent=''; return; }
+    if(err){ el.textContent='—'; el.title='нет данных протокола: '+err; return; }
+    const c=P.plan.get(iso), dn=P.done.get(iso), rs=c?String(c.reasons||'').split(',').filter(r=>PP_RS[r]):[];
+    el.style.cursor=(c||dn)?'pointer':''; el.onclick=(c||dn)?()=>pulseProtoCell(key,iso):null;
+    if(dn)el.style.background='rgba(22,163,74,0.30)';
+    if(c){ el.style.color=''; el.textContent=rs.map(r=>PP_RS[r]).join('')||'·';
+      el.title=`В плане дня ${ddmm(iso)}: ${rs.map(r=>PP_RN[r]).join(', ')||'причин для показа нет'}${dn?`\n✓ Выполнено: ${dn.comment||''}`:''}\nЩелчок — разбор`; }
+    else if(dn){ el.textContent='✓'; el.title=(iso>=PP_FROM?'отмечено выполненным вне плана':'отмечено выполненным; план дня не зафиксирован (до 03.11.2026)')+`: ${dn.comment||''}\nЩелчок — подробнее`; }
+    else{ el.textContent=iso>=PP_FROM?'—':''; el.title=iso>=PP_FROM?'позиции не было в плане дня':''; } }); }
+// окно разбора — как prMxCell на главной: цифры причин на день фиксации (info) и отметка «выполнено»
+function pulseProtoCell(key,day){ const P=PULSE_PROTO[key]; if(!P)return; const c=P.plan.get(day), dn=P.done.get(day);
+  const dd=x=>x?x.slice(8,10)+'.'+x.slice(5,7):'—', n0=v=>v==null?'—':fmt(v), n1=v=>v==null?'—':(v==='inf'?'∞':f1(v)), I=(c&&c.info)||null;
+  const HS={late:'срок гипотезы прошёл',none:'нет ни гипотезы, ни даты работы',moved:'дата работы перенесена без гипотезы'};
+  const sec=(ic,t,body)=>`<div style="margin:10px 0;padding:8px 10px;border-radius:8px;background:#f4f1f8;line-height:1.45"><div style="font-size:1.05em;margin-bottom:3px">${ic} ${t}</div><div>${body}</div></div>`;
+  const R={
+    drop:()=>sec('📉','Просадка заказов',I&&I.drop?`Заказы ${c.a_from?`${dd(c.a_from)}–${dd(c.a_to)} (в день)`:dd(c.y_day)}: <b>${n1(I.drop.cur)} шт</b> против ${n1(I.drop.prev)} шт ${c.cmp_to&&c.cmp_to!==c.cmp_day?`${dd(c.cmp_day)}–${dd(c.cmp_to)} (в день)`:dd(c.cmp_day)} (−${n1(I.drop.pct)}%${Math.abs(I.drop.pct-Math.round(I.drop.pct))>=0.05?`, округлённо −${Math.round(I.drop.pct)}%`:''}; порог — ≥ 15% и ≥ 5 шт). Выручка ${n0(I.drop.revC)} ₽ против ${n0(I.drop.revP)} ₽.`:`Заказы ${dd(c.y_day)} ниже ${dd(c.cmp_day)} на ≥ 15% и ≥ 5 шт.`),
+    gap:()=>sec('🎯','Потенциал до условной нормы',I&&I.gap?`Выручка ${n0(I.revY)} ₽ при плане дня ${n0(I.planRY)} ₽ — недобор <b>${n0(I.gap.pot)} ₽</b>. Юрлицу до минимума ${n0(I.gap.min)} ₽ не хватало ${n0(I.gap.gap)} ₽ (выручка всех товаров ${n0(I.gap.revAll)} ₽) — позиция взята в добор по потенциалу.`:'Ниже плана дня — взята в добор до корпоративного минимума выручки.'),
+    drr:()=>sec('📣','ДРР в красной зоне',I&&I.drr?`ДРР ${dd(c.y_day)}: <b>${n1(I.drr.drr)}%</b> (реклама ${n0(I.drr.ads)} ₽ / выручка ${n0(I.revY)} ₽) — выше безубыточного лимита ${n1(I.drr.be)}%${I.drr.plan!=null?` (плановый ${n1(I.drr.plan)}%)`:''}${I.drr.price?` при цене ${n0(I.drr.price)} ₽`:''}: реклама в убыток.`:'ДРР вчера выше безубыточного лимита от цены дня.'),
+    hyp:()=>sec('🧪','Нужна гипотеза',I&&I.hyp?`${HS[I.hyp.state]||'есть размеры без гипотезы'}${I.hyp.due?` (срок ${dd(I.hyp.due)})`:''}.${I.hyp.action?` Последняя гипотеза: «${esc(I.hyp.action)}»${I.hyp.deadline?`, контроль ${dd(I.hyp.deadline)}`:''}.`:''}${I.hyp.sizes&&I.hyp.sizes.length?` Размеры без гипотезы: ${I.hyp.sizes.map(([o,st])=>esc(o)+' — '+(HS[st]||st)).join('; ')}.`:''}`:'Нет действующей гипотезы.'),
+    restock:()=>sec('▲','Пополнение',I&&I.restock?`${I.restock.before!=null&&I.restock.now!=null?`Остаток ${n0(I.restock.before)} → <b>${n0(I.restock.now)} шт</b>. `:''}${I.restock.afterZero?`Снова в наличии после нуля (${dd(I.restock.afterZero)}). `:''}${I.restock.days!=null?`Запас ${n1(I.restock.days)} дн. по плановому темпу.`:''}`:'Остатки пополнились.')};
+  const cap=s=>`<div style="color:#64748b;font-size:.92em;margin:4px 0">${s}</div>`;
+  const body=c?String(c.reasons||'').split(',').filter(Boolean).map(r=>R[r]?R[r]():'').join(''):cap(day>=PP_FROM?'Позиции не было в плане этого дня.':'План этого дня не зафиксирован (фиксация — с 03.11.2026): причин нет.');
+  const gen=I?cap(`Данные за ${dd(c.y_day)}: заказы ${n1(I.yest)} шт при плане дня ${n1(I.planY)} · выручка ${n0(I.revY)} ₽ при плане ${n0(I.planRY)} ₽ · остаток ${n0(I.stock)} шт (норма наличия ${n0(I.need)})`):(c?cap(`Данные за ${dd(c.y_day)}, сравнение с ${dd(c.cmp_day)}; цифры причин не сохранены.`):'');
+  const dnH=dn?`<div style="margin:10px 0;padding:8px 10px;border-radius:8px;background:rgba(22,163,74,.16);line-height:1.45"><div style="font-size:1.05em;margin-bottom:3px">✓ Выполнено${dn.updated_at?' '+new Date(dn.updated_at).toLocaleString('ru-RU',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',',''):''}</div><div>${esc(dn.comment||'')}${dn.user_email?' — '+esc(dn.user_email):''}</div></div>`:cap('Отметки «выполнено» нет.');
+  const off=(c||dn||{}).offer_id||P.offer, ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:3000;background:rgba(20,8,34,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML=`<div style="width:min(620px,100%);max-height:90vh;overflow:auto;background:#fff;color:#1C0D2E;border-radius:14px;padding:14px 16px;box-shadow:0 10px 40px rgba(0,0,0,.35);font-size:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><b>${esc(off)}</b><span style="color:#64748b">протокол ${dd(day)}${c&&c.src==='manual'?' · план правлен вручную':''}</span><button style="margin-left:auto;cursor:pointer;border:1px solid #ddd;background:#fff;border-radius:8px;padding:2px 9px" onclick="this.closest('div[style*=fixed]').remove()">✕</button></div>${gen}${body}${dnH}</div>`;
+  const close=()=>{ ov.remove(); document.removeEventListener('keydown',k,true); }, k=e=>{ if(e.key==='Escape'){ e.stopImmediatePropagation(); close(); } };
+  ov.addEventListener('click',e=>{ if(e.target===ov)close(); }); document.addEventListener('keydown',k,true); (document.getElementById('embedBox')||document.body).appendChild(ov); }   // во встроенном режиме вне #embedBox всё скрыто
 function pulseRender(D){
   const {days,todayISO,matureTo}=D, isG=!!D.sizes, T=s=>s.replace(/"/g,'&quot;');
   const fam=isG?D.label:'', short=s=>isG&&s.offer.indexOf(fam)===0?s.offer.slice(fam.length).replace(/^-/,''):s.offer;
@@ -2443,6 +2488,7 @@ function pulseRender(D){
   days.forEach(iso=>{ const prov=iso<todayISO&&iso>matureTo;
     h+=prov?`<th title="предварительно: выкупы и возвраты по заказам этого дня ещё приходят — маржинальность уточнится сама">${ddmm(iso)}*</th>`:`<th>${ddmm(iso)}</th>`; });
   h+='</tr></thead><tbody>';
+  h+=pulseProtoRow(D);
   h+=metric('ord','Заказы, шт','Сколько штук заказали за день (до выкупа и отмен).\n\nС сегодняшнего дня — план дня / догоняющий темп: сколько нужно заказов в день, чтобы выйти на план месяца (выходной × 0,7).'+(isG?'\n\nГруппа — сумма размеров.':''),rowOrders);
   h+=metric('prc','Цена заказа, ₽','Средняя цена заказа за день: выручка заказов ÷ штуки (рычаг 1 — цена).\n\n'+(D.planPrice!=null?`Цена в плане — ${fmt(D.planPrice)} ₽; розовым — ниже плана больше чем на 2%.`:'Плана на месяц нет.')+(isG?' Группа — Σ выручки ÷ Σ шт; цена плана — средняя по плану размеров.':''),rowPrice);
   h+=metric('drr','ДРР, %','Сколько процентов от выручки заказов дня ушло на рекламу (рычаг 2 — реклама): реклама дня ÷ выручка заказов дня, как на главной.\n\n'+D.limTip,rowDrr);
@@ -3118,11 +3164,7 @@ async function embedMarket(pid){const box=document.getElementById('embedMarket')
         html+=`<tr class="${isOur?'mkour':(x.m.role==='etalon'||x.m.role==='nearest')?'mkref':''}"><td class="num">${ed?`<button class="mkx" data-k="${esc(k)}" data-s="${esc(x.m.sku)}" onclick="mktDel(this,'${pid}')" title="Убрать из группы">✕</button>`:''}${x.v?i+1:''}</td>${roleTd}<td>${r?esc(r.seller||'')+' · '+esc(r.brand||''):'—'}</td>`
           +`<td class="mkname" title="${esc((r?.name||'')+(x.m.note?' — '+x.m.note:''))}"><a href="https://www.ozon.ru/product/${esc(x.m.sku)}" target="_blank" rel="noopener">${r?esc(r.name):'SKU '+esc(x.m.sku)+' — нет в отчёте'}</a></td>`
           +(x.v?MKT_T.map(c=>mktCell(c,x.v,S)).join(''):`<td colspan="${MKT_T.length}" class="psub">нет в отчёте ${rd?mktD(rd):''}</td>`)+'</tr>';
-        if(isOur){const Fs=F.filter(f=>f.sku===x.m.sku),A=ads.filter(a=>a.offer_id===x.m.sku);
-          const per=rd?[addDaysISO(rd,-7),addDaysISO(rd,-1),'за 7 дн до отчёта']:null,now=[addDaysISO(y,-6),y,'сейчас: 7 дн до вчера'];
-          if(per&&per[0]===now[0])now[2]='7 дн до вчера, тот же период, что отчёт';
-          (per&&per[0]===now[0]?[now]:[per,now]).filter(Boolean).forEach(([f,t,l])=>{const v=mktApiVals(Fs,A,f,t);if(!v)return;
-            html+=`<tr class="mkapi"><td></td><td colspan="3" title="Наши данные из API Ozon (ночная загрузка), ${mktD(f)}–${mktD(t)}; корзина → заказ — шт ÷ добавления в корзину; выкуп ≈ доставлено ÷ заказано за те же дни (выкупы доезжают)">Мы по API — ${l} (${mktD(f).slice(0,5)}–${mktD(t).slice(0,5)})</td>${MKT_T.map(c=>['nostock','vol','promo'].includes(c[0])?'<td class="num">—</td>':mktCell(c,v,S)).join('')}</tr>`;});}
+        // строки «Мы по API» под нашей строкой убраны 06.11.2026 (решение владельца: путают, сопоставить не с чем)
       });
       html+='</tbody></table>';
       if(ed){const ourRow=R.find(x=>x.m.role==='our'&&x.r&&x.r.report_date===rd)?.r;
