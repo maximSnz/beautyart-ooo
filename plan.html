@@ -3149,11 +3149,17 @@ async function mktRecs(title,rows,skus,ms){const our=rows.filter(x=>x.m.role==='
     const U=p?await mktUnitC(p.product_id):null,C=U&&U.C;
     if(R&&R.price&&P>R.price*(1+MKT_TOL)){
       if(O.qty>=R.qty*MKT_LEAD)A.push({t:`<b>Цена</b>: сейчас ${rub(P)} — выше ориентира ${rub(R.price)}${rl}, но заказов в ${mktN(O.qty/R.qty,1)} раза больше. Зачем: мы лидер — запас по цене есть, <b>не снижать</b> (снижение отдаст маржу без роста заказов).`});
-      else if(low(O.qty,R.qty)){const m0=C?unitPct(C,P,O.drr||0):null,m1=C?unitPct(C,R.price,O.drr||0):null;
-        A.push({t:`<b>Цена</b>: сейчас ${rub(P)} → цель ≤ ${rub(R.price)}${rl}. Зачем: заказов меньше, а цена выше — выгодная цена поднимает товар в поиске Ozon.${m1!=null?` Маржинальность по модели при ДРР ${mktN(O.drr,1)}%: ${mktN(m0,1)}% → <b>${mktN(m1,1)}%</b>${m1<NET_FLOOR?' — ниже 5%, снижение убыточно':''}.`:' Модели юнит-экономики нет — проверить маржу на столе 1.'}`});}}
-    if(C&&O.drr!=null&&isFinite(O.drr)&&P>0){const pre=unitPct(C,P,0),be=Math.max(0,(pre-NET_FLOOR)*C.b),pl=U.planPct!=null?Math.max(0,(pre-U.planPct)*C.b):null;
-      if(O.drr>be)A.push({t:`<b>ДРР</b>: сейчас ${mktN(O.drr,1)}% → цель ≤ ${mktN(pl!=null?Math.min(pl,be):be,1)}% <span class="mkof">(наши лимиты при цене ${rub(P)}: плановый ${pl!=null?mktN(pl,1)+'%':'— нет плана'} / безубыточный ${mktN(be,1)}%)</span>. Зачем: реклама выше безубыточного лимита — в убыток; снизить ставки.`});
-      else if(pl!=null&&O.drr<pl&&A.some(a=>a.reach))A.push({t:`<b>ДРР</b>: сейчас ${mktN(O.drr,1)}% → до ${mktN(pl,1)}% <span class="mkof">(плановый лимит при цене ${rub(P)})</span>. Зачем: охват слабый, а запас по рекламе есть — усилить рекламу в пределах планового лимита.`});}
+      else if(low(O.qty,R.qty)){
+        // цена отчёта — цена покупателя на сайте (со скидками Ozon), модель юнит-экономики — от нашей цены (выручка заказов ÷ шт, как РНП):
+        // цена-цель переводится в нашу цену с той же скидкой — наша цена 14 дн × (цена-цель ÷ наша цена в отчёте)
+        const S=U&&U.p14>0?U.p14:null,S1=S?S*R.price/P:null,m0=C&&S?unitPct(C,S,U.d14||0):null,m1=C&&S1?unitPct(C,S1,U.d14||0):null;
+        A.push({t:`<b>Цена на сайте</b>: сейчас ${rub(P)} → цель ≤ ${rub(R.price)}${rl}. Зачем: заказов меньше, а цена выше — выгодная цена поднимает товар в поиске Ozon.${m1!=null?` Наша цена (выручка ÷ шт, 14 дн) ${rub(S)} → ≈ ${rub(S1)}; маржинальность по модели при ДРР ${mktN(U.d14||0,1)}%: ${mktN(m0,1)}% → <b>${mktN(m1,1)}%</b>${m1<NET_FLOOR?' — ниже 5%, снижение убыточно':''}.`:' Модели юнит-экономики нет — проверить маржу на столе 1.'}`});}}
+    // ДРР и лимиты — только по нашим данным за 14 дн (цена = выручка заказов ÷ шт, ДРР = реклама ÷ выручка заказов — как РНП и юнит-экономика);
+    // цена и ДРР отчёта считаются от цены покупателя на сайте — с лимитами их не сравниваем (06.11.2026, замечание владельца по WL-STD-35X70)
+    const S=U&&U.p14>0?U.p14:null,D=U?U.d14:null;
+    if(C&&S&&D!=null&&isFinite(D)){const pre=unitPct(C,S,0),be=Math.max(0,(pre-NET_FLOOR)*C.b),pl=U.planPct!=null?Math.max(0,(pre-U.planPct)*C.b):null,lim=`<span class="mkof">(наши данные за 14 дн, как юнит-экономика: цена ${rub(S)}; лимиты при этой цене — плановый ${pl!=null?mktN(pl,1)+'%':'— нет плана'} / безубыточный ${mktN(be,1)}%)</span>`;
+      if(D>be)A.push({t:`<b>ДРР</b>: сейчас ${mktN(D,1)}% → цель ≤ ${mktN(pl!=null?Math.min(pl,be):be,1)}% ${lim}. Зачем: реклама выше безубыточного лимита — в убыток; снизить ставки${be<=0?' (при этой цене товар убыточен и без рекламы — сначала цена)':''}.`});
+      else if(pl!=null&&D<pl&&A.some(a=>a.reach))A.push({t:`<b>ДРР</b>: сейчас ${mktN(D,1)}% → до ${mktN(pl,1)}% ${lim}. Зачем: охват слабый, а запас по рекламе есть — усилить рекламу в пределах планового лимита.`});}
     // 7. порядок и вывод
     A.sort((a,b)=>(b.first?1:0)-(a.first?1:0)||(b.e?b.e.r:-1)-(a.e?a.e.r:-1));
     const li=a=>`<li>${a.t}</li>`,top=A.slice(0,MKT_TOP),rest=A.slice(MKT_TOP);
