@@ -3072,7 +3072,7 @@ const MKT_T=[['sum','Заказано, ₽','Заказано на сумму з
   ['buy','Выкуп, %','Шаг 4 воронки: доля выкупа',0,1],['v2o','Показ → заказ, %','Итог воронки: конверсия из показа в заказ',2,1],['drr','ДРР, %','Доля рекламных расходов',1,-1],['promo','Дней в акциях','Дней в акциях (из N)',0,0]];
 function mktScales(vs){const S={};MKT_T.forEach(c=>{if(!c[4])return;const a=vs.map(v=>v&&v[c[0]]).filter(x=>x!=null&&isFinite(x)).map(Number).sort((x,y)=>x-y);
   if(a.length<2)return;const m=a.length>>1;S[c[0]]={min:a[0],med:a.length%2?a[m]:(a[m-1]+a[m])/2,max:a[a.length-1]};});return S;}
-const MKT_RGB={r:[248,105,107],y:[255,235,132],g:[99,190,123]};
+const MKT_RGB={r:[247,197,214],y:[254,241,172],g:[185,227,201]};   // пастельные цвета «Руки на пульсе» на белом (06.11.2026, решение владельца)
 function mktColor(c,val,S){const s=S&&S[c[0]];if(!s||val==null||!isFinite(val)||s.max===s.min)return '';const v=Math.min(s.max,Math.max(s.min,Number(val)));
   const lo=c[4]>0?MKT_RGB.r:MKT_RGB.g,hi=c[4]>0?MKT_RGB.g:MKT_RGB.r,mix=(a,b,k)=>a.map((x,i)=>Math.round(x+(b[i]-x)*k));
   const rgb=v<=s.med?mix(lo,MKT_RGB.y,s.med>s.min?(v-s.min)/(s.med-s.min):1):mix(MKT_RGB.y,hi,s.max>s.med?(v-s.med)/(s.max-s.med):0);return `background:rgb(${rgb.join(',')})`;}
