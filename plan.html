@@ -1400,7 +1400,7 @@ async function load(){
       await Promise.all([loadPlans(),loadKappa(),loadWeeks(),loadPPM(),loadProto(),loadDev(),loadCosts(),loadCostHistory(),loadAnaReq()]);
       const planCnt=ROWS.filter(r=>((PLAN[r.product_id]||{}).plan_qty||0)>0).length;
       document.getElementById('meta').textContent=`Период: ${MONTH} • позиций: ${ROWS.length} • в плане: ${planCnt} • обновлено: ${new Date().toLocaleString('ru-RU')}`;
-      render(); return;
+      render(); if(EMBED)embedPulse(); return;
     }catch(e){ if(a<3){await sleep(800*a);continue;} err.textContent='Ошибка загрузки: '+e.message; }
   }
 }
@@ -2936,6 +2936,18 @@ async function applyRowMarks(){
     if(td){const base=(td.dataset.t0=td.dataset.t0||td.title);td.title=notes.length?base+'\n'+notes.join('\n'):base;}
   });
 }
+// встраивание «Руки на пульсе» в окно товара главной (06.11.2026, решение владельца: «Диаграмма | РНП»): plan.html?embed=1&pulse=<артикул
+// или семейство перчаток> — страница грузится как обычно, но показывает только таблицу РНП товара (тот же расчёт, одна копия); высота — родителю
+const EMBED=new URLSearchParams(location.search).get('embed')==='1',EMBED_KEY=new URLSearchParams(location.search).get('pulse')||'';
+if(EMBED){document.body.classList.add('embed');const b=document.createElement('div');b.id='embedBox';b.innerHTML='<div class="psub">загрузка «Руки на пульсе»…</div>';document.body.prepend(b);
+  const st=document.createElement('style');st.textContent='body.embed{background:transparent!important;margin:0;padding:0}body.embed>*:not(#embedBox){display:none!important}#embedBox{padding:4px 2px;color:#1C0D2E;background:#fff;border-radius:10px;overflow-x:auto}';document.head.appendChild(st);
+  const tell=()=>{try{parent.postMessage({type:'ba-pulse-h',key:EMBED_KEY,h:b.scrollHeight},'*');}catch(e){}};new ResizeObserver(tell).observe(b);
+  if(!BA_AUTH.has(SUPABASE_URL))b.innerHTML='<div class="psub">Нет входа — откройте plan.html и войдите (вход общий с главной).</div>';}
+async function embedPulse(){const b=document.getElementById('embedBox');
+  let pid=OFFER_PID[EMBED_KEY]||null;
+  if(!pid){const ms=ROWS.filter(p=>gloveFamily(p.offer_id)===EMBED_KEY);if(ms.length>1){pid='g_'+EMBED_KEY.replace(/[^A-Za-z0-9]/g,'_');PROTO_GROUPS[pid]=PROTO_GROUPS[pid]||{key:EMBED_KEY,members:ms};}}
+  if(!pid){b.innerHTML=`<div class="psub">Товар ${esc(EMBED_KEY)} не найден среди неархивных.</div>`;return;}
+  b.innerHTML=`<div id="pulsetbl_${pid}" class="psub">загрузка…</div>`;await loadPulse(pid);}
 if(BA_AUTH.has(SUPABASE_URL))go();
 </script>
 </body>
