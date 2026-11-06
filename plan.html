@@ -2941,7 +2941,7 @@ async function applyRowMarks(){
 let tellH=()=>{};
 const EMBED=new URLSearchParams(location.search).get('embed')==='1',EMBED_KEY=new URLSearchParams(location.search).get('pulse')||'';
 if(EMBED){document.body.classList.add('embed');const b=document.createElement('div');b.id='embedBox';b.innerHTML='<div class="psub">загрузка «Руки на пульсе»…</div>';document.body.prepend(b);
-  const st=document.createElement('style');st.textContent='body.embed{background:transparent!important;margin:0;padding:0}body.embed>*:not(#embedBox){display:none!important}#embedBox{padding:4px 2px;color:#1C0D2E;background:#fff;border-radius:10px;overflow-x:auto}#embedBox .pchildform{display:none}.embedrow{display:flex;gap:14px;align-items:flex-start;margin-top:10px}#embedHyp{flex:0 0 60%;min-width:0}.embedunit{flex:1 1 0;min-width:0;overflow-x:auto}.embedunit [id^=unitbox_]>div:not(:has([id^=unitgrid_],[id^=gugrid_])),.embedunit [id^=unitres_],.embedunit [id^=unitinfo_],.embedunit [id^=gutot_],.embedunit [id^=guinfo_],.embedunit caption{display:none!important}.embedunit [id^=unitbox_]>div.psub:only-child{display:block!important}';document.head.appendChild(st);
+  const st=document.createElement('style');st.textContent='body.embed{background:transparent!important;margin:0;padding:0}body.embed>*:not(#embedBox){display:none!important}#embedBox{padding:4px 2px;color:#1C0D2E;background:#fff;border-radius:10px;overflow-x:auto}#embedBox .pchildform{display:none}html:has(body.embed),body.embed{height:100%;overflow:hidden}body.embed #embedBox{box-sizing:border-box;height:100vh;display:flex;flex-direction:column;overflow:hidden}#embedBox [id^=pulsetbl_]{flex:0 0 auto;overflow-x:auto}.embedrow{display:flex;gap:14px;align-items:stretch;margin-top:10px;flex:1 1 auto;min-height:0}#embedHyp{flex:0 0 60%;min-width:0;display:flex;flex-direction:column;min-height:0;margin:0}#embedHypList{flex:1 1 auto;min-height:0;overflow:auto}#embedForm{flex:0 0 auto;border-top:1px solid rgba(84,66,115,.15);padding-top:6px;margin-top:6px}#embedForm .pfrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:4px 0}#embedForm input[type=text]{flex:1 1 300px}.embedunit{flex:1 1 0;min-width:0;overflow:auto;margin:0}.embedunit [id^=unitbox_]>div:not(:has([id^=unitgrid_],[id^=gugrid_],input)),.embedunit [id^=unitres_],.embedunit [id^=unitinfo_],.embedunit [id^=gutot_],.embedunit [id^=guinfo_],.embedunit caption,.embedunit button:not(.embednow),.embedunit [id^=unitbox_g_]>div:not(:has([id^=gugrid_])){display:none!important}.embedunit [id^=unitbox_]>div.psub:only-child{display:block!important}.embedunit table{font-size:1.05em!important}.embedunit table td,.embedunit table th{padding:5px 8px}.embedunit input{font-size:1em;padding:3px 6px}';document.head.appendChild(st);
   tellH=()=>{try{parent.postMessage({type:'ba-pulse-h',key:EMBED_KEY,h:b.scrollHeight},'*');}catch(e){}};new ResizeObserver(tellH).observe(b);
   if(!BA_AUTH.has(SUPABASE_URL))b.innerHTML='<div class="psub">Нет входа — откройте plan.html и войдите (вход общий с главной).</div>';}
 async function embedPulse(){const b=document.getElementById('embedBox');
@@ -2949,12 +2949,12 @@ async function embedPulse(){const b=document.getElementById('embedBox');
   if(!pid){const ms=ROWS.filter(p=>gloveFamily(p.offer_id)===EMBED_KEY);if(ms.length>1){pid='g_'+EMBED_KEY.replace(/[^A-Za-z0-9]/g,'_');PROTO_GROUPS[pid]=PROTO_GROUPS[pid]||{key:EMBED_KEY,members:ms};}}
   if(!pid){b.innerHTML=`<div class="psub">Товар ${esc(EMBED_KEY)} не найден среди неархивных.</div>`;return;}
   // под таблицей (06.11.2026, решение владельца): слева гипотезы (~60% ширины), справа матрица «цена × ДРР» юнит-экономики — без текста
-  b.innerHTML=`<div id="pulsetbl_${pid}" class="psub">загрузка…</div><div class="embedrow"><div class="psection" id="embedHyp"><div class="psectitle">🎯 SMART-гипотезы</div><div class="psub">загрузка…</div></div>`
+  b.innerHTML=`<div id="pulsetbl_${pid}" class="psub">загрузка…</div><div class="embedrow"><div class="psection" id="embedHyp"><div id="embedHypList"><div class="psectitle">🎯 SMART-гипотезы</div><div class="psub">загрузка…</div></div><div id="embedForm"></div></div>`
     +`<div class="psection embedunit"><div class="psectitle">🧮 Юнит-экономика</div><div id="unitbox_${pid}" class="psub">загрузка…</div></div></div>`;
-  await Promise.all([loadPulse(pid).then(()=>loadUnit(pid)),embedHyp(pid)]);tellH();}   // юнит-экономика — после РНП: не больше 3 запросов начислений одновременно
+  embedFormFor(pid);await Promise.all([loadPulse(pid).then(()=>loadUnit(pid)).then(()=>{const bt=document.querySelector('.embedunit [id^=unitbox_] button');if(bt){bt.classList.add('embednow');bt.textContent='Сейчас';bt.title='Вернуть значения по умолчанию: '+bt.title;}}),embedHyp(pid)]);tellH();}   // юнит-экономика — после РНП: не больше 3 запросов начислений одновременно
 // гипотезы товара в окне РНП главной (06.11.2026, решение владельца: «сразу видеть, что менеджер делал с товаром»): только чтение;
 // гипотезы со сроком контроля или постановкой с начала таблицы РНП (за 10 дней до 1-го числа), новые сверху; у группы перчаток — по размерам
-async function embedHyp(pid){const box=document.getElementById('embedHyp');
+async function embedHyp(pid){const box=document.getElementById('embedHypList');
   try{const G=PROTO_GROUPS[pid],ms=G?G.members:[BYID[pid]],ids=ms.map(p=>p.product_id);
     const [y,m]=MONTH.split('-').map(Number),from=localISO(new Date(y,m-1,1-10));
     const r=await fetch(SUPABASE_URL+`/rest/v1/product_protocol?product_id=in.(${ids.join(',')})&select=*&order=created_at.asc`,{headers:HD});
@@ -2965,6 +2965,21 @@ async function embedHyp(pid){const box=document.getElementById('embedHyp');
     box.innerHTML=`<div class="psectitle">🎯 SMART-гипотезы с ${ddmm(from)} (новые сверху)</div>`+(parts||'<div class="psub">гипотез за период нет</div>');
   }catch(e){box.innerHTML=`<div class="psectitle">🎯 SMART-гипотезы</div><div class="psub">Ошибка загрузки гипотез: ${esc(e.message)}</div>`;}
   tellH();}
+// постановка гипотезы в окне РНП (06.11.2026, решение владельца): только по заказам; тот же addProto (запись в product_protocol, дата работы);
+// у группы перчаток — выбор размера (гипотезы ставятся на размер)
+function embedFormFor(pid){const box=document.getElementById('embedForm'),G=PROTO_GROUPS[pid];
+  const sid=G?(box.dataset.sz&&G.members.some(m=>String(m.product_id)===box.dataset.sz)?Number(box.dataset.sz):G.members[0].product_id):pid;box.dataset.sz=sid;
+  const start=localISO(new Date());
+  box.innerHTML=`<div class="psectitle">➕ Новая гипотеза (по заказам)</div><div class="pfrow">`
+    +(G?`<select onchange="document.getElementById('embedForm').dataset.sz=this.value;embedFormFor('${pid}')" title="Размер — гипотеза ставится на него">${G.members.map(m=>`<option value="${m.product_id}"${m.product_id===sid?' selected':''}>${esc(m.offer_id)}</option>`).join('')}</select>`:'')
+    +`<input type="hidden" id="pm_${sid}" value="orders"><input type="number" id="pt_${sid}" step="0.01" placeholder="Цель: заказы, шт/день" style="width:170px">`
+    +`<label>Контроль <select id="pd_${sid}">${weekdayOptions(start).map(o=>`<option value="${o}">${ddmm(o)}</option>`).join('')}</select></label></div>`
+    +`<div class="pfrow"><input type="text" id="pa_${sid}" placeholder="Гипотеза (действие)"><button onclick="embedAdd('${pid}',${sid},this)">Добавить</button></div>`
+    +`<div class="psub" id="embedBase">База: расчёт…</div>`;
+  ordersBaseWindow(sid,start).then(w=>{const el=document.getElementById('embedBase');if(el)el.textContent=`База: заказы ${f1(w.avg)} шт/день (${ddmm(w.from)}…${ddmm(w.to)}, 3 будн. дн). Контроль — один из 3 следующих будних дней, факт — среднее по будням периода.`;}).catch(()=>{});}
+async function embedAdd(pid,sid,btn){const n0=(PROTO[sid]||[]).filter(x=>!x.parent_id).length;btn.disabled=true;
+  try{await addProto(sid);}finally{btn.disabled=false;}
+  await embedHyp(pid);if((PROTO[sid]||[]).filter(x=>!x.parent_id).length>n0)embedFormFor(pid);}   // сохранилось — форма очищается
 if(BA_AUTH.has(SUPABASE_URL))go();
 </script>
 </body>
