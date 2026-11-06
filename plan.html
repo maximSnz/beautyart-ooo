@@ -3035,7 +3035,7 @@ async function embedPlan(pid){const box=document.getElementById('embedPlan');
 // (ночная загрузка, API /v1/analytics/data); мин. цена такого же товара — product_price_index. Вывода нет (обсуждается отдельно).
 // Шаги воронки (как в Excel-разборе 05–06.11.2026): CTR = просмотры карточки ÷ показы всего; в корзину из карточки, %;
 // корзина → заказ = шт ÷ (просмотры в поиске × в корзину из поиска + просмотры карточки × в корзину из карточки) — приблизительно;
-// выкуп. Ориентир группы — эталон, иначе ближайший конкурент, иначе конкурент с наибольшими заказами.
+// выкуп. Цвет ячеек — шкала по столбцу внутри группы, как в Excel: худшее — красный, медиана — жёлтый, лучшее — зелёный.
 const MKT_ROLE={our:'★ Наш',etalon:'Эталон',nearest:'Ближайший конкурент',competitor:'Конкурент'};
 const MKT_COLS={'Название товара':'name','Ссылка на товар':'link','Продавец':'seller','Бренд':'brand','Категория 1 уровня':'cat1','Категория 3 уровня':'cat3','Признак товара':'feature',
   'Заказано на сумму, ₽':'ordered_sum','Динамика оборота, %':'turnover_dyn','Заказано, штуки':'ordered_qty','Средняя цена, ₽':'avg_price','Минимальная цена, ₽':'min_price',
@@ -3070,20 +3070,24 @@ const MKT_T=[['sum','Заказано, ₽','Заказано на сумму з
   ['share','Доля поиска, %','Просмотры в поиске и каталоге ÷ показы всего',1,1],['ctr','CTR, %','Шаг 1 воронки: просмотры карточки ÷ показы всего',1,1],
   ['cart','В корзину из карточки, %','Шаг 2 воронки',1,1],['c2o','Корзина → заказ, %','Шаг 3 воронки: шт ÷ (просмотры в поиске × в корзину из поиска + просмотры карточки × в корзину из карточки); приблизительно — в отчёте штуки, а не заказы, бывает > 100%',0,1],
   ['buy','Выкуп, %','Шаг 4 воронки: доля выкупа',0,1],['v2o','Показ → заказ, %','Итог воронки: конверсия из показа в заказ',2,1],['drr','ДРР, %','Доля рекламных расходов',1,-1],['promo','Дней в акциях','Дней в акциях (из N)',0,0]];
-function mktCell(c,v,ref,isOur){let val=v[c[0]];let t=val===Infinity?'∞':mktN(val,c[3]);
+function mktScales(vs){const S={};MKT_T.forEach(c=>{if(!c[4])return;const a=vs.map(v=>v&&v[c[0]]).filter(x=>x!=null&&isFinite(x)).map(Number).sort((x,y)=>x-y);
+  if(a.length<2)return;const m=a.length>>1;S[c[0]]={min:a[0],med:a.length%2?a[m]:(a[m-1]+a[m])/2,max:a[a.length-1]};});return S;}
+const MKT_RGB={r:[248,105,107],y:[255,235,132],g:[99,190,123]};
+function mktColor(c,val,S){const s=S&&S[c[0]];if(!s||val==null||!isFinite(val)||s.max===s.min)return '';const v=Math.min(s.max,Math.max(s.min,Number(val)));
+  const lo=c[4]>0?MKT_RGB.r:MKT_RGB.g,hi=c[4]>0?MKT_RGB.g:MKT_RGB.r,mix=(a,b,k)=>a.map((x,i)=>Math.round(x+(b[i]-x)*k));
+  const rgb=v<=s.med?mix(lo,MKT_RGB.y,s.med>s.min?(v-s.min)/(s.med-s.min):1):mix(MKT_RGB.y,hi,s.max>s.med?(v-s.med)/(s.max-s.med):0);return `background:rgb(${rgb.join(',')})`;}
+function mktCell(c,v,S){let val=v[c[0]];let t=val===Infinity?'∞':mktN(val,c[3]);
   if(c[0]==='nostock'&&val!=null&&v.nostockOf)t+=` <span class="mkof">из ${v.nostockOf}</span>`;if(c[0]==='promo'&&val!=null&&v.promoOf)t+=` <span class="mkof">из ${v.promoOf}</span>`;
   if(c[0]==='buy'&&v.buyApprox&&val!=null)t='≈'+t;
-  let cl='';if(isOur&&ref&&c[4]&&val!=null&&ref[c[0]]!=null&&isFinite(ref[c[0]])){const a=Number(val),b=Number(ref[c[0]]);
-    if(c[4]>0)cl=a>=b?'mkg':(a<b*0.9?'mkr':'');else cl=a<=b?'mkg':(a>b*1.1?'mkr':'');}
-  return `<td class="num ${cl}">${t}</td>`;}
+  return `<td class="num" style="${mktColor(c,val,S)}">${t}</td>`;}
 async function embedMarket(pid){const box=document.getElementById('embedMarket');if(!box)return;
-  if(!document.getElementById('mktStyle')){const st=document.createElement('style');st.id='mktStyle';st.textContent='.embedpg2{display:block!important;overflow:auto;border:0!important;color:#1C0D2E!important}#embedMarket .mkhead{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px}#embedMarket .mkhead .psectitle{margin:0}#embedMarket table{border-collapse:collapse;font-size:.85em;width:100%}#embedMarket th{color:#94a3b8;font-weight:400;font-size:.85em;padding:3px 5px;border-bottom:1px solid rgba(84,66,115,.15);max-width:110px;white-space:normal;vertical-align:bottom}#embedMarket td{padding:3px 5px;border-bottom:1px dashed rgba(84,66,115,.12);white-space:nowrap}#embedMarket td.num{text-align:right}#embedMarket tr.mkour td{background:rgba(227,61,120,.07);font-weight:700}#embedMarket tr.mkapi td{background:rgba(120,166,199,.10);font-style:italic}#embedMarket .mkname{max-width:260px;overflow:hidden;text-overflow:ellipsis}#embedMarket .mkname a{color:inherit;text-decoration:none}#embedMarket .mkname a:hover{text-decoration:underline}#embedMarket .mkof{color:#94a3b8;font-weight:400;font-size:.85em}#embedMarket td.mkg{color:#15803d}#embedMarket td.mkr{color:#dc2626}#embedMarket .mkgrp{margin:12px 0 4px;font-weight:700;color:#544273}#embedMarket .mkidx{font-size:.85em;color:#544273;margin:2px 0 4px}#embedMarket .mkbtn{border:1px solid #544273;background:#fff;color:#544273;border-radius:8px;padding:3px 10px;cursor:pointer;font-size:.85em}#embedMarket .mkst{font-size:.85em;color:#544273}#embedMarket .mkx{border:0;background:none;color:#dc2626;cursor:pointer;padding:0 4px}#embedMarket .mkedit{margin:6px 0 10px;padding:8px;border:1px dashed rgba(84,66,115,.3);border-radius:8px;font-size:.85em}#embedMarket .mkcand{margin:3px 0}#embedMarket .mkcand a{color:#1C0D2E}#embedMarket select{font-size:.95em}';document.head.appendChild(st);}
+  if(!document.getElementById('mktStyle')){const st=document.createElement('style');st.id='mktStyle';st.textContent='.embedpg2{display:block!important;overflow:auto;border:0!important;color:#1C0D2E!important}#embedMarket .mkhead{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px}#embedMarket .mkhead .psectitle{margin:0}#embedMarket table{border-collapse:collapse;font-size:.85em;width:100%}#embedMarket th{color:#94a3b8;font-weight:400;font-size:.85em;padding:3px 5px;border-bottom:1px solid rgba(84,66,115,.15);max-width:110px;white-space:normal;vertical-align:bottom}#embedMarket td{padding:3px 5px;border-bottom:1px dashed rgba(84,66,115,.12);white-space:nowrap}#embedMarket td.num,#embedMarket th{text-align:center}#embedMarket td,#embedMarket th{border-left:1px solid rgba(84,66,115,.18)}#embedMarket td:first-child,#embedMarket th:first-child{border-left:0}#embedMarket tr.mkour td{background:#FCE4EC;font-weight:700}#embedMarket tr.mkref td{background:#E2EFDA}#embedMarket tr.mkapi td{background:rgba(120,166,199,.10);font-style:italic}#embedMarket .mkname{max-width:260px;overflow:hidden;text-overflow:ellipsis}#embedMarket .mkname a{color:inherit;text-decoration:none}#embedMarket .mkname a:hover{text-decoration:underline}#embedMarket .mkof{color:#94a3b8;font-weight:400;font-size:.85em}#embedMarket .mkgrp{margin:12px 0 4px;font-weight:700;color:#544273}#embedMarket .mkidx{font-size:.85em;color:#544273;margin:2px 0 4px}#embedMarket .mkbtn{border:1px solid #544273;background:#fff;color:#544273;border-radius:8px;padding:3px 10px;cursor:pointer;font-size:.85em}#embedMarket .mkst{font-size:.85em;color:#544273}#embedMarket .mkx{border:0;background:none;color:#dc2626;cursor:pointer;padding:0 4px}#embedMarket .mkedit{margin:6px 0 10px;padding:8px;border:1px dashed rgba(84,66,115,.3);border-radius:8px;font-size:.85em}#embedMarket .mkcand{margin:3px 0}#embedMarket .mkcand a{color:#1C0D2E}#embedMarket select{font-size:.95em}';document.head.appendChild(st);}
   const G=PROTO_GROUPS[pid],ms=G?G.members:[BYID[pid]],skus=ms.map(p=>p&&p.raw&&p.raw.sku!=null?String(p.raw.sku):'').filter(Boolean);
   const head=`<div class="mkhead"><div class="psectitle">📊 Аналитика категории</div><span class="mkst" id="mktInfo"></span><label class="mkbtn" title="Отчёты «Аналитика рынка» из кабинета Ozon (.xlsx), можно несколько файлов сразу; запись — в базы ИП и ООО">⬆ Загрузить отчёты рынка<input type="file" accept=".xlsx" multiple style="display:none" onchange="mktUpload(this,'${pid}')"></label><span class="mkst" id="mktUp"></span></div>`;
   box.innerHTML=head+'<div class="psub">загрузка…</div>';
   if(!skus.length){box.innerHTML=head+'<div class="psub">У товара нет SKU Ozon.</div>';return;}
   try{const y=localISO(new Date(Date.now()-864e5)),f30=addDaysISO(y,-29);
-    const myG=await mktGet(`market_groups?sku=in.(${skus.join(',')})&select=grp_key&order=grp_key,sku`),keys=[...new Set(myG.map(x=>x.grp_key))];
+    const myG=await mktGet(`market_groups?sku=in.(${skus.join(',')})&select=grp_key,sku&order=grp_key,sku`),keys=[...new Set(myG.map(x=>x.grp_key))];
     const mem=keys.length?await mktGet(`market_groups?grp_key=in.(${keys.map(k=>'"'+k+'"').join(',')})&select=grp_key,title,sku,role,note&order=grp_key,sku`):[];
     const allSku=[...new Set(mem.map(x=>x.sku).concat(skus))];
     const [rep,F,ads,idx]=await Promise.all([
@@ -3101,7 +3105,7 @@ async function embedMarket(pid){const box=document.getElementById('embedMarket')
       const R=M.map(m=>({m,r:lastRep.get(m.sku)})),rd=R.map(x=>x.r?.report_date).filter(Boolean).sort().pop();
       if(rd)repDates.push(rd);
       const rows=R.map(x=>({...x,v:x.r&&x.r.report_date===rd?mktRepVals(x.r):null})).sort((a,b)=>(b.v?.sum??-1)-(a.v?.sum??-1));
-      const ref=(rows.find(x=>x.m.role==='etalon'&&x.v)||rows.find(x=>x.m.role==='nearest'&&x.v)||rows.find(x=>x.m.role!=='our'&&x.v)||{}).v||null;
+      const S=mktScales(rows.map(x=>x.v));   // шкала цвета — по строкам отчёта группы (как условное форматирование в Excel-разборе)
       const ed=MKT_EDIT.has(k);
       html+=`<div class="mkgrp">${esc(title)}${rd?` <span class="mkof">· отчёт ${mktD(rd)}</span>`:''} <button class="mkbtn" data-k="${esc(k)}" onclick="mktEditToggle(this.dataset.k,'${pid}')" title="Изменить состав группы: добавить или убрать товар, сменить роль (запись — в базы ИП и ООО)">${ed?'✓ Готово':'✎ Состав'}</button></div>`;
       const ourSkus=M.filter(m=>m.role==='our').map(m=>m.sku).filter(s=>skus.includes(s));
@@ -3110,13 +3114,13 @@ async function embedMarket(pid){const box=document.getElementById('embedMarket')
       html+=`<table><thead><tr><th>Место</th><th>Роль</th><th>Продавец · бренд</th><th>Товар</th>${MKT_T.map(c=>`<th title="${esc(c[2])}">${c[1]}</th>`).join('')}</tr></thead><tbody>`;
       rows.forEach((x,i)=>{const isOur=x.m.role==='our'&&skus.includes(x.m.sku),r=x.r&&x.r.report_date===rd?x.r:null;
         const roleTd=ed?`<td><select data-k="${esc(k)}" data-s="${esc(x.m.sku)}" onchange="mktRoleSet(this,'${pid}')">${Object.entries(MKT_ROLE).map(([v,l])=>`<option value="${v}"${v===x.m.role?' selected':''}>${l}</option>`).join('')}</select></td>`:`<td>${MKT_ROLE[x.m.role]||esc(x.m.role)}</td>`;
-        html+=`<tr class="${isOur?'mkour':''}"><td class="num">${ed?`<button class="mkx" data-k="${esc(k)}" data-s="${esc(x.m.sku)}" onclick="mktDel(this,'${pid}')" title="Убрать из группы">✕</button>`:''}${x.v?i+1:''}</td>${roleTd}<td>${r?esc(r.seller||'')+' · '+esc(r.brand||''):'—'}</td>`
+        html+=`<tr class="${isOur?'mkour':(x.m.role==='etalon'||x.m.role==='nearest')?'mkref':''}"><td class="num">${ed?`<button class="mkx" data-k="${esc(k)}" data-s="${esc(x.m.sku)}" onclick="mktDel(this,'${pid}')" title="Убрать из группы">✕</button>`:''}${x.v?i+1:''}</td>${roleTd}<td>${r?esc(r.seller||'')+' · '+esc(r.brand||''):'—'}</td>`
           +`<td class="mkname" title="${esc((r?.name||'')+(x.m.note?' — '+x.m.note:''))}"><a href="https://www.ozon.ru/product/${esc(x.m.sku)}" target="_blank" rel="noopener">${r?esc(r.name):'SKU '+esc(x.m.sku)+' — нет в отчёте'}</a></td>`
-          +(x.v?MKT_T.map(c=>mktCell(c,x.v,ref,isOur)).join(''):`<td colspan="${MKT_T.length}" class="psub">нет в отчёте ${rd?mktD(rd):''}</td>`)+'</tr>';
+          +(x.v?MKT_T.map(c=>mktCell(c,x.v,S)).join(''):`<td colspan="${MKT_T.length}" class="psub">нет в отчёте ${rd?mktD(rd):''}</td>`)+'</tr>';
         if(isOur){const Fs=F.filter(f=>f.sku===x.m.sku),A=ads.filter(a=>a.offer_id===x.m.sku);
           const per=rd?[addDaysISO(rd,-7),addDaysISO(rd,-1),'за 7 дн до отчёта']:null,now=[addDaysISO(y,-6),y,'сейчас: 7 дн до вчера'];
           [per,now].filter(Boolean).forEach(([f,t,l])=>{const v=mktApiVals(Fs,A,f,t);if(!v)return;
-            html+=`<tr class="mkapi"><td></td><td colspan="3" title="Наши данные из API Ozon (ночная загрузка), ${mktD(f)}–${mktD(t)}; корзина → заказ — шт ÷ добавления в корзину; выкуп ≈ доставлено ÷ заказано за те же дни (выкупы доезжают)">Мы по API — ${l} (${mktD(f).slice(0,5)}–${mktD(t).slice(0,5)})</td>${MKT_T.map(c=>['nostock','vol','promo'].includes(c[0])?'<td class="num">—</td>':mktCell(c,v,ref,true)).join('')}</tr>`;});}
+            html+=`<tr class="mkapi"><td></td><td colspan="3" title="Наши данные из API Ozon (ночная загрузка), ${mktD(f)}–${mktD(t)}; корзина → заказ — шт ÷ добавления в корзину; выкуп ≈ доставлено ÷ заказано за те же дни (выкупы доезжают)">Мы по API — ${l} (${mktD(f).slice(0,5)}–${mktD(t).slice(0,5)})</td>${MKT_T.map(c=>['nostock','vol','promo'].includes(c[0])?'<td class="num">—</td>':mktCell(c,v,S)).join('')}</tr>`;});}
       });
       html+='</tbody></table>';
       if(ed){const ourRow=R.find(x=>x.m.role==='our'&&x.r&&x.r.report_date===rd)?.r;let cand=[];

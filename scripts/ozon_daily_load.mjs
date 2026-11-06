@@ -542,11 +542,11 @@ try{
   const FM=['hits_view','hits_view_search','hits_view_pdp','hits_tocart','hits_tocart_search','hits_tocart_pdp','session_view','session_view_search','session_view_pdp','ordered_units','revenue','delivered_units','returns','cancellations'];
   const FM2=['position_category'], F0=addDays(D,-2);
   let calls=0;
-  const anaAll=async metrics=>{let out=[],off=0;
-    for(;;){if(calls++)await sleep(62000);
-      const j=await ozon('/v1/analytics/data',{date_from:F0,date_to:D,metrics,dimension:['sku','day'],filters:[],sort:[{key:metrics[0],order:'DESC'}],limit:1000,offset:off});
-      const d=j?.result?.data||[];out=out.concat(d);if(d.length<1000)break;off+=1000;}
-    return out;};
+  // ответ — не больше 1000 строк; сортировка не уникальна, поэтому не листаем страницами, а при 1000 строк — заново по одному дню
+  const ana=async(metrics,f,to)=>{if(calls++)await sleep(62000);
+    const j=await ozon('/v1/analytics/data',{date_from:f,date_to:to,metrics,dimension:['sku','day'],filters:[],sort:[{key:metrics[0],order:'DESC'}],limit:1000,offset:0});return j?.result?.data||[];};
+  const anaAll=async metrics=>{const d=await ana(metrics,F0,D);if(d.length<1000)return d;const out=[];
+    for(let x=F0;x<=D;x=addDays(x,1)){const one=await ana(metrics,x,x);if(one.length>=1000)console.log(`  ⚠️ воронка ${x}: 1000 строк — возможна потеря`);out.push(...one);}return out;};
   const A=await anaAll(FM),B=await anaAll(FM2),key=x=>x.dimensions?.[0]?.id+'|'+x.dimensions?.[1]?.id;
   const pos=new Map(B.map(x=>[key(x),x.metrics?.[0]]));
   const SKU_PID_ALL=new Map(products.filter(p=>p.sku!=null).map(p=>[String(p.sku),p.product_id])),now=new Date().toISOString();

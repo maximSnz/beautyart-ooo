@@ -1,0 +1,30 @@
+name: ozon-funnel-backfill
+# Догрузка воронки наших товаров (API /v1/analytics/data) за N дней → product_funnel_daily. Только ручной запуск.
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Сколько дней до вчера (1–90)'
+        required: false
+        default: '40'
+      write:
+        description: 'Записать в базу (1) или только проверить (0)'
+        required: false
+        default: '0'
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Backfill funnel
+        run: node scripts/ozon_funnel_backfill.mjs
+        env:
+          DAYS: ${{ github.event.inputs.days }}
+          WRITE: ${{ github.event.inputs.write }}
+          OZON_CLIENT_ID: ${{ secrets.OZON_CLIENT_ID }}
+          OZON_API_KEY: ${{ secrets.OZON_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
