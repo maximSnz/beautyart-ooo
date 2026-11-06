@@ -534,6 +534,39 @@ else try{
   note(`Маржа по дате заказа: ${rows.length} строк`);
 }catch(e){console.log('  ⚠️ маржа по дате заказа:',e.message.slice(0,160));note(`⚠️ Маржа по дате заказа не посчитана: ${e.message.slice(0,100)}`);}
 
+// ===== 11. Воронка и ценовой индекс → product_funnel_daily, product_price_index (06.11.2026, стол 2 окна товара: аналитика категории) =====
+// Воронка — /v1/analytics/data по SKU и дням за D−2…D (свежие дни Ozon досчитывает — перезаписываем); метод — не чаще 1 раза в минуту.
+// Ценовой индекс — /v5/product/info/prices, снимок на сегодня (только при загрузке за вчера). Нет таблиц — предупреждение, загрузка не падает.
+console.log('\n11. Воронка и ценовой индекс',el());
+try{
+  const FM=['hits_view','hits_view_search','hits_view_pdp','hits_tocart','hits_tocart_search','hits_tocart_pdp','session_view','session_view_search','session_view_pdp','ordered_units','revenue','delivered_units','returns','cancellations'];
+  const FM2=['position_category'], F0=addDays(D,-2);
+  let calls=0;
+  const anaAll=async metrics=>{let out=[],off=0;
+    for(;;){if(calls++)await sleep(62000);
+      const j=await ozon('/v1/analytics/data',{date_from:F0,date_to:D,metrics,dimension:['sku','day'],filters:[],sort:[{key:metrics[0],order:'DESC'}],limit:1000,offset:off});
+      const d=j?.result?.data||[];out=out.concat(d);if(d.length<1000)break;off+=1000;}
+    return out;};
+  const A=await anaAll(FM),B=await anaAll(FM2),key=x=>x.dimensions?.[0]?.id+'|'+x.dimensions?.[1]?.id;
+  const pos=new Map(B.map(x=>[key(x),x.metrics?.[0]]));
+  const SKU_PID_ALL=new Map(products.filter(p=>p.sku!=null).map(p=>[String(p.sku),p.product_id])),now=new Date().toISOString();
+  const fr=A.map(x=>{const r={sku:String(x.dimensions[0].id),day:x.dimensions[1].id,product_id:SKU_PID_ALL.get(String(x.dimensions[0].id))??null,updated_at:now};
+    FM.forEach((m,i)=>{r[m]=Number(x.metrics?.[i]??0);});const p=pos.get(key(x));r.position_category=p==null?null:Number(p);return r;});
+  console.log(`  воронка ${F0}…${D}: строк ${fr.length}, SKU ${new Set(fr.map(r=>r.sku)).size}, без товара в products ${fr.filter(r=>r.product_id==null).length}`);
+  await sbWrite('POST','product_funnel_daily?on_conflict=sku,day',fr);
+  note(`Воронка: ${fr.length} строк`);
+  if(SNAPSHOT){let cursor='',pr=[];
+    for(let i=0;i<50;i++){const j=await ozon('/v5/product/info/prices',{filter:{visibility:'ALL'},limit:1000,cursor});const it=j?.items||[];
+      it.forEach(x=>{const p=x.price_indexes||{},n=v=>v==null||Number(v)===0?null:Number(v);
+        pr.push({product_id:x.product_id,day:TODAY,color:p.color_index||null,ozon_min:n(p.ozon_index_data?.min_price),ozon_idx:n(p.ozon_index_data?.price_index_value),
+          ext_min:n(p.external_index_data?.min_price),ext_idx:n(p.external_index_data?.price_index_value),self_min:n(p.self_marketplaces_index_data?.min_price),self_idx:n(p.self_marketplaces_index_data?.price_index_value)});});
+      cursor=j?.cursor||'';if(!cursor||!it.length)break;}
+    console.log(`  ценовой индекс: товаров ${pr.length}, с ценой у других продавцов Ozon ${pr.filter(r=>r.ozon_min!=null).length}`);
+    await sbWrite('POST','product_price_index?on_conflict=product_id,day',pr);
+    note(`Ценовой индекс: ${pr.length} товаров`);}
+  else console.log('  ценовой индекс: день ≠ вчера — пропущено');
+}catch(e){console.log('  ⚠️ воронка / ценовой индекс:',e.message.slice(0,160));note(`⚠️ Воронка / ценовой индекс не загружены: ${e.message.slice(0,100)}`);}
+
 if(!WRITE){console.log('\nРежим проверки — в базу НЕ записано. Было бы выполнено:');PLANNED.forEach(x=>console.log('  '+x));}
 note(`Время: ${Math.round((Date.now()-T0)/60000)} мин`);
 console.log('\nГотово.');

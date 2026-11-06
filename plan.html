@@ -2953,10 +2953,10 @@ async function embedPulse(){const b=document.getElementById('embedBox');
     +`<div class="psection" id="embedNotes"><div id="embedNotesList"><div class="psectitle">📝 Комментарии менеджера</div><div class="psub">загрузка…</div></div><div id="embedNotesForm"></div></div></div>`
     +`<div class="embedright"><div class="psection embedunit"><div class="psectitle">🧮 Юнит-экономика</div><div id="unitbox_${pid}" class="psub">загрузка…</div></div>`
     +`<div class="psection" id="embedPlan"></div></div></div>`
-    +`<div class="embedpg embedpg2">Рабочий стол 2 — здесь будет аналитика товара</div></div>`
+    +`<div class="embedpg embedpg2"><div class="psection" id="embedMarket" style="margin:0"></div></div></div>`
     +`<div class="embeddots"><button class="on" onclick="embedPage(0)" title="Рабочий стол 1: гипотезы, комментарии, юнит-экономика, план">1</button><button onclick="embedPage(1)" title="Рабочий стол 2: аналитика товара">2</button></div>`;
   {const pg=document.getElementById('embedPages');pg.addEventListener('scroll',()=>{const i=Math.round(pg.scrollLeft/Math.max(1,pg.clientWidth));document.querySelectorAll('.embeddots button').forEach((x,j)=>x.classList.toggle('on',j===i));},{passive:true});}
-  embedFormFor(pid);embedNotesFormFor(pid);embedPlan(pid);await Promise.all([embedNotes(pid),loadPulse(pid).then(()=>loadUnit(pid)).then(()=>{const bt=document.querySelector('.embedunit [id^=unitbox_] button');if(bt){bt.classList.add('embednow');bt.textContent='Сейчас';bt.title='Вернуть значения по умолчанию: '+bt.title;}}),embedHyp(pid)]);tellH();}   // юнит-экономика — после РНП: не больше 3 запросов начислений одновременно
+  embedFormFor(pid);embedNotesFormFor(pid);embedPlan(pid);embedMarket(pid);await Promise.all([embedNotes(pid),loadPulse(pid).then(()=>loadUnit(pid)).then(()=>{const bt=document.querySelector('.embedunit [id^=unitbox_] button');if(bt){bt.classList.add('embednow');bt.textContent='Сейчас';bt.title='Вернуть значения по умолчанию: '+bt.title;}}),embedHyp(pid)]);tellH();}   // юнит-экономика — после РНП: не больше 3 запросов начислений одновременно
 // гипотезы товара в окне РНП главной (06.11.2026, решение владельца: «сразу видеть, что менеджер делал с товаром»): только чтение;
 // гипотезы со сроком контроля или постановкой с начала таблицы РНП (за 10 дней до 1-го числа), новые сверху; у группы перчаток — по размерам
 async function embedHyp(pid){const box=document.getElementById('embedHypList');
@@ -3029,6 +3029,185 @@ async function embedPlan(pid){const box=document.getElementById('embedPlan');
     box.innerHTML=`<div class="psectitle">📋 Товар в плане месяца (${MNAMES[+MONTH.slice(5,7)-1].toLowerCase()})</div>`
       +`<table class="pulsetable"><thead><tr><th style="text-align:left">Показатель</th><th title="План месяца (карты Шухарта)">План</th><th title="Прогноз закрытия месяца (CF): факт с 1-го ÷ эфф. дни × эфф. дни месяца; цена и маржинальность — факт месяца; маржинальность 7 дн — Σ маржи ÷ Σ GMV за 7 дней до вчера (cf_daily, по дате начисления)">Прогноз</th><th>Откл.</th><th title="Прогноз ÷ план">% плана</th></tr></thead><tbody>${rows}</tbody></table>`;
   }catch(e){box.innerHTML=`<div class="psectitle">📋 Товар в плане месяца</div><div class="psub">Ошибка: ${esc(e.message)}</div>`;}}
+// ===== Рабочий стол 2: аналитика категории (06.11.2026, решение владельца; этап 5) =====
+// Группы «наш товар + конкуренты» — market_groups (по SKU нашего товара); цифры групп — последний загруженный отчёт «Аналитика рынка»
+// кабинета Ozon (market_report; загрузка файла здесь — сразу в базы ИП и ООО); наша воронка по дням — product_funnel_daily
+// (ночная загрузка, API /v1/analytics/data); мин. цена такого же товара — product_price_index. Вывода нет (обсуждается отдельно).
+// Шаги воронки (как в Excel-разборе 05–06.11.2026): CTR = просмотры карточки ÷ показы всего; в корзину из карточки, %;
+// корзина → заказ = шт ÷ (просмотры в поиске × в корзину из поиска + просмотры карточки × в корзину из карточки) — приблизительно;
+// выкуп. Ориентир группы — эталон, иначе ближайший конкурент, иначе конкурент с наибольшими заказами.
+const MKT_ROLE={our:'★ Наш',etalon:'Эталон',nearest:'Ближайший конкурент',competitor:'Конкурент'};
+const MKT_COLS={'Название товара':'name','Ссылка на товар':'link','Продавец':'seller','Бренд':'brand','Категория 1 уровня':'cat1','Категория 3 уровня':'cat3','Признак товара':'feature',
+  'Заказано на сумму, ₽':'ordered_sum','Динамика оборота, %':'turnover_dyn','Заказано, штуки':'ordered_qty','Средняя цена, ₽':'avg_price','Минимальная цена, ₽':'min_price',
+  'Доля выкупа, %':'buyout_pct','Упущенные продажи':'lost_sales','Дней без остатка':'days_no_stock','Среднесуточные продажи, ₽':'avg_daily_sum','Среднесуточные продажи, штуки':'avg_daily_qty',
+  'Остаток на конец периода, штуки':'stock_end','Схема работы':'scheme','Объем товара, л':'volume_l','Показы всего':'hits_view','Просмотры в поиске и каталоге':'hits_view_search',
+  'Просмотры карточки':'hits_view_pdp','Конверсия из показа в заказ, %':'conv_view_order','В корзину из поиска и каталога, %':'tocart_search_pct','В корзину из карточки, %':'tocart_pdp_pct',
+  'Скидка от медианной цены, %':'disc_median_pct','Доля суммы заказов по акциям, %':'promo_share_pct','Дней в акциях':'days_promo','Дней с продвижением':'days_adv',
+  'Доля рекламных расходов, %':'drr_pct','Дата создания карточки товара':'card_created'};
+const MKT_TEXT=new Set(['name','link','seller','brand','cat1','cat3','feature','scheme','card_created']),MKT_OF=new Set(['days_no_stock','days_promo','days_adv']);
+async function mktGet(path,base=SUPABASE_URL,hd=HD){let out=[],off=0;
+  for(;;){const r=await fetch(`${base}/rest/v1/${path}${path.includes('?')?'&':'?'}limit=1000&offset=${off}`,{headers:hd});
+    if(!r.ok){const t=await r.text();const e=new Error(path.split('?')[0]+' HTTP '+r.status);e.noTable=r.status===404||/does not exist|42P01|PGRST205/.test(t);throw e;}
+    const j=await r.json();out=out.concat(j);if(j.length<1000)break;off+=1000;}
+  return out;}
+const mktN=(v,d=0)=>v==null||!isFinite(v)?'—':Number(v).toLocaleString('ru-RU',{minimumFractionDigits:d,maximumFractionDigits:d});
+const mktDiv=(a,b,m=100)=>a==null||b==null||!b?null:a/b*m;
+const mktD=iso=>iso?iso.slice(8,10)+'.'+iso.slice(5,7)+'.'+iso.slice(0,4):'';
+// показатели строки отчёта (конкурент или мы)
+function mktRepVals(r){const carts=(Number(r.hits_view_search)||0)*(Number(r.tocart_search_pct)||0)/100+(Number(r.hits_view_pdp)||0)*(Number(r.tocart_pdp_pct)||0)/100;
+  return {sum:r.ordered_sum,qty:r.ordered_qty,price:r.avg_price,nostock:r.days_no_stock,nostockOf:r.days_no_stock_of,vol:r.volume_l,views:r.hits_view,
+    share:mktDiv(r.hits_view_search,r.hits_view),ctr:mktDiv(r.hits_view_pdp,r.hits_view),cart:r.tocart_pdp_pct,c2o:carts>0?r.ordered_qty/carts*100:null,
+    v2o:r.conv_view_order,buy:r.buyout_pct,drr:r.drr_pct,promo:r.days_promo,promoOf:r.days_promo_of};}
+// наша строка по API за период (сумма дней product_funnel_daily) + реклама ozon_ad_spend
+function mktApiVals(F,ads,from,to){const s={};let n=0;F.filter(x=>x.day>=from&&x.day<=to).forEach(x=>{n++;['hits_view','hits_view_search','hits_view_pdp','hits_tocart','hits_tocart_pdp','ordered_units','revenue','delivered_units'].forEach(k=>s[k]=(s[k]||0)+Number(x[k]||0));});
+  if(!n)return null;const ad=ads.filter(x=>x.spend_date>=from&&x.spend_date<=to).reduce((a,x)=>a+Number(x.amount||0),0);
+  return {sum:s.revenue,qty:s.ordered_units,price:mktDiv(s.revenue,s.ordered_units,1),views:s.hits_view,share:mktDiv(s.hits_view_search,s.hits_view),ctr:mktDiv(s.hits_view_pdp,s.hits_view),
+    cart:mktDiv(s.hits_tocart_pdp,s.hits_view_pdp),c2o:mktDiv(s.ordered_units,s.hits_tocart),v2o:mktDiv(s.ordered_units,s.hits_view),buy:mktDiv(s.delivered_units,s.ordered_units),buyApprox:true,
+    drr:s.revenue>0?ad/s.revenue*100:(ad>0?Infinity:null)};}
+// столбцы таблицы: ключ, заголовок, подсказка, знаков, «лучше» (1 — больше, −1 — меньше, 0 — без цвета)
+const MKT_T=[['sum','Заказано, ₽','Заказано на сумму за период отчёта',0,1],['qty','Заказано, шт','',0,1],['price','Ср. цена, ₽','Средняя цена за период',0,-1],
+  ['nostock','Дней без остатка','Дней без остатка (из N)',0,-1],['vol','Объём, л','Объём товара — от него зависят логистика и комиссия',1,-1],['views','Показы всего','Охват: сколько раз товар показан',0,1],
+  ['share','Доля поиска, %','Просмотры в поиске и каталоге ÷ показы всего',1,1],['ctr','CTR, %','Шаг 1 воронки: просмотры карточки ÷ показы всего',1,1],
+  ['cart','В корзину из карточки, %','Шаг 2 воронки',1,1],['c2o','Корзина → заказ, %','Шаг 3 воронки: шт ÷ (просмотры в поиске × в корзину из поиска + просмотры карточки × в корзину из карточки); приблизительно — в отчёте штуки, а не заказы, бывает > 100%',0,1],
+  ['buy','Выкуп, %','Шаг 4 воронки: доля выкупа',0,1],['v2o','Показ → заказ, %','Итог воронки: конверсия из показа в заказ',2,1],['drr','ДРР, %','Доля рекламных расходов',1,-1],['promo','Дней в акциях','Дней в акциях (из N)',0,0]];
+function mktCell(c,v,ref,isOur){let val=v[c[0]];let t=val===Infinity?'∞':mktN(val,c[3]);
+  if(c[0]==='nostock'&&val!=null&&v.nostockOf)t+=` <span class="mkof">из ${v.nostockOf}</span>`;if(c[0]==='promo'&&val!=null&&v.promoOf)t+=` <span class="mkof">из ${v.promoOf}</span>`;
+  if(c[0]==='buy'&&v.buyApprox&&val!=null)t='≈'+t;
+  let cl='';if(isOur&&ref&&c[4]&&val!=null&&ref[c[0]]!=null&&isFinite(ref[c[0]])){const a=Number(val),b=Number(ref[c[0]]);
+    if(c[4]>0)cl=a>=b?'mkg':(a<b*0.9?'mkr':'');else cl=a<=b?'mkg':(a>b*1.1?'mkr':'');}
+  return `<td class="num ${cl}">${t}</td>`;}
+async function embedMarket(pid){const box=document.getElementById('embedMarket');if(!box)return;
+  if(!document.getElementById('mktStyle')){const st=document.createElement('style');st.id='mktStyle';st.textContent='.embedpg2{display:block!important;overflow:auto;border:0!important;color:#1C0D2E!important}#embedMarket .mkhead{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px}#embedMarket .mkhead .psectitle{margin:0}#embedMarket table{border-collapse:collapse;font-size:.85em;width:100%}#embedMarket th{color:#94a3b8;font-weight:400;font-size:.85em;padding:3px 5px;border-bottom:1px solid rgba(84,66,115,.15);max-width:110px;white-space:normal;vertical-align:bottom}#embedMarket td{padding:3px 5px;border-bottom:1px dashed rgba(84,66,115,.12);white-space:nowrap}#embedMarket td.num{text-align:right}#embedMarket tr.mkour td{background:rgba(227,61,120,.07);font-weight:700}#embedMarket tr.mkapi td{background:rgba(120,166,199,.10);font-style:italic}#embedMarket .mkname{max-width:260px;overflow:hidden;text-overflow:ellipsis}#embedMarket .mkname a{color:inherit;text-decoration:none}#embedMarket .mkname a:hover{text-decoration:underline}#embedMarket .mkof{color:#94a3b8;font-weight:400;font-size:.85em}#embedMarket td.mkg{color:#15803d}#embedMarket td.mkr{color:#dc2626}#embedMarket .mkgrp{margin:12px 0 4px;font-weight:700;color:#544273}#embedMarket .mkidx{font-size:.85em;color:#544273;margin:2px 0 4px}#embedMarket .mkbtn{border:1px solid #544273;background:#fff;color:#544273;border-radius:8px;padding:3px 10px;cursor:pointer;font-size:.85em}#embedMarket .mkst{font-size:.85em;color:#544273}#embedMarket .mkx{border:0;background:none;color:#dc2626;cursor:pointer;padding:0 4px}#embedMarket .mkedit{margin:6px 0 10px;padding:8px;border:1px dashed rgba(84,66,115,.3);border-radius:8px;font-size:.85em}#embedMarket .mkcand{margin:3px 0}#embedMarket .mkcand a{color:#1C0D2E}#embedMarket select{font-size:.95em}';document.head.appendChild(st);}
+  const G=PROTO_GROUPS[pid],ms=G?G.members:[BYID[pid]],skus=ms.map(p=>p&&p.raw&&p.raw.sku!=null?String(p.raw.sku):'').filter(Boolean);
+  const head=`<div class="mkhead"><div class="psectitle">📊 Аналитика категории</div><span class="mkst" id="mktInfo"></span><label class="mkbtn" title="Отчёты «Аналитика рынка» из кабинета Ozon (.xlsx), можно несколько файлов сразу; запись — в базы ИП и ООО">⬆ Загрузить отчёты рынка<input type="file" accept=".xlsx" multiple style="display:none" onchange="mktUpload(this,'${pid}')"></label><span class="mkst" id="mktUp"></span></div>`;
+  box.innerHTML=head+'<div class="psub">загрузка…</div>';
+  if(!skus.length){box.innerHTML=head+'<div class="psub">У товара нет SKU Ozon.</div>';return;}
+  try{const y=localISO(new Date(Date.now()-864e5)),f30=addDaysISO(y,-29);
+    const myG=await mktGet(`market_groups?sku=in.(${skus.join(',')})&select=grp_key&order=grp_key,sku`),keys=[...new Set(myG.map(x=>x.grp_key))];
+    const mem=keys.length?await mktGet(`market_groups?grp_key=in.(${keys.map(k=>'"'+k+'"').join(',')})&select=grp_key,title,sku,role,note&order=grp_key,sku`):[];
+    const allSku=[...new Set(mem.map(x=>x.sku).concat(skus))];
+    const [rep,F,ads,idx]=await Promise.all([
+      allSku.length?mktGet(`market_report?sku=in.(${allSku.join(',')})&select=*&order=report_date.desc,category,sku`):[],
+      mktGet(`product_funnel_daily?sku=in.(${skus.join(',')})&day=gte.${addDaysISO(y,-40)}&select=*&order=day,sku`).catch(e=>{if(e.noTable)return [];throw e;}),
+      mktGet(`ozon_ad_spend?offer_id=in.(${skus.join(',')})&spend_date=gte.${addDaysISO(y,-40)}&select=offer_id,spend_date,amount&order=spend_date,offer_id`),
+      mktGet(`product_price_index?product_id=in.(${ms.map(p=>p.product_id).join(',')})&day=gte.${addDaysISO(y,-6)}&select=*&order=day.desc,product_id`).catch(e=>{if(e.noTable)return [];throw e;})]);
+    const lastRep=new Map();rep.forEach(r=>{if(!lastRep.has(r.sku))lastRep.set(r.sku,r);});
+    let html=head;
+    // ценовой индекс (последний снимок по каждому размеру)
+    const li=new Map();idx.forEach(x=>{if(!li.has(x.product_id))li.set(x.product_id,x);});
+    if(!keys.length)html+=`<div class="psub">Товар не входит ни в одну группу сравнения. Группы из разбора 05–06.11.2026 — 7 категорий; новую можно создать кнопкой ниже.</div>`;
+    const repDates=[];
+    for(const k of keys){const M=mem.filter(x=>x.grp_key===k),title=M[0]?.title||k;
+      const R=M.map(m=>({m,r:lastRep.get(m.sku)})),rd=R.map(x=>x.r?.report_date).filter(Boolean).sort().pop();
+      if(rd)repDates.push(rd);
+      const rows=R.map(x=>({...x,v:x.r&&x.r.report_date===rd?mktRepVals(x.r):null})).sort((a,b)=>(b.v?.sum??-1)-(a.v?.sum??-1));
+      const ref=(rows.find(x=>x.m.role==='etalon'&&x.v)||rows.find(x=>x.m.role==='nearest'&&x.v)||rows.find(x=>x.m.role!=='our'&&x.v)||{}).v||null;
+      const ed=MKT_EDIT.has(k);
+      html+=`<div class="mkgrp">${esc(title)}${rd?` <span class="mkof">· отчёт ${mktD(rd)}</span>`:''} <button class="mkbtn" data-k="${esc(k)}" onclick="mktEditToggle(this.dataset.k,'${pid}')" title="Изменить состав группы: добавить или убрать товар, сменить роль (запись — в базы ИП и ООО)">${ed?'✓ Готово':'✎ Состав'}</button></div>`;
+      const ourSkus=M.filter(m=>m.role==='our').map(m=>m.sku).filter(s=>skus.includes(s));
+      ourSkus.forEach(s=>{const p=ms.find(q=>String(q.raw?.sku)===s),x=p&&li.get(p.product_id);if(!x)return;
+        html+=`<div class="mkidx" title="Ценовой индекс Ozon на ${mktD(x.day)}: индекс = наша цена ÷ минимальная">${ms.length>1?esc(p.offer_id)+': ':''}мин. цена такого же товара — у других продавцов Ozon <b>${mktN(x.ozon_min)} ₽</b>${x.ozon_idx?` (индекс ${mktN(x.ozon_idx,2)})`:''} · на других площадках <b>${mktN(x.ext_min)} ₽</b>${x.ext_idx?` (${mktN(x.ext_idx,2)})`:''} · индекс Ozon: ${esc(x.color||'—')}</div>`;});
+      html+=`<table><thead><tr><th>Место</th><th>Роль</th><th>Продавец · бренд</th><th>Товар</th>${MKT_T.map(c=>`<th title="${esc(c[2])}">${c[1]}</th>`).join('')}</tr></thead><tbody>`;
+      rows.forEach((x,i)=>{const isOur=x.m.role==='our'&&skus.includes(x.m.sku),r=x.r&&x.r.report_date===rd?x.r:null;
+        const roleTd=ed?`<td><select data-k="${esc(k)}" data-s="${esc(x.m.sku)}" onchange="mktRoleSet(this,'${pid}')">${Object.entries(MKT_ROLE).map(([v,l])=>`<option value="${v}"${v===x.m.role?' selected':''}>${l}</option>`).join('')}</select></td>`:`<td>${MKT_ROLE[x.m.role]||esc(x.m.role)}</td>`;
+        html+=`<tr class="${isOur?'mkour':''}"><td class="num">${ed?`<button class="mkx" data-k="${esc(k)}" data-s="${esc(x.m.sku)}" onclick="mktDel(this,'${pid}')" title="Убрать из группы">✕</button>`:''}${x.v?i+1:''}</td>${roleTd}<td>${r?esc(r.seller||'')+' · '+esc(r.brand||''):'—'}</td>`
+          +`<td class="mkname" title="${esc((r?.name||'')+(x.m.note?' — '+x.m.note:''))}"><a href="https://www.ozon.ru/product/${esc(x.m.sku)}" target="_blank" rel="noopener">${r?esc(r.name):'SKU '+esc(x.m.sku)+' — нет в отчёте'}</a></td>`
+          +(x.v?MKT_T.map(c=>mktCell(c,x.v,ref,isOur)).join(''):`<td colspan="${MKT_T.length}" class="psub">нет в отчёте ${rd?mktD(rd):''}</td>`)+'</tr>';
+        if(isOur){const Fs=F.filter(f=>f.sku===x.m.sku),A=ads.filter(a=>a.offer_id===x.m.sku);
+          const per=rd?[addDaysISO(rd,-7),addDaysISO(rd,-1),'за 7 дн до отчёта']:null,now=[addDaysISO(y,-6),y,'сейчас: 7 дн до вчера'];
+          [per,now].filter(Boolean).forEach(([f,t,l])=>{const v=mktApiVals(Fs,A,f,t);if(!v)return;
+            html+=`<tr class="mkapi"><td></td><td colspan="3" title="Наши данные из API Ozon (ночная загрузка), ${mktD(f)}–${mktD(t)}; корзина → заказ — шт ÷ добавления в корзину; выкуп ≈ доставлено ÷ заказано за те же дни (выкупы доезжают)">Мы по API — ${l} (${mktD(f).slice(0,5)}–${mktD(t).slice(0,5)})</td>${MKT_T.map(c=>['nostock','vol','promo'].includes(c[0])?'<td class="num">—</td>':mktCell(c,v,ref,true)).join('')}</tr>`;});}
+      });
+      html+='</tbody></table>';
+      if(ed){const ourRow=R.find(x=>x.m.role==='our'&&x.r&&x.r.report_date===rd)?.r;let cand=[];
+        if(ourRow)try{cand=(await mktGet(`market_report?report_date=eq.${rd}&category=eq.${encodeURIComponent(ourRow.category)}&select=sku,name,seller,brand,ordered_sum,avg_price&order=ordered_sum.desc.nullslast,sku`)).filter(c=>!M.some(m=>m.sku===c.sku)&&c.seller!==ourRow.seller).slice(0,8);}catch(e){}
+        html+=`<div class="mkedit"><input type="text" placeholder="SKU или ссылка на товар Ozon" size="36"> <select>${Object.entries(MKT_ROLE).filter(([v])=>v!=='our').map(([v,l])=>`<option value="${v}"${v==='competitor'?' selected':''}>${l}</option>`).join('')}</select> <button class="mkbtn" data-k="${esc(k)}" data-t="${esc(title)}" onclick="mktAddSku(this,'${pid}')">+ Добавить</button>`
+          +(cand.length?`<div class="mkof" style="margin-top:6px">Кандидаты — лидеры категории в отчёте ${mktD(rd)}, которых нет в группе (без наших товаров; похожесть проверяйте сами):</div>`+cand.map(c=>`<div class="mkcand"><button class="mkbtn" data-k="${esc(k)}" data-t="${esc(title)}" data-s="${esc(c.sku)}" onclick="mktAddSku(this,'${pid}')">+</button> <a href="https://www.ozon.ru/product/${esc(c.sku)}" target="_blank" rel="noopener">${esc(c.name||c.sku)}</a> <span class="mkof">· ${esc(c.seller||'')} · ${mktN(c.ordered_sum)} ₽ · ${mktN(c.avg_price)} ₽/шт</span></div>`).join(''):'')+'</div>';}}
+    // наши размеры без группы — создать группу вручную
+    const noG=skus.filter(s=>!myG.some(g=>g.sku===s));
+    if(noG.length)html+=`<div class="mkedit" style="margin-top:8px">${keys.length?'Без группы: '+noG.map(s=>esc(ms.find(p=>String(p.raw?.sku)===s)?.offer_id||s)).join(', ')+' ':''}<button class="mkbtn" onclick="mktNewGroup('${pid}')" title="Создать группу «ручная:SKU» с нашим товаром — конкурентов добавите в ней">+ Создать группу${noG.length>1?' для каждого ('+noG.length+')':''}</button></div>`;
+    if(keys.length&&!rep.length)html+=`<div class="psub" style="margin-top:6px">Отчётов «Аналитика рынка» в базе нет — загрузите файлы кнопкой выше.</div>`;
+    html+=`<div class="mkgrp" style="margin-top:16px">Наша воронка по дням (API Ozon, 30 дн${ms.length>1?', сумма размеров':''})</div><div id="mktFunnel"></div>`;
+    box.innerHTML=html;
+    const inf=document.getElementById('mktInfo');if(inf&&repDates.length)inf.textContent='последний отчёт: '+mktD(repDates.sort().pop());
+    mktFunnel(F,ads,f30,y);
+  }catch(e){box.innerHTML=head+(e.noTable?'<div class="psub">Нет таблиц аналитики — запустите SQL 2026-11-06_market_analytics.sql и 2026-11-06_market_groups_seed.sql (ИП и ООО).</div>':`<div class="psub">Ошибка: ${esc(e.message)}</div>`);}
+  tellH();}
+// график воронки по дням: показы (столбики) и 3 шага — CTR, в корзину из карточки, корзина → заказ (линии), каждый своей полосой
+function mktFunnel(F,ads,from,to){const el=document.getElementById('mktFunnel');if(!el)return;
+  const days=[];for(let d=from;d<=to;d=addDaysISO(d,1))days.push(d);
+  const by=new Map();F.forEach(x=>{if(x.day<from||x.day>to)return;const g=by.get(x.day)||{};['hits_view','hits_view_pdp','hits_tocart','hits_tocart_pdp','ordered_units'].forEach(k=>g[k]=(g[k]||0)+Number(x[k]||0));by.set(x.day,g);});
+  if(!by.size){el.innerHTML='<div class="psub">Данных воронки пока нет — их загружает ночная загрузка (шаг 11), первая — в ночь после запуска SQL.</div>';return;}
+  const S=[['Показы всего',d=>by.get(d)?.hits_view,'bar','#78A6C7',0],['CTR, %',d=>{const g=by.get(d);return g?mktDiv(g.hits_view_pdp,g.hits_view):null;},'line','#E33D78',1],
+    ['В корзину из карточки, %',d=>{const g=by.get(d);return g?mktDiv(g.hits_tocart_pdp,g.hits_view_pdp):null;},'line','#7D3673',1],['Корзина → заказ, %',d=>{const g=by.get(d);return g?mktDiv(g.ordered_units,g.hits_tocart):null;},'line','#544273',0]];
+  const W=1200,L=170,R=20,PH=56,GAP=14,H=S.length*(PH+GAP)+24,xw=(W-L-R)/days.length,X=i=>L+xw*(i+.5);
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;font-family:inherit">`;
+  S.forEach(([lab,f,type,col,dg],si)=>{const y0=si*(PH+GAP),vals=days.map(f),fin=vals.filter(v=>v!=null&&isFinite(v)),mx=Math.max(...fin,0)||1,Y=v=>y0+PH-v/mx*PH;
+    const avg=fin.length?fin.reduce((a,b)=>a+b,0)/fin.length:null;
+    svg+=`<text x="0" y="${y0+PH/2}" font-size="13" fill="#544273">${lab}</text><text x="0" y="${y0+PH/2+15}" font-size="11" fill="#94a3b8">ср. ${mktN(avg,dg)}</text><line x1="${L}" x2="${W-R}" y1="${y0+PH}" y2="${y0+PH}" stroke="rgba(84,66,115,.15)"/>`;
+    if(type==='bar')vals.forEach((v,i)=>{if(v==null)return;svg+=`<rect x="${X(i)-xw*.35}" y="${Y(v)}" width="${xw*.7}" height="${y0+PH-Y(v)}" fill="${col}" opacity=".7"><title>${mktD(days[i])}: ${mktN(v)}</title></rect>`;});
+    else{let p='';vals.forEach((v,i)=>{if(v==null||!isFinite(v))return;p+=(p?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1);});svg+=`<path d="${p}" fill="none" stroke="${col}" stroke-width="2"/>`;
+      vals.forEach((v,i)=>{if(v==null||!isFinite(v))return;svg+=`<circle cx="${X(i)}" cy="${Y(v)}" r="3" fill="${col}"><title>${mktD(days[i])}: ${mktN(v,dg+1)}%</title></circle>`;});}});
+  days.forEach((d,i)=>{if(i%3===0||i===days.length-1)svg+=`<text x="${X(i)}" y="${H-6}" font-size="11" fill="#94a3b8" text-anchor="middle">${d.slice(8,10)}.${d.slice(5,7)}</text>`;});
+  el.innerHTML=svg+'</svg>';}
+// загрузка отчётов «Аналитика рынка» (.xlsx из кабинета Ozon) → market_report в обе базы (ИП и ООО) тем же входом, как перенос в need.html
+function mktNum(v){if(v==null||v==='')return null;if(typeof v==='number')return v;const s=String(v).replace(/\s/g,'').replace(',','.').replace('%','');const n=Number(s);return isFinite(n)?n:null;}
+function mktDate(v){if(typeof v==='number'){const d=new Date(Math.round((v-25569)*864e5));return d.toISOString().slice(0,10);}
+  const m=String(v||'').match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/);if(!m)return null;const yy=m[3].length===2?'20'+m[3]:m[3],today=localISO(new Date());
+  const a=`${yy}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`,b=`${yy}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;   // Ozon пишет ММ.ДД.ГГ («11.05.26» — отчёт от 05.11.2026)
+  const ok=s=>!isNaN(new Date(s+'T00:00:00'))&&s<=today&&+s.slice(5,7)<=12;return ok(a)?a:(ok(b)?b:null);}
+function mktParse(wb,fname){const ws=wb.Sheets[wb.SheetNames[0]],A=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+  const meta={};let h=-1;A.forEach((r,i)=>{const k=String(r[0]??'').trim();if(k==='Название товара'&&h<0)h=i;else if(h<0&&k.endsWith(':'))meta[k.slice(0,-1)]=r[1];});
+  if(h<0)throw new Error(fname+': нет строки заголовков «Название товара»');
+  const date=mktDate(meta['Дата формирования']),cat=String(meta['Категория 3 уровня']||'').trim();
+  if(!date||!cat)throw new Error(fname+': в шапке нет даты формирования или категории 3 уровня');
+  const hdr=A[h].map(x=>String(x??'').trim()),miss=Object.keys(MKT_COLS).filter(c=>!hdr.includes(c));
+  if(miss.length>3)throw new Error(fname+': не тот формат — нет столбцов '+miss.slice(0,4).join(', '));
+  const out=new Map();A.slice(h+1).forEach(r=>{const o={report_date:date,category:cat,period:meta['Период отчета']?String(meta['Период отчета']):null};
+    hdr.forEach((c,j)=>{const f=MKT_COLS[c];if(!f)return;const v=r[j];
+      if(MKT_OF.has(f)){const m=String(v??'').match(/(\d+)\s*из\s*(\d+)/);o[f]=m?+m[1]:mktNum(v);o[f+'_of']=m?+m[2]:null;}
+      else if(MKT_TEXT.has(f))o[f]=v==null?null:String(v);else o[f]=mktNum(v);});
+    const sku=String(o.link||'').match(/product\/(?:[^/]*-)?(\d+)/);if(!sku)return;o.sku=sku[1];delete o.link;o.uploaded_by=BA_AUTH.email()||null;out.set(o.sku,o);});
+  return {date,cat,rows:[...out.values()]};}
+async function mktUpload(inp,pid){const st=document.getElementById('mktUp'),files=[...inp.files];inp.value='';if(!files.length)return;
+  try{if(!window.XLSX){st.textContent='загрузка библиотеки Excel…';await new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';s.onload=ok;s.onerror=()=>no(new Error('не загрузилась библиотека Excel'));document.head.appendChild(s);});}
+    const P=[];for(const f of files)P.push(mktParse(XLSX.read(await f.arrayBuffer(),{type:'array'}),f.name));
+    if(!confirm('Загрузить в базы ИП и ООО:\n'+P.map(p=>`• ${p.cat} — отчёт от ${mktD(p.date)}, товаров ${p.rows.length}`).join('\n')+'\n\nОтчёт с той же датой и категорией заменится.'))return;
+    const OTHER=await mktOther(),hd2=OTHER.hd,ok2=OTHER.ok;
+    const put=async(base,hd,rows)=>{for(let i=0;i<rows.length;i+=500){const r=await fetch(`${base}/rest/v1/market_report?on_conflict=report_date,category,sku`,{method:'POST',headers:{...hd,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify(rows.slice(i,i+500))});
+      if(!r.ok)throw new Error('market_report HTTP '+r.status+' '+(await r.text()).slice(0,150));}};
+    const res=[];for(const p of P){st.textContent=`запись: ${p.cat}…`;await put(SUPABASE_URL,HD,p.rows);if(ok2)await put(OTHER.url,hd2,p.rows);res.push(p.cat);}
+    st.textContent=`✓ загружено: ${res.length} отч.`+(ok2?'':` (только в эту базу — нет входа в ${OTHER.name})`);
+    embedMarket(pid);
+  }catch(e){st.textContent='⚠️ '+e.message;}}
+// редактор групп (06.11.2026, решение владельца): состав группы правится на столе 2 — добавить по SKU / ссылке или из кандидатов, сменить
+// роль, убрать; новая группа — «ручная:SKU». Каждая правка — сразу в обе базы (ИП и ООО), кто и когда — updated_by / updated_at.
+let MKT_EDIT=new Set(),MKT_OTHER=null;
+async function mktOther(){if(MKT_OTHER)return MKT_OTHER;
+  const O=SUPABASE_URL.includes('jvoofak')?{name:'ООО',url:'https://jaruwkpugxybwcsalhgr.supabase.co',anon:'sb_publishable_09rFaH3adGXnEO3-cybX9A_eK_mCnW0'}:{name:'ИП',url:'https://jvoofakrkhzoblhhuyvr.supabase.co',anon:'sb_publishable_IA4ReUU9xTL7hb_sbsHaFA_LPATJazE'};
+  const hd={apikey:O.anon,Authorization:'Bearer '+O.anon},ok=await BA_AUTH.login(O.url,hd);return MKT_OTHER={...O,hd,ok};}
+async function mktWrite(method,path,body){const O=await mktOther();
+  const one=async(base,hd)=>{const r=await fetch(`${base}/rest/v1/${path}`,{method,headers:{...hd,'Content-Type':'application/json',Prefer:method==='POST'?'resolution=merge-duplicates,return=minimal':'return=minimal'},body:body?JSON.stringify(body):undefined});
+    if(!r.ok)throw new Error(path.split('?')[0]+' HTTP '+r.status+' '+(await r.text()).slice(0,150));};
+  await one(SUPABASE_URL,HD);if(O.ok)await one(O.url,O.hd);else alert('Записано только в эту базу — нет входа в базу '+O.name+'. Выйдите и войдите снова, затем повторите правку.');}
+const mktWho=()=>({updated_by:BA_AUTH.email()||null,updated_at:new Date().toISOString()});
+const mktQ=(k,s)=>`market_groups?grp_key=eq.${encodeURIComponent(k)}&sku=eq.${encodeURIComponent(s)}`;
+function mktSkuOf(v){const s=String(v||'').trim(),m=s.match(/product\/(?:[^/?#]*-)?(\d+)/)||s.match(/^(\d{5,})$/);return m?m[1]:null;}
+function mktEditToggle(k,pid){MKT_EDIT.has(k)?MKT_EDIT.delete(k):MKT_EDIT.add(k);embedMarket(pid);}
+async function mktAddSku(btn,pid){const k=btn.dataset.k,box=btn.closest('.mkedit');
+  const sku=btn.dataset.s||mktSkuOf(box.querySelector('input').value);if(!sku){alert('Введите SKU (цифры) или ссылку вида ozon.ru/product/…-123456789');return;}
+  const role=btn.dataset.s?'competitor':box.querySelector('select').value;btn.disabled=true;
+  try{await mktWrite('POST','market_groups?on_conflict=grp_key,sku',[{grp_key:k,title:btn.dataset.t||null,sku,role,note:null,...mktWho()}]);embedMarket(pid);}
+  catch(e){alert('Не сохранено: '+e.message);btn.disabled=false;}}
+async function mktRoleSet(sel,pid){sel.disabled=true;
+  try{await mktWrite('PATCH',mktQ(sel.dataset.k,sel.dataset.s),{role:sel.value,...mktWho()});embedMarket(pid);}catch(e){alert('Не сохранено: '+e.message);sel.disabled=false;}}
+async function mktDel(btn,pid){if(!confirm('Убрать SKU '+btn.dataset.s+' из группы?'))return;btn.disabled=true;
+  try{await mktWrite('DELETE',mktQ(btn.dataset.k,btn.dataset.s),null);embedMarket(pid);}catch(e){alert('Не удалено: '+e.message);btn.disabled=false;}}
+async function mktNewGroup(pid){const G=PROTO_GROUPS[pid],ms=G?G.members:[BYID[pid]];
+  try{const have=new Set((await mktGet(`market_groups?sku=in.(${ms.map(p=>String(p.raw?.sku||'')).filter(Boolean).join(',')})&select=sku&order=grp_key,sku`)).map(x=>x.sku));
+    const rows=ms.filter(p=>p.raw?.sku!=null&&!have.has(String(p.raw.sku))).map(p=>({grp_key:'ручная:'+p.raw.sku,title:p.offer_id+' — '+(p.name||''),sku:String(p.raw.sku),role:'our',note:null,...mktWho()}));
+    if(!rows.length)return;await mktWrite('POST','market_groups?on_conflict=grp_key,sku',rows);rows.forEach(r=>MKT_EDIT.add(r.grp_key));embedMarket(pid);}
+  catch(e){alert('Не создано: '+e.message);}}
 if(BA_AUTH.has(SUPABASE_URL))go();
 </script>
 </body>
