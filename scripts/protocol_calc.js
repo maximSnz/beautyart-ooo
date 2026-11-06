@@ -89,7 +89,7 @@ async function load(api,{today,m1,bKey,aRange,bRange}){
   const curMon=addDays(tD,-((tD.getDay()+6)%7)),wkKey=keyOf(addDays(curMon,-7));  // последняя закрытая неделя (маржинальность CF)
   const months=[...new Set(cur7.map(k=>k.slice(0,7)).concat(mk))];
   const [prodAll,plans,salesDays,ads,spw,hyp,ppm,stockDays,limDay]=await Promise.all([
-    api.one(`products?select=product_id,offer_id,archived,raw&limit=1000`),
+    api.one(`products?select=product_id,offer_id,name,archived,raw&limit=1000`),
     api.one(`sales_plan?month=in.(${months.join(',')})&select=month,product_id,plan_qty,price,margin_pct&limit=5000`),
     pool(days,k=>api.all(`product_sales?sale_date=eq.${k}&select=offer_id,qty,revenue&order=id`)),
     api.all(`ozon_ad_spend?spend_date=gte.${cur7[0]}&spend_date=lte.${yKey}&select=offer_id,spend_date,amount&order=offer_id,spend_date`),
@@ -128,7 +128,7 @@ async function load(api,{today,m1,bKey,aRange,bRange}){
     if(!pl||!(Number(pl.plan_qty)>0))return;                                  // товары с планом на месяц вчерашнего дня
     const q=Number(pl.plan_qty),pp=Number(pl.price||0),pct=pl.margin_pct!=null?Number(pl.margin_pct):null,c=cf.get(pid),L=LIM.get(String(pid));
     const st=stock.get(o)||zeros(7);
-    const u={pid,offer:o,mgr:matrixOf(o),ord:ord.get(o)||zeros(days.length),rev:rev.get(o)||zeros(days.length),a7:adv.get(pid)||0,
+    const u={pid,offer:o,name:p.name||'',mgr:matrixOf(o),ord:ord.get(o)||zeros(days.length),rev:rev.get(o)||zeros(days.length),a7:adv.get(pid)||0,
       plan7:cur7.map(k=>planDay(pid,k)),planR7:cur7.map(k=>{const pk=PLAN[k.slice(0,7)+'|'+pid];return planDay(pid,k)*(pk?Number(pk.price||0):0);}),planQ:q,planRev:q*pp,planRevPct:pct!=null?q*pp:0,planMarW:pct!=null?q*pp*pct:0,
       cfMar:c?c.mar:0,cfRevn:c?c.revn:0,lim:L?{drr_plan:L.drr_plan!=null?Number(L.drr_plan):null,drr_be:Number(L.drr_be)}:null,aY:advY.get(pid)||0,ad7:advD.get(pid)||zeros(7),
       coef:L&&L.b!=null?{b:+L.b,r0:+L.r0,lo:+L.comm_low,hi:+L.comm_high,t:+L.t,u:+L.u,plan:L.plan_pct!=null?+L.plan_pct:null}:null,stock:st,
@@ -149,7 +149,7 @@ async function load(api,{today,m1,bKey,aRange,bRange}){
   fam.forEach((ms,k)=>{
     if(ms.length<2){out.push(...ms);return;}
     const sA=f=>ms[0][f].map((_,i)=>ms.reduce((s,m)=>s+(m[f][i]||0),0)),sN=f=>ms.reduce((s,m)=>s+(m[f]||0),0);
-    const g={fam:k,offer:k,pid:'f:'+k,members:ms,mgr:ms[0].mgr,ord:sA('ord'),rev:sA('rev'),plan7:sA('plan7'),planR7:sA('planR7'),ad7:sA('ad7'),stock:sA('stock'),need:sA('need')};
+    const g={fam:k,offer:k,name:ms[0].name||'',pid:'f:'+k,members:ms,mgr:ms[0].mgr,ord:sA('ord'),rev:sA('rev'),plan7:sA('plan7'),planR7:sA('planR7'),ad7:sA('ad7'),stock:sA('stock'),need:sA('need')};
     ['a7','aY','planQ','planRev','planRevPct','planMarW','cfMar','cfRevn'].forEach(f=>g[f]=sN(f));
     // лимиты вчерашнего дня у группы — по размерам, взвешенные выручкой вчера (нет — планом дня)
     {const wm=ms.filter(m=>m.limY),wv=m=>m.revY>0?m.revY:0,WV=wm.reduce((s,m)=>s+wv(m),0),ww=m=>WV>0?wv(m):m.planRY,WW=wm.reduce((s,m)=>s+ww(m),0),wpm=wm.filter(m=>m.limY.plan!=null),WPM=wpm.reduce((s,m)=>s+ww(m),0);
