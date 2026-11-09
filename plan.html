@@ -3061,7 +3061,7 @@ async function embedNoteDel(pid,id){if(!confirm('Удалить коммента
 // причины неделя к неделе с порогом SH_TOL: наличие (дни без запаса на 4 дня продаж по плану), цена, реклама (расход и ДРР к лимитам от цены,
 // как РНП), показы, конверсия (product_funnel_daily), ценовой индекс; не больше SH_ACT действий «сейчас → цель → зачем», наличие первым,
 // дальше по эффекту в ₽ (оценка «при прочих равных»). Причин нет — «заказы ушли к конкурентам, смотрите стол 2».
-const SH_DROP_PP=1, SH_TOL=0.10, SH_TOP=3, SH_ACT=3, SH_STOCK_DAYS=4, SH_WD=['вс','пн','вт','ср','чт','пт','сб'];
+const SH_DROP_PP=1, SH_TOL=0.10, SH_TOP=3, SH_ACT=3, SH_STOCK_DAYS=4, SH_EXP_W=5, SH_EXP_MIN=1000, SH_PRICE_STEPS=[0.05,0.10], SH_WD=['вс','пн','вт','ср','чт','пт','сб'];
 const shM=v=>v==null?'—':v>=1e6?(v/1e6).toLocaleString('ru-RU',{maximumFractionDigits:1})+' млн':Math.round(v/1e3)+' тыс';
 const shP=(a,b)=>a>0&&b!=null?b/a*100-100:null, shSg=(v,d=0)=>v==null||!isFinite(v)?'—':(v>0?'+':'')+mktN(v,d);
 async function embedShare(pid,cat){const box=document.getElementById('embedShare');if(!box)return;
@@ -3089,7 +3089,7 @@ async function embedShare(pid,cat){const box=document.getElementById('embedShare
     const wk=`<table class="shwk"><thead><tr><th>Неделя</th><th>Категория, ₽</th><th>к пред.</th><th>Мы, ₽</th><th>к пред.</th><th>Доля</th><th>к пред., п. п.</th></tr></thead><tbody>${W.map((w,i)=>{const p=W[i-1];const a=p?shP(p.cat,w.cat):null,b=p?shP(p.our,w.our):null,c=p&&p.sh!=null&&w.sh!=null?w.sh-p.sh:null;
       return `<tr><td>${ddmm(w.from)}–${ddmm(w.to)}${w.n<7?` <span class="mkof">(${w.n} дн)</span>`:''}</td><td>${mktN(w.cat)}</td><td class="${cls(a)}">${a==null?'':shSg(a)+'%'}</td><td>${mktN(w.our)}</td><td class="${cls(b)}">${b==null?'':shSg(b)+'%'}</td><td><b>${mktN(w.sh,1)}%</b></td><td class="${cls(c)}">${c==null?'':shSg(c,1)}</td></tr>`;}).join('')}</tbody></table>`;
     box.innerHTML=head(sel+info)+shChart(C)+wk+`<div class="mkgrp">🧭 Рекомендации: разбор падения доли <span class="mkof">(последние 7 дней к предыдущим 7; наши товары категории — выручка PNL, наличие, цена, реклама, показы и конверсия)</span></div><div id="shRecs" class="psub">расчёт…</div>`;
-    tellH();
+    shTipBind(C);tellH();
     const el=document.getElementById('shRecs');
     try{const h=await shRecs(C,W[3],W[2],ms,defBy);if(el&&el.isConnected){el.className='';el.innerHTML=h;}}catch(e){if(el)el.textContent='Ошибка разбора: '+e.message;}
   }catch(e){box.innerHTML=head()+(e.noTable?'<div class="psub">Нет таблицы — запустите SQL 2026-11-09_market_category_daily.sql (ИП и ООО).</div>':`<div class="psub">Ошибка: ${esc(e.message)}</div>`);}
@@ -3100,11 +3100,51 @@ function shChart(C){const S=C.days,W=1100,H=300,pl=50,pr=6,pt=22,pb=34,n=S.lengt
   let g='';for(let v=0;v<=mx;v+=t)g+=`<line x1="${pl}" x2="${W-pr}" y1="${yv(v)}" y2="${yv(v)}" stroke="rgba(84,66,115,.12)" stroke-dasharray="3 3"/><text x="${pl-6}" y="${yv(v)+4}" text-anchor="end" font-size="11" fill="#94a3b8">${v?shM(v):'0'}</text>`;
   S.forEach((x,i)=>{const X=pl+i*bw+bw*0.1,w=bw*0.8,cx=X+w/2,wd=parseW(x.d).getDay(),we=wd===0||wd===6;
     if(x.cat!=null){const sh=x.cat>0?x.our/x.cat*100:null;
-      g+=`<g><title>${ddmm(x.d)}, ${SH_WD[wd]}\nКатегория: ${mktN(x.cat)} ₽\nМы: ${mktN(x.our)} ₽\nДоля: ${mktN(sh,1)}%</title><rect x="${X}" y="${yv(x.cat)}" width="${w}" height="${yv(0)-yv(x.cat)}" fill="#bfe0f7" rx="2"/><rect x="${X}" y="${yv(x.our)}" width="${w}" height="${yv(0)-yv(x.our)}" fill="#56c3f0" rx="2"/>`
+      g+=`<g class="shbar" data-i="${i}" style="cursor:default"><rect x="${pl+i*bw}" y="${pt}" width="${bw}" height="${yv(0)-pt}" fill="transparent"/><rect class="shc" x="${X}" y="${yv(x.cat)}" width="${w}" height="${yv(0)-yv(x.cat)}" fill="#bfe0f7" rx="2"/><rect class="sho" x="${X}" y="${yv(x.our)}" width="${w}" height="${yv(0)-yv(x.our)}" fill="#56c3f0" rx="2"/>`
         +`<text x="${cx}" y="${yv(x.cat)-4}" text-anchor="middle" font-size="9.5" fill="#544273">${shM(x.cat)}</text><text x="${cx}" y="${Math.min(yv(x.our)-3,yv(0)-14)}" text-anchor="middle" font-size="9.5" fill="#1C0D2E">${mktN(sh,1)}%</text></g>`;}
     else g+=`<text x="${cx}" y="${yv(0)-4}" text-anchor="middle" font-size="9" fill="#94a3b8">нет</text>`;
     g+=`<text x="${cx}" y="${H-pb+14}" text-anchor="middle" font-size="10.5" fill="${we?'#ef4444':'#544273'}">${x.d.slice(8,10)}</text><text x="${cx}" y="${H-pb+27}" text-anchor="middle" font-size="9" fill="${we?'#ef4444':'#94a3b8'}">${SH_WD[wd]}</text>`;});
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:42vh;display:block">${g}</svg><div class="mkof" style="margin:-2px 0 4px"><span style="display:inline-block;width:10px;height:10px;background:#56c3f0;border-radius:2px"></span> Мы &nbsp; <span style="display:inline-block;width:10px;height:10px;background:#bfe0f7;border-radius:2px"></span> ${esc(C.name)} · подпись — доля дня; наведите на столбик — точные суммы</div>`;}
+  return `<svg class="shsvg" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:42vh;display:block">${g}</svg><div class="mkof" style="margin:-2px 0 4px"><span style="display:inline-block;width:10px;height:10px;background:#56c3f0;border-radius:2px"></span> Мы &nbsp; <span style="display:inline-block;width:10px;height:10px;background:#bfe0f7;border-radius:2px"></span> ${esc(C.name)} · подпись — доля дня; наведите на столбик — точные суммы</div>`;}
+// тултип как в кабинете Ozon (09.11.2026, решение владельца): тёмная карточка над столбиком — полная дата, категория (₽, 100%) и «Мой магазин» (₽, доля);
+// столбик под курсором темнее
+function shTipBind(C){const sv=document.querySelector('#embedShare .shsvg');if(!sv)return;
+  let tip=document.getElementById('shTip');if(!tip){tip=document.createElement('div');tip.id='shTip';tip.style.cssText='position:fixed;z-index:50;pointer-events:none;display:none;background:#2b2d33;color:#fff;border-radius:14px;padding:12px 16px;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.25);white-space:nowrap;width:max-content;box-sizing:border-box';(document.getElementById('embedBox')||document.body).appendChild(tip);}   // во встроенном режиме всё вне #embedBox скрыто
+  const sq=c=>`<span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:${c};vertical-align:-2px;margin-right:10px"></span>`;
+  let cur=null;const off=()=>{tip.style.display='none';if(cur){cur.querySelector('.shc').setAttribute('fill','#bfe0f7');cur.querySelector('.sho').setAttribute('fill','#56c3f0');cur=null;}};
+  sv.addEventListener('mouseleave',off);
+  sv.addEventListener('mousemove',e=>{const g=e.target.closest('g.shbar');if(!g){off();return;}const x=C.days[+g.dataset.i];if(!x||x.cat==null){off();return;}
+    if(cur!==g){off();cur=g;g.querySelector('.shc').setAttribute('fill','#9cc8f2');g.querySelector('.sho').setAttribute('fill','#3fb4ea');
+      let dt=parseW(x.d).toLocaleDateString('ru-RU',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}).replace(/\s*г\.?$/,' года');dt=dt[0].toUpperCase()+dt.slice(1);
+      // сетка, а не таблица: стили таблиц #embedBox (рамки, ширина) на тултип не действуют
+      const row=(c,n,v,p)=>`<span>${sq(c)}${n}</span><b style="text-align:right">${v} ₽</b><span style="color:${c};text-align:right">${p}%</span>`;
+      tip.innerHTML=`<div style="color:#a3a7b3;margin-bottom:8px">${dt}</div><div style="display:grid;grid-template-columns:auto auto auto;column-gap:16px;row-gap:6px;align-items:center">`
+        +row('#a9cdf5',esc(C.name),mktN(x.cat),'100')+row('#56c3f0','Мой магазин',mktN(x.our),mktN(x.cat>0?x.our/x.cat*100:null,1))+'</div>';
+      tip.style.display='block';}
+    const r=g.querySelector('.shc').getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight;
+    let L=r.left+r.width/2-tw/2;L=Math.max(6,Math.min(L,window.innerWidth-tw-6));let T=r.top-th-10;if(T<6)T=Math.min(e.clientY+16,window.innerHeight-th-6);
+    tip.style.left=L+'px';tip.style.top=T+'px';});}
+// опыт товара за SH_EXP_W недель (09.11.2026, решение владельца): цена, реклама, ДРР, показы, заказы, выручка и маржа ₽ по дате заказа
+// (product_margin_daily — как окно товара и «Позиции по дням»; свежие 7 дней — оценка модели); неделя без заказов, с маржой меньше чем
+// за 5 дней или с ≥ 2 днями без запаса на 4 дня продаж в опыт не берётся (серая строка)
+async function shExp(top,end){const W=[...Array(SH_EXP_W)].map((_,i)=>{const to=addDaysISO(end,-7*(SH_EXP_W-1-i));return {from:addDaysISO(to,-6),to};}),f=W[0].from;
+  const offs=top.map(x=>`"${encodeURIComponent(x.p.offer_id)}"`).join(','),skus=top.map(x=>x.p.raw.sku).join(','),pids=top.map(x=>x.p.product_id).join(',');
+  const [sa,ad,fu,st,md]=await Promise.all([
+    mktGet(`product_sales?offer_id=in.(${offs})&sale_date=gte.${f}&sale_date=lte.${end}&select=offer_id,sale_date,qty,revenue&order=sale_date,offer_id,warehouse_name`),
+    mktGet(`ozon_ad_spend?offer_id=in.(${skus})&spend_date=gte.${f}&spend_date=lte.${end}&select=offer_id,spend_date,amount&order=spend_date,offer_id`),
+    mktGet(`product_funnel_daily?sku=in.(${skus})&day=gte.${f}&day=lte.${end}&select=sku,day,hits_view&order=day,sku`).catch(e=>{if(e.noTable)return [];throw e;}),
+    mktGet(`stock_history?offer_id=in.(${offs})&report_date=gte.${f}&report_date=lte.${end}&select=offer_id,report_date,stock&order=report_date,offer_id,warehouse_name`),
+    mktGet(`product_margin_daily?product_id=in.(${pids})&day=gte.${f}&day=lte.${end}&select=product_id,day,mar,gmv,est&order=day,product_id`).catch(e=>{if(e.noTable)return [];throw e;})]);
+  const M=new Map();
+  top.forEach(x=>{const o=x.p.offer_id,s=String(x.p.raw.sku),id=x.p.product_id,sd=new Map();st.filter(z=>z.offer_id===o).forEach(z=>sd.set(z.report_date,(sd.get(z.report_date)||0)+Number(z.stock||0)));
+    M.set(id,W.map(w=>{const inW=d=>d>=w.from&&d<=w.to,S=(Lst,k,fl,v)=>Lst.filter(z=>fl(z)&&inW(z[k])).reduce((a2,z)=>a2+Number(z[v]||0),0);
+      const q=S(sa,'sale_date',z=>z.offer_id===o,'qty'),r=S(sa,'sale_date',z=>z.offer_id===o,'revenue'),ads=S(ad,'spend_date',z=>String(z.offer_id)===s,'amount'),v=S(fu,'day',z=>String(z.sku)===s,'hits_view');
+      const mr=md.filter(z=>z.product_id===id&&inW(z.day)),mar=mr.reduce((a2,z)=>a2+Number(z.mar||0),0),gmv=mr.reduce((a2,z)=>a2+Number(z.gmv||0),0);
+      let out=0;sd.forEach((val,d)=>{if(inW(d)&&val<x.norm)out++;});
+      return {...w,q,r,ads,v,mar:mr.length?mar:null,gmv,mdays:mr.length,est:mr.filter(z=>z.est).length,out,p:q>0?r/q:null,drr:r>0?ads/r*100:null,ok:q>0&&mr.length>=5&&out<2};}));});
+  return M;}
+function shExpTable(E,best){if(!E.length)return '';const rub=v=>mktN(v)+' ₽';
+  return `<details open style="margin-top:4px"><summary class="mkof">Опыт товара за ${E.length} нед (маржа ₽ — по дате заказа, как окно товара; ≈ — есть дни-оценки модели; зелёная — лучшая маржа, серая — не в опыте)</summary><table class="shwk"><thead><tr><th>Неделя</th><th>Цена</th><th>Реклама</th><th>ДРР</th><th>Показы</th><th>Заказы, шт</th><th>Выручка</th><th>Маржа</th></tr></thead><tbody>`
+    +E.map(w=>`<tr style="${w===best?'background:#E2EFDA;':''}${w.ok?'':'color:#94a3b8;'}" title="${w.ok?'':esc('не в опыте: '+(w.q<=0?'нет заказов':w.mdays<5?'маржа меньше чем за 5 дней':'дней без запаса на 4 дня — '+w.out))}"><td>${ddmm(w.from)}–${ddmm(w.to)}</td><td>${rub(w.p)}</td><td>${rub(w.ads)}</td><td>${mktN(w.drr,1)}%</td><td>${w.v?mktN(w.v):'—'}</td><td>${mktN(w.q)}</td><td>${rub(w.r)}</td><td>${w.mar==null?'—':(w.est?'≈ ':'')+rub(w.mar)+` <span class="mkof">(${mktN(w.gmv>0?w.mar/w.gmv*100:null,1)}%)</span>`}</td></tr>`).join('')+'</tbody></table></details>';}
 // разбор падения доли: А — предыдущие 7 дней, Б — последние 7
 async function shRecs(C,B,A,ms,defBy){const catG=A.cat>0?B.cat/A.cat:null;
   let h=`<div class="mkrec">${ddmm(B.from)}–${ddmm(B.to)} к ${ddmm(A.from)}–${ddmm(A.to)}: категория <b>${shSg(shP(A.cat,B.cat))}%</b>, мы <b>${shSg(shP(A.our,B.our))}%</b>, доля ${mktN(A.sh,1)}% → <b>${mktN(B.sh,1)}%</b> (${shSg(B.sh-A.sh,1)} п. п.).`;
@@ -3141,36 +3181,43 @@ async function shRecs(C,B,A,ms,defBy){const catG=A.cat>0?B.cat/A.cat:null;
   const sumLoss=lost.reduce((s,x)=>s+x.loss,0);
   h+=`<div class="mkof">Наших товаров в категории: ${P.length} (по ${how}); потеряли к рынку ${lost.length}, всего ≈ ${mktN(-sumLoss)} ₽. Разбор — ${top.length} с наибольшей потерей. Потеря = выручка за 7 дн − выручка пред. 7 дн × рост категории (${shSg(shP(A.cat,B.cat))}%).</div>`;
   const rub=v=>mktN(v)+' ₽',pc=(x,y)=>shSg(shP(x,y))+'%',low=(x,y)=>x>0&&y!=null&&y<x*(1-SH_TOL);
+  const EX=top.length?await shExp(top,B.to):new Map();
   top.forEach(x=>{const {a,b,p,L,I}=x,Ac=[],pA=a.q>0?a.r/a.q:null,pB=b.q>0?b.r/b.q:null;
     // 1. наличие
     if(b.out>=2&&b.out>a.out){const dr=b.inD>0?b.inR/b.inD:a.r/7,e=dr*b.out;
-      Ac.push({first:true,e,t:`<b>Наличие</b>: сейчас ${b.out} дн. из ${b.snap} без запаса на ${SH_STOCK_DAYS} дня продаж (неделей раньше — ${a.out}) → цель 0. Зачем: без остатка товар выпадает из выдачи. <b>Упущено ≈ ${rub(e)}${pB?' / '+mktN(e/pB)+' шт':''}</b> (выручка в день с запасом × дни без него).`});}
-    // 2. цена
-    const Cm=L&&L.b!=null?{b:+L.b,r0:+L.r0,t:+L.t,u:+L.u,comm:{low:+L.comm_low,high:+L.comm_high}}:null,dB=b.r>0?b.ads/b.r*100:null;
-    if(pA&&pB&&pB>pA*(1+SH_TOL)){const m0=Cm?unitPct(Cm,pA,dB||0):null,m1=Cm?unitPct(Cm,pB,dB||0):null;
-      Ac.push({t:`<b>Цена</b>: сейчас ${rub(pB)} (${pc(pA,pB)}) → цель ≈ ${rub(pA)}, как неделей раньше. Зачем: после подорожания заказы ${pc(a.q,b.q)}.${m1!=null?` Маржинальность по модели при ДРР ${mktN(dB,1)}%: ${mktN(m1,1)}% → ${mktN(m0,1)}%${m0<NET_FLOOR?' — ниже 5%, возврат цены убыточен':''}.`:''}`});}
-    // 3. реклама — расход урезан; лимиты от цены (как РНП)
-    if(a.ads>0&&b.ads<a.ads*(1-SH_TOL)){const pre=Cm&&pB?unitPct(Cm,pB,0):null,be=pre!=null?Math.max(0,(pre-NET_FLOOR)*Cm.b):null,pp=L&&L.plan_pct!=null&&pre!=null?Math.max(0,(pre-Number(L.plan_pct))*Cm.b):null;
-      // к лимитам от цены дня (как РНП): ниже планового — вернуть расход; между плановым и безубыточным — вернуть можно ценой маржинальности
-      // ниже плана (решение за менеджером: доля или маржа); выше безубыточного — не увеличивать; нет модели — без вывода о лимитах
-      const z=pre==null?'none':dB==null||(pp!=null&&dB<pp)?'room':be!=null&&dB<be?'mid':'over',lims=pre!=null?` <span class="mkof">(лимиты при цене ${rub(pB)}: плановый ${pp!=null?mktN(pp,1)+'%':'— нет плана'} / безубыточный ${mktN(be,1)}%)</span>`:' <span class="mkof">(модели лимитов нет)</span>';
-      const tgt={room:`цель ≈ ${rub(a.ads)}, как неделей раньше`,mid:`можно вернуть до ≈ ${rub(a.ads)}, если важнее доля`,over:'не увеличивать — ДРР выше безубыточного',none:`цель ≈ ${rub(a.ads)}, как неделей раньше — сначала сверить с лимитами на столе 1`}[z];
-      const why={room:'расход урезан — меньше показов и заказов; запас до планового лимита есть',mid:'расход урезан — меньше показов; ДРР уже выше планового лимита, но ниже безубыточного: возврат расхода вернёт охват ценой маржинальности ниже плана',over:'урезанный расход объясняет часть падения, но реклама и так выше безубыточного лимита — больше тратить в убыток; сначала цена или юнит-экономика',none:'расход урезан — меньше показов и заказов'}[z];
-      Ac.push({ads:true,t:`<b>Реклама</b>: сейчас ${rub(b.ads)} за 7 дн (${pc(a.ads,b.ads)}, ДРР ${mktN(dB,1)}%) → ${tgt}${lims}. Зачем: ${why}.`});}
+      Ac.push({first:true,e,t:`<b>Наличие</b>: сейчас ${b.out} дн. из ${b.snap} без запаса на ${SH_STOCK_DAYS} дня продаж (неделей раньше — ${a.out}) → цель 0. Зачем: без остатка товар выпадает из выдачи. <b>Упущено ≈ ${rub(e)} выручки${pB?' / '+mktN(e/pB)+' шт':''}</b> (выручка в день с запасом × дни без него).`});}
+    // 2–3. цена и реклама — по опыту товара (09.11.2026, решение владельца: решать по марже в ₽, а не по выручке и доле; до этого — зоны ДРР
+    // при текущей цене, без маржи и опыта): ориентир — неделя с лучшей маржой ₽ из SH_EXP_W (без нехватки остатков), её цена и реклама;
+    // предупреждение — неделя с большим числом заказов, но меньшей маржой; сценарии модели — снижение цены и сколько заказов нужно, чтобы маржа не упала
+    const Cm=L&&L.b!=null?{b:+L.b,r0:+L.r0,t:+L.t,u:+L.u,comm:{low:+L.comm_low,high:+L.comm_high}}:null,dB=b.r>0?b.ads/b.r*100:null,adsDrop=a.ads>0&&b.ads<a.ads*(1-SH_TOL);
+    const E=EX.get(p.product_id)||[],cur=E[E.length-1],val=E.filter(w=>w.ok),best=val.reduce((m,w)=>!m||w.mar>m.mar?w:m,null),Nt=[];
+    const limAt=P=>{if(!Cm||!P)return '';const pre=unitPct(Cm,P,0),be=Math.max(0,(pre-NET_FLOOR)*Cm.b),pp=L.plan_pct!=null?Math.max(0,(pre-Number(L.plan_pct))*Cm.b):null;return ` <span class="mkof">(лимиты ДРР при цене ${rub(P)}: плановый ${pp!=null?mktN(pp,1)+'%':'— нет плана'} / безубыточный ${mktN(be,1)}%)</span>`;};
+    if(best&&cur&&cur.mar!=null){const dM=best.mar-cur.mar;
+      if(best!==cur&&dM>Math.max(SH_EXP_MIN,Math.abs(cur.mar)*0.05)){const dp=cur.p&&best.p?best.p/cur.p-1:0,da=cur.ads>0?best.ads/cur.ads-1:(best.ads>0?1:0);
+        const lev=[Math.abs(dp)>0.03?`цена ${rub(cur.p)} → ≈ ${rub(best.p)}`:`цена ≈ ${rub(cur.p)} (без изменений)`,Math.abs(da)>SH_TOL?`реклама ${rub(cur.ads)} → ≈ ${rub(best.ads)} за 7 дн`:`реклама ≈ ${rub(cur.ads)} за 7 дн (без изменений)`];
+        Ac.push({exp:true,t:`<b>Цена и реклама — по опыту товара</b>: ${lev.join(', ')}; ДРР ${mktN(cur.drr,1)}% → ${mktN(best.drr,1)}%. Зачем: такая связка ${ddmm(best.from)}–${ddmm(best.to)} дала лучшую маржу за ${E.length} нед — ${rub(best.mar)} против ${cur.est?'≈ ':''}${rub(cur.mar)} сейчас. <b>Эффект ≈ +${rub(dM)} маржи за 7 дн</b>, если повторится (совпадение по времени, не доказанная причина — проверить SMART-гипотезой).${limAt(best.p)}`});}
+      else if(best===cur)Ac.push({exp:true,t:`<b>Цена и реклама</b>: текущая связка (цена ${rub(cur.p)}, реклама ${rub(cur.ads)} за 7 дн) дала лучшую маржу за ${E.length} нед — ${cur.est?'≈ ':''}${rub(cur.mar)}; менять ради доли не нужно.${limAt(cur.p)}`});
+      const mo=val.filter(w=>w!==best&&w.q>best.q&&w.mar<best.mar).sort((u,v)=>v.q-u.q)[0];
+      if(mo)Nt.push(`⚠ <b>Опыт</b>: ${ddmm(mo.from)}–${ddmm(mo.to)} при цене ${rub(mo.p)} и рекламе ${rub(mo.ads)} заказов было больше (${mktN(mo.q)} против ${mktN(best.q)}), а маржа меньше — ${rub(mo.mar)} против ${rub(best.mar)}: больше заказов и доли — не больше маржи.`);}
+    else if(adsDrop&&Cm&&pB&&a.r>0){const mA=a.r*Cm.b*unitPct(Cm,pB,a.ads/a.r*100)/100,mB=b.r*Cm.b*unitPct(Cm,pB,dB||0)/100;
+      Nt.push(`<b>Реклама</b> урезана: ${rub(a.ads)} → ${rub(b.ads)} за 7 дн. По модели: если с прежним расходом вернутся и заказы прошлой недели, маржа ≈ ${rub(mA)} против ≈ ${rub(mB)} сейчас.${limAt(pB)} Опыта товара для сравнения мало.`);}
+    if(Cm&&pB){const mo=P=>P*Cm.b*unitPct(Cm,P,dB||0)/100,m0=mo(pB),sc=SH_PRICE_STEPS.map(k=>{const P=pB*(1-k),m1=mo(P);return `−${k*100}% (${rub(P)}): маржа на заказ ${rub(m0)} → ${rub(m1)}${m1>0&&m0>0?`, заказов нужно больше на ${mktN((m0/m1-1)*100)}%`:' — заказ в минус'}`;});
+      Nt.push(`<b>Снизить цену ради охвата?</b> По модели при ДРР ${mktN(dB,1)}%: ${sc.join('; ')} — чтобы маржа в ₽ не упала. ${val.length>=3?'Сверить с опытом в таблице.':'Опыта мало — проверить SMART-гипотезой.'}`);}
     // 4. показы
     const cap=e=>Math.min(e,-x.loss);   // эффект одного шага — не больше потери к рынку (линейная оценка при сильном падении завышает)
-    if(low(a.v,b.v)){const e=cap(b.r*(a.v/b.v-1));Ac.push({e,t:`<b>Показы</b>: сейчас ${mktN(b.v)} (${pc(a.v,b.v)}) → цель ≥ ${mktN(a.v)}, как неделей раньше. Зачем: охват упал${Ac.some(z=>z.ads)?' вместе с рекламой':''} — меньше людей видят товар. <b>Эффект ≈ +${rub(e)}</b> при прочих равных (не больше потери).`});}
+    if(low(a.v,b.v)){const e=cap(b.r*(a.v/b.v-1));Ac.push({e,t:`<b>Показы</b>: сейчас ${mktN(b.v)} (${pc(a.v,b.v)}) → цель ≥ ${mktN(a.v)}, как неделей раньше. Зачем: охват упал${adsDrop?' вместе с рекламой ('+pc(a.ads,b.ads)+')':''} — меньше людей видят товар. <b>Эффект ≈ +${rub(e)} выручки</b> при прочих равных (не больше потери; маржа — в опыте товара).`});}
     // 5. конверсия: карточка → корзина, иначе показ → заказ
     const cA=a.pdp>0?a.cart/a.pdp:null,cB=b.pdp>0?b.cart/b.pdp:null,vA=a.v>0?a.ordF/a.v:null,vB=b.v>0?b.ordF/b.v:null;
-    if(cA&&cB&&low(cA,cB)){const e=cap(b.r*(cA/cB-1));Ac.push({e,t:`<b>Карточка → корзина</b>: сейчас ${mktN(cB*100,1)}% → цель ≥ ${mktN(cA*100,1)}%, как неделей раньше. Зачем: карточка стала хуже убеждать — проверить цену, отзывы и рейтинг, фото, сроки доставки. <b>Эффект ≈ +${rub(e)}</b> при прочих равных (не больше потери).`});}
-    else if(vA&&vB&&low(vA,vB)){const e=cap(b.r*(vA/vB-1));Ac.push({e,t:`<b>Показ → заказ</b>: сейчас ${mktN(vB*100,2)}% → цель ≥ ${mktN(vA*100,2)}%, как неделей раньше. Зачем: товар видят, но покупают реже — цена к конкурентам, отзывы, сроки доставки. <b>Эффект ≈ +${rub(e)}</b> при прочих равных (не больше потери).`});}
+    if(cA&&cB&&low(cA,cB)){const e=cap(b.r*(cA/cB-1));Ac.push({e,t:`<b>Карточка → корзина</b>: сейчас ${mktN(cB*100,1)}% → цель ≥ ${mktN(cA*100,1)}%, как неделей раньше. Зачем: карточка стала хуже убеждать — проверить цену, отзывы и рейтинг, фото, сроки доставки. <b>Эффект ≈ +${rub(e)} выручки</b> при прочих равных (не больше потери; маржа — в опыте товара).`});}
+    else if(vA&&vB&&low(vA,vB)){const e=cap(b.r*(vA/vB-1));Ac.push({e,t:`<b>Показ → заказ</b>: сейчас ${mktN(vB*100,2)}% → цель ≥ ${mktN(vA*100,2)}%, как неделей раньше. Зачем: товар видят, но покупают реже — цена к конкурентам, отзывы, сроки доставки. <b>Эффект ≈ +${rub(e)} выручки</b> при прочих равных (не больше потери; маржа — в опыте товара).`});}
     // 6. ценовой индекс — есть ли такой же товар дешевле (подсказка, без эффекта)
     if(I&&pB&&((I.ozon_min&&I.ozon_min<pB*(1-SH_TOL/2))||(I.ext_min&&I.ext_min<pB*(1-SH_TOL/2))))Ac.push({t:`<b>Есть дешевле</b>: такой же товар ${[I.ozon_min?'у других продавцов Ozon — от '+rub(I.ozon_min):'',I.ext_min?'на других площадках — от '+rub(I.ext_min):''].filter(Boolean).join(', ')} (наша цена 7 дн ${rub(pB)}; индекс Ozon на ${mktD(I.day)}). Зачем: покупатель видит цену ниже — проверить, сравнима ли наша цена.`});
-    Ac.sort((u,v)=>(v.first?1:0)-(u.first?1:0)||(v.e||0)-(u.e||0));
+    Ac.sort((u,v)=>(v.first?1:0)-(u.first?1:0)||(v.exp?1:0)-(u.exp?1:0)||(v.e||0)-(u.e||0));   // наличие, затем цена и реклама по опыту, затем по эффекту
     const li=z=>`<li>${z.t}</li>`,tp=Ac.slice(0,SH_ACT),rs=Ac.slice(SH_ACT);
     h+=`<div class="mkrec"><b>${esc(p.offer_id)}</b>${ms.some(m=>m&&m.product_id===p.product_id)?' <span class="mkof">(этот товар)</span>':''}: выручка ${rub(a.r)} → ${rub(b.r)} (${pc(a.r,b.r)}), заказы ${mktN(a.q)} → ${mktN(b.q)} шт; к рынку потеряно ≈ <b>${rub(-x.loss)}</b>.`
       +(Ac.length?`<ul>${tp.map(li).join('')}</ul>${rs.length?`<details><summary class="mkof">ещё ${rs.length}</summary><ul>${rs.map(li).join('')}</ul></details>`:''}`
         :` По нашим данным причин нет (наличие, цена, реклама, показы, конверсия — без изменений больше ${Math.round(SH_TOL*100)}%): заказы ушли к конкурентам — смотрите стол 2 (цены и воронка конкурентов).`)
+      +Nt.map(n=>`<div style="margin-top:4px;font-size:.92em">${n}</div>`).join('')+shExpTable(E,best)
       +`${!a.snap&&!b.snap?'<div class="mkof">Снимков остатков за период нет — наличие не проверено.</div>':''}${!a.v&&!b.v?'<div class="mkof">Воронки (показы, конверсия) за период нет.</div>':''}</div>`;});
   // этот товар, если его нет среди разобранных
   ms.forEach(m=>{if(!m||top.some(x=>x.p.product_id===m.product_id))return;const x=R.find(z=>z.p.product_id===m.product_id);if(!x)return;
