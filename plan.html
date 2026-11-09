@@ -3000,10 +3000,11 @@ async function embedPulse(){const b=document.getElementById('embedBox');
     +`<div class="psection" id="embedNotes"><div id="embedNotesList"><div class="psectitle">📝 Комментарии менеджера</div><div class="psub">загрузка…</div></div><div id="embedNotesForm"></div></div></div>`
     +`<div class="embedright"><div class="psection embedunit"><div class="psectitle">🧮 Юнит-экономика</div><div id="unitbox_${pid}" class="psub">загрузка…</div></div>`
     +`<div class="psection" id="embedPlan"></div></div></div>`
-    +`<div class="embedpg embedpg2"><div class="psection" id="embedMarket" style="margin:0"></div></div></div>`
-    +`<div class="embeddots"><button class="on" onclick="embedPage(0)" title="Рабочий стол 1: гипотезы, комментарии, юнит-экономика, план">1</button><button onclick="embedPage(1)" title="Рабочий стол 2: аналитика товара">2</button></div>`;
+    +`<div class="embedpg embedpg2"><div class="psection" id="embedMarket" style="margin:0"></div></div>`
+    +`<div class="embedpg embedpg2"><div class="psection" id="embedShare" style="margin:0"></div></div></div>`
+    +`<div class="embeddots"><button class="on" onclick="embedPage(0)" title="Рабочий стол 1: гипотезы, комментарии, юнит-экономика, план">1</button><button onclick="embedPage(1)" title="Рабочий стол 2: аналитика категории">2</button><button onclick="embedPage(2)" title="Рабочий стол 3: доля в категории по дням">3</button></div>`;
   {const pg=document.getElementById('embedPages');pg.addEventListener('scroll',()=>{const i=Math.round(pg.scrollLeft/Math.max(1,pg.clientWidth));document.querySelectorAll('.embeddots button').forEach((x,j)=>x.classList.toggle('on',j===i));},{passive:true});}
-  EMBED_PID=pid;embedFormFor(pid);embedNotesFormFor(pid);embedPlan(pid);embedMarket(pid);await Promise.all([embedNotes(pid),loadPulse(pid).then(()=>loadUnit(pid)).then(()=>{const bt=document.querySelector('.embedunit [id^=unitbox_] button');if(bt){bt.classList.add('embednow');bt.textContent='Сейчас';bt.title='Вернуть значения по умолчанию: '+bt.title;}}),embedHyp(pid)]);tellH();}   // юнит-экономика — после РНП: не больше 3 запросов начислений одновременно
+  EMBED_PID=pid;embedFormFor(pid);embedNotesFormFor(pid);embedPlan(pid);embedMarket(pid);embedShare(pid);await Promise.all([embedNotes(pid),loadPulse(pid).then(()=>loadUnit(pid)).then(()=>{const bt=document.querySelector('.embedunit [id^=unitbox_] button');if(bt){bt.classList.add('embednow');bt.textContent='Сейчас';bt.title='Вернуть значения по умолчанию: '+bt.title;}}),embedHyp(pid)]);tellH();}   // юнит-экономика — после РНП: не больше 3 запросов начислений одновременно
 // гипотезы товара в окне РНП главной (06.11.2026, решение владельца: «сразу видеть, что менеджер делал с товаром»): только чтение;
 // гипотезы со сроком контроля или постановкой с начала таблицы РНП (за 10 дней до 1-го числа), новые сверху; у группы перчаток — по размерам
 async function embedHyp(pid){const box=document.getElementById('embedHypList');
@@ -3051,6 +3052,130 @@ async function embedNoteAdd(pid,sid,btn){const el=document.getElementById('embed
     if(!r.ok){alert('Ошибка сохранения: HTTP '+r.status);return;}el.value='';await embedNotes(pid);}finally{btn.disabled=false;}}
 async function embedNoteDel(pid,id){if(!confirm('Удалить комментарий?'))return;   // удаление — как «удалить» в «Заметках менеджера» plan.html (06.11.2026)
   const r=await fetch(SUPABASE_URL+`/rest/v1/product_protocol_notes?id=eq.${id}`,{method:'DELETE',headers:HD});if(!r.ok){alert('Ошибка удаления: HTTP '+r.status);return;}await embedNotes(pid);}
+// третий «рабочий стол» (09.11.2026, решение владельца): доля в категории по дням — как график кабинета Ozon «Аналитика конкурентов →
+// Категории» за 28 дней (market_category_daily; в API Ozon этих данных нет — снимает Claude через Chrome по запросу владельца, данные — SQL-файлом);
+// селектор категории (по умолчанию — категория товара: products.raw.type_id, иначе категория SKU в отчётах «Аналитика рынка»); недели —
+// последние 4 по 7 дней от последнего дня данных; «Мы» — кабинет этого юрлица.
+// Рекомендации — разбор падения доли (последние 7 дней к предыдущим 7): доля упала больше чем на SH_DROP_PP п. п. → наши товары категории,
+// которые потеряли больше всех к рынку (выручка PNL, product_sales: потеря = выручка Б − выручка А × рост категории), по SH_TOP худших —
+// причины неделя к неделе с порогом SH_TOL: наличие (дни без запаса на 4 дня продаж по плану), цена, реклама (расход и ДРР к лимитам от цены,
+// как РНП), показы, конверсия (product_funnel_daily), ценовой индекс; не больше SH_ACT действий «сейчас → цель → зачем», наличие первым,
+// дальше по эффекту в ₽ (оценка «при прочих равных»). Причин нет — «заказы ушли к конкурентам, смотрите стол 2».
+const SH_DROP_PP=1, SH_TOL=0.10, SH_TOP=3, SH_ACT=3, SH_STOCK_DAYS=4, SH_WD=['вс','пн','вт','ср','чт','пт','сб'];
+const shM=v=>v==null?'—':v>=1e6?(v/1e6).toLocaleString('ru-RU',{maximumFractionDigits:1})+' млн':Math.round(v/1e3)+' тыс';
+const shP=(a,b)=>a>0&&b!=null?b/a*100-100:null, shSg=(v,d=0)=>v==null||!isFinite(v)?'—':(v>0?'+':'')+mktN(v,d);
+async function embedShare(pid,cat){const box=document.getElementById('embedShare');if(!box)return;
+  if(!document.getElementById('shStyle')){const st=document.createElement('style');st.id='shStyle';st.textContent='#embedShare .mkhead{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:6px}#embedShare .mkhead .psectitle{margin:0}#embedShare .mkof{color:#94a3b8;font-weight:400;font-size:.85em}#embedShare select{font-size:.95em}#embedShare .shwk{border-collapse:collapse;font-size:.85em;margin:6px 0}#embedShare .shwk th{color:#94a3b8;font-weight:400;padding:2px 8px;border-bottom:1px solid rgba(84,66,115,.15);text-align:center}#embedShare .shwk td{padding:2px 8px;text-align:center;border-bottom:1px dashed rgba(84,66,115,.12)}#embedShare .shwk td:first-child{text-align:left}#embedShare .up{color:#16a34a}#embedShare .dn{color:#dc2626}#embedShare .mkgrp{margin:12px 0 4px;font-weight:700;color:#544273}#embedShare .mkrec{margin:6px 0;padding:6px 10px;border-radius:8px;background:#f8f6fb;line-height:1.45}#embedShare .mkrec ul{margin:4px 0 0 18px;padding:0}#embedShare .mkrec li{margin:2px 0}';document.head.appendChild(st);}
+  const G=PROTO_GROUPS[pid],ms=G?G.members:[BYID[pid]];
+  const head=(t='')=>`<div class="mkhead"><div class="psectitle">📈 Доля в категории</div>${t}</div>`;
+  box.innerHTML=head()+'<div class="psub">загрузка…</div>';
+  try{const y=localISO(new Date(Date.now()-864e5));
+    const D=await mktGet(`market_category_daily?day=gte.${addDaysISO(y,-70)}&select=category_id,category,day,cat_gmv,our_gmv,loaded_at&order=category_id,day`);
+    if(!D.length){box.innerHTML=head()+'<div class="psub">Данных нет. Обновление — по запросу в чате Claude: снятие кабинета Ozon «Аналитика конкурентов → Категории» (28 дней), данные — SQL-файлом.</div>';return;}
+    const cats=new Map();D.forEach(r=>{let c=cats.get(r.category_id);if(!c)cats.set(r.category_id,c={id:r.category_id,name:r.category,rows:new Map(),loaded:''});c.rows.set(r.day,r);c.name=r.category;if(r.loaded_at>c.loaded)c.loaded=r.loaded_at;});
+    cats.forEach(c=>{c.last=[...c.rows.keys()].sort().pop();c.days=[...Array(28)].map((_,i)=>{const d=addDaysISO(c.last,i-27),r=c.rows.get(d);return {d,cat:r?Number(r.cat_gmv):null,our:r?Number(r.our_gmv):null};});
+      c.cat28=c.days.reduce((s,x)=>s+(x.cat||0),0);c.our28=c.days.reduce((s,x)=>s+(x.our||0),0);});
+    // категория товара: type_id карточки Ozon (= id категории в кабинете), иначе — категория нашего SKU в отчётах «Аналитика рынка»
+    let def=ms.map(p=>p&&p.raw&&p.raw.type_id!=null?String(p.raw.type_id):null).find(t=>t&&cats.has(t))||null,defBy=def?'type_id':'';
+    if(!def){const skus=ms.map(p=>p&&p.raw&&p.raw.sku!=null?String(p.raw.sku):'').filter(Boolean);
+      if(skus.length){const mr=await mktGet(`market_report?sku=in.(${skus.join(',')})&select=category,report_date&order=report_date.desc,category`).catch(()=>[]);
+        const nm=mr.map(x=>x.category).find(n=>[...cats.values()].some(c=>c.name===n));if(nm){def=[...cats.values()].find(c=>c.name===nm).id;defBy='report';}}}
+    const list=[...cats.values()].sort((a,b)=>b.our28-a.our28),cid=cat&&cats.has(cat)?cat:(def||list[0].id),C=cats.get(cid);
+    const sel=`<select onchange="embedShare('${pid}',this.value)" title="Категории кабинета Ozon; по умолчанию — категория товара">${list.map(c=>`<option value="${esc(c.id)}"${c.id===cid?' selected':''}>${esc(c.name)} — ${mktN(c.cat28>0?c.our28/c.cat28*100:null,1)}%${c.id===def?' (товар)':''}</option>`).join('')}</select>`;
+    const info=`<span class="mkof">28 дн ${ddmm(C.days[0].d)}–${ddmm(C.last)} · кабинет ${SUPABASE_URL.includes('jaruwk')?'ООО':'ИП'}, снято ${C.loaded?new Date(C.loaded).toLocaleDateString('ru-RU'):'—'} · обновление — по запросу в чате Claude${!def?' · категория товара не найдена — выберите вручную':''}</span>`;
+    // недели — по 7 дней от последнего дня данных (в кабинете «7 д» с понедельника — ровно пн–вс)
+    const W=[3,2,1,0].map(k=>{const xs=C.days.slice(27-k*7-6,28-k*7),cs=xs.reduce((s,x)=>s+(x.cat||0),0),os=xs.reduce((s,x)=>s+(x.our||0),0);return {from:xs[0].d,to:xs[6].d,cat:cs,our:os,sh:cs>0?os/cs*100:null,n:xs.filter(x=>x.cat!=null).length};});
+    const cls=v=>v==null?'':v<0?'dn':'up';
+    const wk=`<table class="shwk"><thead><tr><th>Неделя</th><th>Категория, ₽</th><th>к пред.</th><th>Мы, ₽</th><th>к пред.</th><th>Доля</th><th>к пред., п. п.</th></tr></thead><tbody>${W.map((w,i)=>{const p=W[i-1];const a=p?shP(p.cat,w.cat):null,b=p?shP(p.our,w.our):null,c=p&&p.sh!=null&&w.sh!=null?w.sh-p.sh:null;
+      return `<tr><td>${ddmm(w.from)}–${ddmm(w.to)}${w.n<7?` <span class="mkof">(${w.n} дн)</span>`:''}</td><td>${mktN(w.cat)}</td><td class="${cls(a)}">${a==null?'':shSg(a)+'%'}</td><td>${mktN(w.our)}</td><td class="${cls(b)}">${b==null?'':shSg(b)+'%'}</td><td><b>${mktN(w.sh,1)}%</b></td><td class="${cls(c)}">${c==null?'':shSg(c,1)}</td></tr>`;}).join('')}</tbody></table>`;
+    box.innerHTML=head(sel+info)+shChart(C)+wk+`<div class="mkgrp">🧭 Рекомендации: разбор падения доли <span class="mkof">(последние 7 дней к предыдущим 7; наши товары категории — выручка PNL, наличие, цена, реклама, показы и конверсия)</span></div><div id="shRecs" class="psub">расчёт…</div>`;
+    tellH();
+    const el=document.getElementById('shRecs');
+    try{const h=await shRecs(C,W[3],W[2],ms,defBy);if(el&&el.isConnected){el.className='';el.innerHTML=h;}}catch(e){if(el)el.textContent='Ошибка разбора: '+e.message;}
+  }catch(e){box.innerHTML=head()+(e.noTable?'<div class="psub">Нет таблицы — запустите SQL 2026-11-09_market_category_daily.sql (ИП и ООО).</div>':`<div class="psub">Ошибка: ${esc(e.message)}</div>`);}
+  tellH();}
+// график как в кабинете: столбик — категория за день, внутри — наша часть, подпись — наша доля; выходные — красным
+function shChart(C){const S=C.days,W=1100,H=300,pl=50,pr=6,pt=22,pb=34,n=S.length,bw=(W-pl-pr)/n,mx=Math.max(1,...S.map(x=>x.cat||0))*1.1,yv=v=>pt+(H-pt-pb)*(1-v/mx);
+  const step=Math.pow(10,Math.floor(Math.log10(mx/3))),t=[1,2,5,10].map(k=>k*step).find(k=>mx/k<=4)||step*10;
+  let g='';for(let v=0;v<=mx;v+=t)g+=`<line x1="${pl}" x2="${W-pr}" y1="${yv(v)}" y2="${yv(v)}" stroke="rgba(84,66,115,.12)" stroke-dasharray="3 3"/><text x="${pl-6}" y="${yv(v)+4}" text-anchor="end" font-size="11" fill="#94a3b8">${v?shM(v):'0'}</text>`;
+  S.forEach((x,i)=>{const X=pl+i*bw+bw*0.1,w=bw*0.8,cx=X+w/2,wd=parseW(x.d).getDay(),we=wd===0||wd===6;
+    if(x.cat!=null){const sh=x.cat>0?x.our/x.cat*100:null;
+      g+=`<g><title>${ddmm(x.d)}, ${SH_WD[wd]}\nКатегория: ${mktN(x.cat)} ₽\nМы: ${mktN(x.our)} ₽\nДоля: ${mktN(sh,1)}%</title><rect x="${X}" y="${yv(x.cat)}" width="${w}" height="${yv(0)-yv(x.cat)}" fill="#bfe0f7" rx="2"/><rect x="${X}" y="${yv(x.our)}" width="${w}" height="${yv(0)-yv(x.our)}" fill="#56c3f0" rx="2"/>`
+        +`<text x="${cx}" y="${yv(x.cat)-4}" text-anchor="middle" font-size="9.5" fill="#544273">${shM(x.cat)}</text><text x="${cx}" y="${Math.min(yv(x.our)-3,yv(0)-14)}" text-anchor="middle" font-size="9.5" fill="#1C0D2E">${mktN(sh,1)}%</text></g>`;}
+    else g+=`<text x="${cx}" y="${yv(0)-4}" text-anchor="middle" font-size="9" fill="#94a3b8">нет</text>`;
+    g+=`<text x="${cx}" y="${H-pb+14}" text-anchor="middle" font-size="10.5" fill="${we?'#ef4444':'#544273'}">${x.d.slice(8,10)}</text><text x="${cx}" y="${H-pb+27}" text-anchor="middle" font-size="9" fill="${we?'#ef4444':'#94a3b8'}">${SH_WD[wd]}</text>`;});
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:42vh;display:block">${g}</svg><div class="mkof" style="margin:-2px 0 4px"><span style="display:inline-block;width:10px;height:10px;background:#56c3f0;border-radius:2px"></span> Мы &nbsp; <span style="display:inline-block;width:10px;height:10px;background:#bfe0f7;border-radius:2px"></span> ${esc(C.name)} · подпись — доля дня; наведите на столбик — точные суммы</div>`;}
+// разбор падения доли: А — предыдущие 7 дней, Б — последние 7
+async function shRecs(C,B,A,ms,defBy){const catG=A.cat>0?B.cat/A.cat:null;
+  let h=`<div class="mkrec">${ddmm(B.from)}–${ddmm(B.to)} к ${ddmm(A.from)}–${ddmm(A.to)}: категория <b>${shSg(shP(A.cat,B.cat))}%</b>, мы <b>${shSg(shP(A.our,B.our))}%</b>, доля ${mktN(A.sh,1)}% → <b>${mktN(B.sh,1)}%</b> (${shSg(B.sh-A.sh,1)} п. п.).`;
+  if(A.sh==null||B.sh==null||catG==null)return h+' Данных за обе недели нет — разбор невозможен.</div>';
+  if(B.sh-A.sh>-SH_DROP_PP)return h+` Доля не упала больше чем на ${SH_DROP_PP} п. п. — разбор не нужен.</div>`;
+  const gap=B.our-A.our*catG;h+=` Чтобы удержать долю, нужно было ≈ <b>${mktN(A.our*catG)} ₽</b> — не хватило ≈ <b>${mktN(-gap)} ₽</b> за 7 дней.</div>`;
+  // наши товары категории
+  let P=ROWS.filter(p=>p.raw&&p.raw.type_id!=null&&String(p.raw.type_id)===C.id),how='type_id карточки';
+  if(!P.length){const all=ROWS.filter(p=>p.raw&&p.raw.sku!=null),bySku=new Map(all.map(p=>[String(p.raw.sku),p]));
+    const mr=await mktGet(`market_report?category=eq.${encodeURIComponent(C.name)}&sku=in.(${[...bySku.keys()].join(',')})&select=sku`).catch(()=>[]);
+    P=[...new Set(mr.map(x=>x.sku))].map(s=>bySku.get(s)).filter(Boolean);how='отчёты «Аналитика рынка»';}
+  if(!P.length)return h+'<div class="psub">Наших товаров этой категории не нашёл (ни по type_id карточки, ни в отчётах «Аналитика рынка») — разбор по товарам невозможен.</div>';
+  const offs=P.map(p=>`"${encodeURIComponent(p.offer_id)}"`).join(','),skus=P.map(p=>p.raw.sku).filter(x=>x!=null).join(','),pids=P.map(p=>p.product_id).join(','),f=A.from,t=B.to,y=localISO(new Date(Date.now()-864e5));
+  const [sa,st,ad,fu,lim,ix]=await Promise.all([
+    mktGet(`product_sales?offer_id=in.(${offs})&sale_date=gte.${f}&sale_date=lte.${t}&select=offer_id,sale_date,qty,revenue&order=sale_date,offer_id,warehouse_name`),
+    mktGet(`stock_history?offer_id=in.(${offs})&report_date=gte.${f}&report_date=lte.${t}&select=offer_id,report_date,stock&order=report_date,offer_id,warehouse_name`),
+    skus?mktGet(`ozon_ad_spend?offer_id=in.(${skus})&spend_date=gte.${f}&spend_date=lte.${t}&select=offer_id,spend_date,amount&order=spend_date,offer_id`):[],
+    skus?mktGet(`product_funnel_daily?sku=in.(${skus})&day=gte.${f}&day=lte.${t}&select=sku,day,hits_view,hits_view_pdp,hits_tocart_pdp,ordered_units&order=day,sku`).catch(e=>{if(e.noTable)return [];throw e;}):[],
+    mktGet(`product_drr_limits?product_id=in.(${pids})&day=gte.${addDaysISO(y,-7)}&select=*&order=day.desc,product_id`).catch(e=>{if(e.noTable)return [];throw e;}),
+    mktGet(`product_price_index?product_id=in.(${pids})&day=gte.${addDaysISO(y,-6)}&select=*&order=day.desc,product_id`).catch(e=>{if(e.noTable)return [];throw e;})]);
+  const inA=d=>d>=A.from&&d<=A.to,inB=d=>d>=B.from&&d<=B.to;
+  const [Y,M]=MONTH.split('-').map(Number),dim=new Date(Y,M,0).getDate();
+  const R=P.map(p=>{const o=p.offer_id,s=String(p.raw.sku),z=()=>({q:0,r:0,ads:0,v:0,pdp:0,cart:0,ordF:0,out:0,snap:0,inR:0,inD:0}),a=z(),b=z(),byDay=new Map();
+    sa.filter(x=>x.offer_id===o).forEach(x=>{const k=inA(x.sale_date)?a:inB(x.sale_date)?b:null;if(!k)return;k.q+=Number(x.qty||0);k.r+=Number(x.revenue||0);byDay.set(x.sale_date,(byDay.get(x.sale_date)||0)+Number(x.revenue||0));});
+    ad.filter(x=>String(x.offer_id)===s).forEach(x=>{const k=inA(x.spend_date)?a:inB(x.spend_date)?b:null;if(k)k.ads+=Number(x.amount||0);});
+    fu.filter(x=>String(x.sku)===s).forEach(x=>{const k=inA(x.day)?a:inB(x.day)?b:null;if(!k)return;k.v+=Number(x.hits_view||0);k.pdp+=Number(x.hits_view_pdp||0);k.cart+=Number(x.hits_tocart_pdp||0);k.ordF+=Number(x.ordered_units||0);});
+    // наличие: запас на SH_STOCK_DAYS дня продаж по плану месяца (как «день с остатком» главной); нет плана — по заказам недели А
+    const pl=PLAN[p.product_id],norm=pl&&pl.plan_qty>0?pl.plan_qty/dim*SH_STOCK_DAYS:(a.q>0?a.q/7*SH_STOCK_DAYS:1);
+    const sd=new Map();st.filter(x=>x.offer_id===o).forEach(x=>sd.set(x.report_date,(sd.get(x.report_date)||0)+Number(x.stock||0)));
+    sd.forEach((v,d)=>{const k=inA(d)?a:inB(d)?b:null;if(!k)return;k.snap++;if(v<norm)k.out++;else if(inB(d)){k.inR+=byDay.get(d)||0;k.inD++;}});
+    const L=lim.find(x=>x.product_id===p.product_id),I=ix.find(x=>x.product_id===p.product_id);
+    return {p,a,b,norm,L,I,loss:b.r-a.r*catG};});
+  const lost=R.filter(x=>x.loss<0).sort((x,y)=>x.loss-y.loss),top=lost.slice(0,SH_TOP);
+  const sumLoss=lost.reduce((s,x)=>s+x.loss,0);
+  h+=`<div class="mkof">Наших товаров в категории: ${P.length} (по ${how}); потеряли к рынку ${lost.length}, всего ≈ ${mktN(-sumLoss)} ₽. Разбор — ${top.length} с наибольшей потерей. Потеря = выручка за 7 дн − выручка пред. 7 дн × рост категории (${shSg(shP(A.cat,B.cat))}%).</div>`;
+  const rub=v=>mktN(v)+' ₽',pc=(x,y)=>shSg(shP(x,y))+'%',low=(x,y)=>x>0&&y!=null&&y<x*(1-SH_TOL);
+  top.forEach(x=>{const {a,b,p,L,I}=x,Ac=[],pA=a.q>0?a.r/a.q:null,pB=b.q>0?b.r/b.q:null;
+    // 1. наличие
+    if(b.out>=2&&b.out>a.out){const dr=b.inD>0?b.inR/b.inD:a.r/7,e=dr*b.out;
+      Ac.push({first:true,e,t:`<b>Наличие</b>: сейчас ${b.out} дн. из ${b.snap} без запаса на ${SH_STOCK_DAYS} дня продаж (неделей раньше — ${a.out}) → цель 0. Зачем: без остатка товар выпадает из выдачи. <b>Упущено ≈ ${rub(e)}${pB?' / '+mktN(e/pB)+' шт':''}</b> (выручка в день с запасом × дни без него).`});}
+    // 2. цена
+    const Cm=L&&L.b!=null?{b:+L.b,r0:+L.r0,t:+L.t,u:+L.u,comm:{low:+L.comm_low,high:+L.comm_high}}:null,dB=b.r>0?b.ads/b.r*100:null;
+    if(pA&&pB&&pB>pA*(1+SH_TOL)){const m0=Cm?unitPct(Cm,pA,dB||0):null,m1=Cm?unitPct(Cm,pB,dB||0):null;
+      Ac.push({t:`<b>Цена</b>: сейчас ${rub(pB)} (${pc(pA,pB)}) → цель ≈ ${rub(pA)}, как неделей раньше. Зачем: после подорожания заказы ${pc(a.q,b.q)}.${m1!=null?` Маржинальность по модели при ДРР ${mktN(dB,1)}%: ${mktN(m1,1)}% → ${mktN(m0,1)}%${m0<NET_FLOOR?' — ниже 5%, возврат цены убыточен':''}.`:''}`});}
+    // 3. реклама — расход урезан; лимиты от цены (как РНП)
+    if(a.ads>0&&b.ads<a.ads*(1-SH_TOL)){const pre=Cm&&pB?unitPct(Cm,pB,0):null,be=pre!=null?Math.max(0,(pre-NET_FLOOR)*Cm.b):null,pp=L&&L.plan_pct!=null&&pre!=null?Math.max(0,(pre-Number(L.plan_pct))*Cm.b):null;
+      // к лимитам от цены дня (как РНП): ниже планового — вернуть расход; между плановым и безубыточным — вернуть можно ценой маржинальности
+      // ниже плана (решение за менеджером: доля или маржа); выше безубыточного — не увеличивать; нет модели — без вывода о лимитах
+      const z=pre==null?'none':dB==null||(pp!=null&&dB<pp)?'room':be!=null&&dB<be?'mid':'over',lims=pre!=null?` <span class="mkof">(лимиты при цене ${rub(pB)}: плановый ${pp!=null?mktN(pp,1)+'%':'— нет плана'} / безубыточный ${mktN(be,1)}%)</span>`:' <span class="mkof">(модели лимитов нет)</span>';
+      const tgt={room:`цель ≈ ${rub(a.ads)}, как неделей раньше`,mid:`можно вернуть до ≈ ${rub(a.ads)}, если важнее доля`,over:'не увеличивать — ДРР выше безубыточного',none:`цель ≈ ${rub(a.ads)}, как неделей раньше — сначала сверить с лимитами на столе 1`}[z];
+      const why={room:'расход урезан — меньше показов и заказов; запас до планового лимита есть',mid:'расход урезан — меньше показов; ДРР уже выше планового лимита, но ниже безубыточного: возврат расхода вернёт охват ценой маржинальности ниже плана',over:'урезанный расход объясняет часть падения, но реклама и так выше безубыточного лимита — больше тратить в убыток; сначала цена или юнит-экономика',none:'расход урезан — меньше показов и заказов'}[z];
+      Ac.push({ads:true,t:`<b>Реклама</b>: сейчас ${rub(b.ads)} за 7 дн (${pc(a.ads,b.ads)}, ДРР ${mktN(dB,1)}%) → ${tgt}${lims}. Зачем: ${why}.`});}
+    // 4. показы
+    const cap=e=>Math.min(e,-x.loss);   // эффект одного шага — не больше потери к рынку (линейная оценка при сильном падении завышает)
+    if(low(a.v,b.v)){const e=cap(b.r*(a.v/b.v-1));Ac.push({e,t:`<b>Показы</b>: сейчас ${mktN(b.v)} (${pc(a.v,b.v)}) → цель ≥ ${mktN(a.v)}, как неделей раньше. Зачем: охват упал${Ac.some(z=>z.ads)?' вместе с рекламой':''} — меньше людей видят товар. <b>Эффект ≈ +${rub(e)}</b> при прочих равных (не больше потери).`});}
+    // 5. конверсия: карточка → корзина, иначе показ → заказ
+    const cA=a.pdp>0?a.cart/a.pdp:null,cB=b.pdp>0?b.cart/b.pdp:null,vA=a.v>0?a.ordF/a.v:null,vB=b.v>0?b.ordF/b.v:null;
+    if(cA&&cB&&low(cA,cB)){const e=cap(b.r*(cA/cB-1));Ac.push({e,t:`<b>Карточка → корзина</b>: сейчас ${mktN(cB*100,1)}% → цель ≥ ${mktN(cA*100,1)}%, как неделей раньше. Зачем: карточка стала хуже убеждать — проверить цену, отзывы и рейтинг, фото, сроки доставки. <b>Эффект ≈ +${rub(e)}</b> при прочих равных (не больше потери).`});}
+    else if(vA&&vB&&low(vA,vB)){const e=cap(b.r*(vA/vB-1));Ac.push({e,t:`<b>Показ → заказ</b>: сейчас ${mktN(vB*100,2)}% → цель ≥ ${mktN(vA*100,2)}%, как неделей раньше. Зачем: товар видят, но покупают реже — цена к конкурентам, отзывы, сроки доставки. <b>Эффект ≈ +${rub(e)}</b> при прочих равных (не больше потери).`});}
+    // 6. ценовой индекс — есть ли такой же товар дешевле (подсказка, без эффекта)
+    if(I&&pB&&((I.ozon_min&&I.ozon_min<pB*(1-SH_TOL/2))||(I.ext_min&&I.ext_min<pB*(1-SH_TOL/2))))Ac.push({t:`<b>Есть дешевле</b>: такой же товар ${[I.ozon_min?'у других продавцов Ozon — от '+rub(I.ozon_min):'',I.ext_min?'на других площадках — от '+rub(I.ext_min):''].filter(Boolean).join(', ')} (наша цена 7 дн ${rub(pB)}; индекс Ozon на ${mktD(I.day)}). Зачем: покупатель видит цену ниже — проверить, сравнима ли наша цена.`});
+    Ac.sort((u,v)=>(v.first?1:0)-(u.first?1:0)||(v.e||0)-(u.e||0));
+    const li=z=>`<li>${z.t}</li>`,tp=Ac.slice(0,SH_ACT),rs=Ac.slice(SH_ACT);
+    h+=`<div class="mkrec"><b>${esc(p.offer_id)}</b>${ms.some(m=>m&&m.product_id===p.product_id)?' <span class="mkof">(этот товар)</span>':''}: выручка ${rub(a.r)} → ${rub(b.r)} (${pc(a.r,b.r)}), заказы ${mktN(a.q)} → ${mktN(b.q)} шт; к рынку потеряно ≈ <b>${rub(-x.loss)}</b>.`
+      +(Ac.length?`<ul>${tp.map(li).join('')}</ul>${rs.length?`<details><summary class="mkof">ещё ${rs.length}</summary><ul>${rs.map(li).join('')}</ul></details>`:''}`
+        :` По нашим данным причин нет (наличие, цена, реклама, показы, конверсия — без изменений больше ${Math.round(SH_TOL*100)}%): заказы ушли к конкурентам — смотрите стол 2 (цены и воронка конкурентов).`)
+      +`${!a.snap&&!b.snap?'<div class="mkof">Снимков остатков за период нет — наличие не проверено.</div>':''}${!a.v&&!b.v?'<div class="mkof">Воронки (показы, конверсия) за период нет.</div>':''}</div>`;});
+  // этот товар, если его нет среди разобранных
+  ms.forEach(m=>{if(!m||top.some(x=>x.p.product_id===m.product_id))return;const x=R.find(z=>z.p.product_id===m.product_id);if(!x)return;
+    h+=`<div class="mkof">${esc(m.offer_id)} (этот товар): выручка ${rub(x.a.r)} → ${rub(x.b.r)} (${pc(x.a.r,x.b.r)}); ${x.loss<0?'к рынку потеряно ≈ '+rub(-x.loss)+' — не в числе '+SH_TOP+' худших':'к рынку не отстал'}.</div>`;});
+  return h;}
 // второй «рабочий стол» под таблицей РНП (06.11.2026, решение владельца): свайп / прокрутка вбок (трекпад, касание) или кнопки 1 · 2
 function embedPage(i){const pg=document.getElementById('embedPages');if(!pg)return;const x=i*pg.clientWidth;pg.scrollTo({left:x,behavior:'smooth'});
   setTimeout(()=>{if(Math.abs(pg.scrollLeft-x)>2){pg.style.scrollBehavior='auto';pg.scrollLeft=x;pg.style.scrollBehavior='';}},500);}   // запасной путь: плавная прокрутка не сработала (фоновая вкладка)
