@@ -3000,11 +3000,11 @@ async function embedPulse(){const b=document.getElementById('embedBox');
     +`<div class="psection" id="embedNotes"><div id="embedNotesList"><div class="psectitle">📝 Комментарии менеджера</div><div class="psub">загрузка…</div></div><div id="embedNotesForm"></div></div></div>`
     +`<div class="embedright"><div class="psection embedunit"><div class="psectitle">🧮 Юнит-экономика</div><div id="unitbox_${pid}" class="psub">загрузка…</div></div>`
     +`<div class="psection" id="embedPlan"></div></div></div>`
-    +`<div class="embedpg embedpg2"><div class="psection" id="embedMarket" style="margin:0"></div></div>`
-    +`<div class="embedpg embedpg2"><div class="psection" id="embedShare" style="margin:0"></div></div></div>`
-    +`<div class="embeddots"><button class="on" onclick="embedPage(0)" title="Рабочий стол 1: гипотезы, комментарии, юнит-экономика, план">1</button><button onclick="embedPage(1)" title="Рабочий стол 2: аналитика категории">2</button><button onclick="embedPage(2)" title="Рабочий стол 3: доля в категории по дням">3</button></div>`;
+    +`<div class="embedpg embedpg2"><div class="psection" id="embedMarket" style="margin:0"></div><div class="psection" id="embedShare" style="margin:18px 0 0"></div></div>`
+    +`<div class="embedpg embedpg2"><div class="psection" id="embedRecs" style="margin:0"></div></div></div>`
+    +`<div class="embeddots"><button class="on" onclick="embedPage(0)" title="Рабочий стол 1: гипотезы, комментарии, юнит-экономика, план">1</button><button onclick="embedPage(1)" title="Рабочий стол 2: аналитика категории и доля в категории">2</button><button onclick="embedPage(2)" title="Рабочий стол 3: рекомендации по товару">3</button></div>`;
   {const pg=document.getElementById('embedPages');pg.addEventListener('scroll',()=>{const i=Math.round(pg.scrollLeft/Math.max(1,pg.clientWidth));document.querySelectorAll('.embeddots button').forEach((x,j)=>x.classList.toggle('on',j===i));},{passive:true});}
-  EMBED_PID=pid;embedFormFor(pid);embedNotesFormFor(pid);embedPlan(pid);embedMarket(pid);embedShare(pid);await Promise.all([embedNotes(pid),loadPulse(pid).then(()=>loadUnit(pid)).then(()=>{const bt=document.querySelector('.embedunit [id^=unitbox_] button');if(bt){bt.classList.add('embednow');bt.textContent='Сейчас';bt.title='Вернуть значения по умолчанию: '+bt.title;}}),embedHyp(pid)]);tellH();}   // юнит-экономика — после РНП: не больше 3 запросов начислений одновременно
+  EMBED_PID=pid;embedFormFor(pid);embedNotesFormFor(pid);embedPlan(pid);embedMarket(pid);embedShare(pid);embedRecs(pid);await Promise.all([embedNotes(pid),loadPulse(pid).then(()=>loadUnit(pid)).then(()=>{const bt=document.querySelector('.embedunit [id^=unitbox_] button');if(bt){bt.classList.add('embednow');bt.textContent='Сейчас';bt.title='Вернуть значения по умолчанию: '+bt.title;}}),embedHyp(pid)]);tellH();}   // юнит-экономика — после РНП: не больше 3 запросов начислений одновременно
 // гипотезы товара в окне РНП главной (06.11.2026, решение владельца: «сразу видеть, что менеджер делал с товаром»): только чтение;
 // гипотезы со сроком контроля или постановкой с начала таблицы РНП (за 10 дней до 1-го числа), новые сверху; у группы перчаток — по размерам
 async function embedHyp(pid){const box=document.getElementById('embedHypList');
@@ -3061,9 +3061,9 @@ async function embedNoteDel(pid,id){if(!confirm('Удалить коммента
 // причины неделя к неделе с порогом SH_TOL: наличие (дни без запаса на 4 дня продаж по плану), цена, реклама (расход и ДРР к лимитам от цены,
 // как РНП), показы, конверсия (product_funnel_daily), ценовой индекс; не больше SH_ACT действий «сейчас → цель → зачем», наличие первым,
 // дальше по эффекту в ₽ (оценка «при прочих равных»). Причин нет — «заказы ушли к конкурентам, смотрите стол 2».
-const SH_DROP_PP=1, SH_TOL=0.10, SH_TOP=3, SH_ACT=3, SH_STOCK_DAYS=4, SH_EXP_W=5, SH_EXP_MIN=1000, SH_MAR_DROP=0.10, SH_PRICE_STEPS=[0.05,0.10], SH_WD=['вс','пн','вт','ср','чт','пт','сб'];
+const SH_DROP_PP=1, SH_TOL=0.10, SH_TOP=3, SH_ACT=3, SH_STOCK_DAYS=4, SH_EXP_W=5, SH_EXP_MIN=1000, SH_MAR_DROP=0.10, SH_COMP_TOL=0.10, SH_SNAP_DAYS=3, SH_REP_OLD=10, SH_PRICE_STEPS=[0.05,0.10], SH_WD=['вс','пн','вт','ср','чт','пт','сб'];
 const shM=v=>v==null?'—':v>=1e6?(v/1e6).toLocaleString('ru-RU',{maximumFractionDigits:1})+' млн':Math.round(v/1e3)+' тыс';
-const shP=(a,b)=>a>0&&b!=null?b/a*100-100:null, shSg=(v,d=0)=>v==null||!isFinite(v)?'—':(v>0?'+':'')+mktN(v,d);
+const shP=(a,b)=>a>0&&b!=null?b/a*100-100:null, shSg=(v,d=0)=>{if(v==null||!isFinite(v))return '—';const r=Math.round(v*10**d)/10**d;return r===0?mktN(0,d):(r>0?'+':'')+mktN(r,d);};
 async function embedShare(pid,cat){const box=document.getElementById('embedShare');if(!box)return;
   if(!document.getElementById('shStyle')){const st=document.createElement('style');st.id='shStyle';st.textContent='#embedShare .mkhead{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:6px}#embedShare .mkhead .psectitle{margin:0}#embedShare .mkof{color:#94a3b8;font-weight:400;font-size:.85em}#embedShare select{font-size:.95em}#embedShare .shwk{border-collapse:collapse;font-size:.85em;margin:6px 0}#embedShare .shwk th{color:#94a3b8;font-weight:400;padding:2px 8px;border-bottom:1px solid rgba(84,66,115,.15);text-align:center}#embedShare .shwk td{padding:2px 8px;text-align:center;border-bottom:1px dashed rgba(84,66,115,.12)}#embedShare .shwk td:first-child{text-align:left}#embedShare .up{color:#16a34a}#embedShare .dn{color:#dc2626}#embedShare .mkgrp{margin:12px 0 4px;font-weight:700;color:#544273}#embedShare .mkrec{margin:6px 0;padding:6px 10px;border-radius:8px;background:#f8f6fb;line-height:1.45}#embedShare .mkrec ul{margin:4px 0 0 18px;padding:0}#embedShare .mkrec li{margin:2px 0}';document.head.appendChild(st);}
   const G=PROTO_GROUPS[pid],ms=G?G.members:[BYID[pid]];
@@ -3088,10 +3088,8 @@ async function embedShare(pid,cat){const box=document.getElementById('embedShare
     const cls=v=>v==null?'':v<0?'dn':'up';
     const wk=`<table class="shwk"><thead><tr><th>Неделя</th><th>Категория, ₽</th><th>к пред.</th><th>Мы, ₽</th><th>к пред.</th><th>Доля</th><th>к пред., п. п.</th></tr></thead><tbody>${W.map((w,i)=>{const p=W[i-1];const a=p?shP(p.cat,w.cat):null,b=p?shP(p.our,w.our):null,c=p&&p.sh!=null&&w.sh!=null?w.sh-p.sh:null;
       return `<tr><td>${ddmm(w.from)}–${ddmm(w.to)}${w.n<7?` <span class="mkof">(${w.n} дн)</span>`:''}</td><td>${mktN(w.cat)}</td><td class="${cls(a)}">${a==null?'':shSg(a)+'%'}</td><td>${mktN(w.our)}</td><td class="${cls(b)}">${b==null?'':shSg(b)+'%'}</td><td><b>${mktN(w.sh,1)}%</b></td><td class="${cls(c)}">${c==null?'':shSg(c,1)}</td></tr>`;}).join('')}</tbody></table>`;
-    box.innerHTML=head(sel+info)+shChart(C)+wk+`<div class="mkgrp">🧭 Рекомендации: разбор падения доли <span class="mkof">(последние 7 дней к предыдущим 7; наши товары категории — выручка PNL, наличие, цена, реклама, показы и конверсия)</span></div><div id="shRecs" class="psub">расчёт…</div>`;
-    shTipBind(C);tellH();
-    const el=document.getElementById('shRecs');
-    try{const h=await shRecs(C,W[3],W[2],ms,defBy);if(el&&el.isConnected){el.className='';el.innerHTML=h;}}catch(e){if(el)el.textContent='Ошибка разбора: '+e.message;}
+    box.innerHTML=head(sel+info)+shChart(C)+wk+`<div id="shCat" class="psub">маржа категории: расчёт…</div>`;
+    shTipBind(C);tellH();shCatLine(C);
   }catch(e){box.innerHTML=head()+(e.noTable?'<div class="psub">Нет таблицы — запустите SQL 2026-11-09_market_category_daily.sql (ИП и ООО).</div>':`<div class="psub">Ошибка: ${esc(e.message)}</div>`);}
   tellH();}
 // график как в кабинете: столбик — категория за день, внутри — наша часть, подпись — наша доля; выходные — красным
@@ -3131,7 +3129,7 @@ async function shExp(top,end){const W=[...Array(SH_EXP_W)].map((_,i)=>{const to=
   const [sa,ad,fu,st,md]=await Promise.all([
     mktGet(`product_sales?offer_id=in.(${offs})&sale_date=gte.${f}&sale_date=lte.${end}&select=offer_id,sale_date,qty,revenue&order=sale_date,offer_id,warehouse_name`),
     mktGet(`ozon_ad_spend?offer_id=in.(${skus})&spend_date=gte.${f}&spend_date=lte.${end}&select=offer_id,spend_date,amount&order=spend_date,offer_id`),
-    mktGet(`product_funnel_daily?sku=in.(${skus})&day=gte.${f}&day=lte.${end}&select=sku,day,hits_view&order=day,sku`).catch(e=>{if(e.noTable)return [];throw e;}),
+    mktGet(`product_funnel_daily?sku=in.(${skus})&day=gte.${f}&day=lte.${end}&select=sku,day,hits_view,hits_view_pdp,hits_tocart_pdp,ordered_units&order=day,sku`).catch(e=>{if(e.noTable)return [];throw e;}),
     mktGet(`stock_history?offer_id=in.(${offs})&report_date=gte.${f}&report_date=lte.${end}&select=offer_id,report_date,stock&order=report_date,offer_id,warehouse_name`),
     mktGet(`product_margin_daily?product_id=in.(${pids})&day=gte.${f}&day=lte.${end}&select=product_id,day,mar,gmv,est&order=day,product_id`).catch(e=>{if(e.noTable)return [];throw e;})]);
   const M=new Map();
@@ -3140,104 +3138,127 @@ async function shExp(top,end){const W=[...Array(SH_EXP_W)].map((_,i)=>{const to=
       const q=S(sa,'sale_date',z=>z.offer_id===o,'qty'),r=S(sa,'sale_date',z=>z.offer_id===o,'revenue'),ads=S(ad,'spend_date',z=>String(z.offer_id)===s,'amount'),v=S(fu,'day',z=>String(z.sku)===s,'hits_view');
       const mr=md.filter(z=>z.product_id===id&&inW(z.day)),mar=mr.reduce((a2,z)=>a2+Number(z.mar||0),0),gmv=mr.reduce((a2,z)=>a2+Number(z.gmv||0),0);
       let out=0;sd.forEach((val,d)=>{if(inW(d)&&val<x.norm)out++;});
-      return {...w,q,r,ads,v,mar:mr.length?mar:null,gmv,mdays:mr.length,est:mr.filter(z=>z.est).length,out,p:q>0?r/q:null,drr:r>0?ads/r*100:null,ok:q>0&&mr.length>=5&&out<2};}));});
+      const pdp=S(fu,'day',z=>String(z.sku)===s,'hits_view_pdp'),cart=S(fu,'day',z=>String(z.sku)===s,'hits_tocart_pdp'),ordF=S(fu,'day',z=>String(z.sku)===s,'ordered_units');
+      return {...w,q,r,ads,v,pdp,cart,ordF,mar:mr.length?mar:null,gmv,mdays:mr.length,est:mr.filter(z=>z.est).length,out,p:q>0?r/q:null,drr:r>0?ads/r*100:null,ok:q>0&&mr.length>=5&&out<2};}));
+    const dd=new Map();sa.filter(z=>z.offer_id===o).forEach(z=>{const c=dd.get(z.sale_date)||[0,0];c[0]+=Number(z.qty||0);c[1]+=Number(z.revenue||0);dd.set(z.sale_date,c);});
+    const ld=[...dd.keys()].filter(k=>dd.get(k)[0]>0).sort().pop();if(ld)M.get(id).lastP={day:ld,p:dd.get(ld)[1]/dd.get(ld)[0]};});
   return M;}
 function shExpTable(E,best){if(!E.length)return '';const rub=v=>mktN(v)+' ₽';
   return `<details open style="margin-top:4px"><summary class="mkof">Опыт товара за ${E.length} нед (маржа ₽ — по дате заказа, как окно товара; ≈ — есть дни-оценки модели; зелёная — лучшая маржа, серая — не в опыте)</summary><table class="shwk"><thead><tr><th>Неделя</th><th>Цена</th><th>Реклама</th><th>ДРР</th><th>Показы</th><th>Заказы, шт</th><th>Выручка</th><th>Маржа</th></tr></thead><tbody>`
     +E.map(w=>`<tr style="${w===best?'background:#E2EFDA;':''}${w.ok?'':'color:#94a3b8;'}" title="${w.ok?'':esc('не в опыте: '+(w.q<=0?'нет заказов':w.mdays<5?'маржа меньше чем за 5 дней':'дней без запаса на 4 дня — '+w.out))}"><td>${ddmm(w.from)}–${ddmm(w.to)}</td><td>${rub(w.p)}</td><td>${rub(w.ads)}</td><td>${mktN(w.drr,1)}%</td><td>${w.v?mktN(w.v):'—'}</td><td>${mktN(w.q)}</td><td>${rub(w.r)}</td><td>${w.mar==null?'—':(w.est?'≈ ':'')+rub(w.mar)+` <span class="mkof">(${mktN(w.gmv>0?w.mar/w.gmv*100:null,1)}%)</span>`}</td></tr>`).join('')+'</tbody></table></details>';}
-// разбор падения доли: А — предыдущие 7 дней, Б — последние 7
-async function shRecs(C,B,A,ms,defBy){const catG=A.cat>0?B.cat/A.cat:null;
-  let h=`<div class="mkrec">${ddmm(B.from)}–${ddmm(B.to)} к ${ddmm(A.from)}–${ddmm(A.to)}: категория <b>${shSg(shP(A.cat,B.cat))}%</b>, мы <b>${shSg(shP(A.our,B.our))}%</b>, доля ${mktN(A.sh,1)}% → <b>${mktN(B.sh,1)}%</b> (${shSg(B.sh-A.sh,1)} п. п.).`;
-  if(A.sh==null||B.sh==null||catG==null)return h+' Данных за обе недели нет — разбор невозможен.</div>';
-  // разбор запускается по доле ИЛИ по марже (09.11.2026, решение владельца: у бахил доля стабильна, а маржа категории на треть ниже лучшей недели)
-  const shDrop=B.sh-A.sh<=-SH_DROP_PP;
-  if(shDrop){const gap=B.our-A.our*catG;h+=` Чтобы удержать долю, нужно было ≈ <b>${mktN(A.our*catG)} ₽</b> — не хватило ≈ <b>${mktN(-gap)} ₽</b> за 7 дней.`;}
-  else h+=` Доля не упала больше чем на ${SH_DROP_PP} п. п.`;
-  h+='</div>';
-  // наши товары категории
-  let P=ROWS.filter(p=>p.raw&&p.raw.type_id!=null&&String(p.raw.type_id)===C.id),how='type_id карточки';
-  if(!P.length){const all=ROWS.filter(p=>p.raw&&p.raw.sku!=null),bySku=new Map(all.map(p=>[String(p.raw.sku),p]));
-    const mr=await mktGet(`market_report?category=eq.${encodeURIComponent(C.name)}&sku=in.(${[...bySku.keys()].join(',')})&select=sku`).catch(()=>[]);
-    P=[...new Set(mr.map(x=>x.sku))].map(s=>bySku.get(s)).filter(Boolean);how='отчёты «Аналитика рынка»';}
-  if(!P.length)return h+'<div class="psub">Наших товаров этой категории не нашёл (ни по type_id карточки, ни в отчётах «Аналитика рынка») — разбор по товарам невозможен.</div>';
-  const offs=P.map(p=>`"${encodeURIComponent(p.offer_id)}"`).join(','),skus=P.map(p=>p.raw.sku).filter(x=>x!=null).join(','),pids=P.map(p=>p.product_id).join(','),f=A.from,t=B.to,y=localISO(new Date(Date.now()-864e5));
-  const [sa,st,ad,fu,lim,ix]=await Promise.all([
-    mktGet(`product_sales?offer_id=in.(${offs})&sale_date=gte.${f}&sale_date=lte.${t}&select=offer_id,sale_date,qty,revenue&order=sale_date,offer_id,warehouse_name`),
-    mktGet(`stock_history?offer_id=in.(${offs})&report_date=gte.${f}&report_date=lte.${t}&select=offer_id,report_date,stock&order=report_date,offer_id,warehouse_name`),
-    skus?mktGet(`ozon_ad_spend?offer_id=in.(${skus})&spend_date=gte.${f}&spend_date=lte.${t}&select=offer_id,spend_date,amount&order=spend_date,offer_id`):[],
-    skus?mktGet(`product_funnel_daily?sku=in.(${skus})&day=gte.${f}&day=lte.${t}&select=sku,day,hits_view,hits_view_pdp,hits_tocart_pdp,ordered_units&order=day,sku`).catch(e=>{if(e.noTable)return [];throw e;}):[],
-    mktGet(`product_drr_limits?product_id=in.(${pids})&day=gte.${addDaysISO(y,-7)}&select=*&order=day.desc,product_id`).catch(e=>{if(e.noTable)return [];throw e;}),
-    mktGet(`product_price_index?product_id=in.(${pids})&day=gte.${addDaysISO(y,-6)}&select=*&order=day.desc,product_id`).catch(e=>{if(e.noTable)return [];throw e;})]);
-  const inA=d=>d>=A.from&&d<=A.to,inB=d=>d>=B.from&&d<=B.to;
-  const [Y,M]=MONTH.split('-').map(Number),dim=new Date(Y,M,0).getDate();
-  const R=P.map(p=>{const o=p.offer_id,s=String(p.raw.sku),z=()=>({q:0,r:0,ads:0,v:0,pdp:0,cart:0,ordF:0,out:0,snap:0,inR:0,inD:0}),a=z(),b=z(),byDay=new Map();
-    sa.filter(x=>x.offer_id===o).forEach(x=>{const k=inA(x.sale_date)?a:inB(x.sale_date)?b:null;if(!k)return;k.q+=Number(x.qty||0);k.r+=Number(x.revenue||0);byDay.set(x.sale_date,(byDay.get(x.sale_date)||0)+Number(x.revenue||0));});
-    ad.filter(x=>String(x.offer_id)===s).forEach(x=>{const k=inA(x.spend_date)?a:inB(x.spend_date)?b:null;if(k)k.ads+=Number(x.amount||0);});
-    fu.filter(x=>String(x.sku)===s).forEach(x=>{const k=inA(x.day)?a:inB(x.day)?b:null;if(!k)return;k.v+=Number(x.hits_view||0);k.pdp+=Number(x.hits_view_pdp||0);k.cart+=Number(x.hits_tocart_pdp||0);k.ordF+=Number(x.ordered_units||0);});
-    // наличие: запас на SH_STOCK_DAYS дня продаж по плану месяца (как «день с остатком» главной); нет плана — по заказам недели А
-    const pl=PLAN[p.product_id],norm=pl&&pl.plan_qty>0?pl.plan_qty/dim*SH_STOCK_DAYS:(a.q>0?a.q/7*SH_STOCK_DAYS:1);
-    const sd=new Map();st.filter(x=>x.offer_id===o).forEach(x=>sd.set(x.report_date,(sd.get(x.report_date)||0)+Number(x.stock||0)));
-    sd.forEach((v,d)=>{const k=inA(d)?a:inB(d)?b:null;if(!k)return;k.snap++;if(v<norm)k.out++;else if(inB(d)){k.inR+=byDay.get(d)||0;k.inD++;}});
-    const L=lim.find(x=>x.product_id===p.product_id),I=ix.find(x=>x.product_id===p.product_id);
-    return {p,a,b,norm,L,I,loss:b.r-a.r*catG};});
-  // маржа категории по неделям — сумма опыта товаров (маржа ₽ по дате заказа); лучшая — среди недель с маржой не меньше чем за 5 дней;
-  // падение маржи — последняя неделя ниже лучшей больше чем на SH_MAR_DROP
-  const EX=await shExp(R,B.to),nW=SH_EXP_W,CW=[...Array(nW)].map((_,i)=>{let mar=0,q=0,md=0,est=0,from='',to='';EX.forEach(E=>{const w=E[i];if(!w)return;from=w.from;to=w.to;mar+=w.mar||0;q+=w.q;md=Math.max(md,w.mdays);est+=w.est;});return {from,to,mar,q,md,est};});
-  const cw=CW[nW-1],bw=CW.filter(w=>w.md>=5).reduce((m,w)=>!m||w.mar>m.mar?w:m,null),marDrop=!!(bw&&bw!==cw&&cw.md>0&&cw.mar<bw.mar*(1-SH_MAR_DROP));
-  const rub=v=>mktN(v)+' ₽',pc=(x,y)=>shSg(shP(x,y))+'%',low=(x,y)=>x>0&&y!=null&&y<x*(1-SH_TOL);
-  if(bw){const mb=bw.q>0?bw.mar/bw.q:null,mc=cw.q>0?cw.mar/cw.q:null;
-    h+=`<div class="mkrec">Наша маржа в категории за 7 дн: ${cw.est?'≈ ':''}<b>${rub(cw.mar)}</b>${bw===cw?' — лучшая за '+nW+' нед.':` против ${rub(bw.mar)} в лучшую неделю ${ddmm(bw.from)}–${ddmm(bw.to)} (<b>${pc(bw.mar,cw.mar)}</b>): заказы ${mktN(bw.q)} → ${mktN(cw.q)} шт, маржа на заказ ${rub(mb)} → ${rub(mc)}.`}${marDrop?'':` Ниже лучшей не больше чем на ${Math.round(SH_MAR_DROP*100)}%.`}${cw.est?' <span class="mkof">(≈ — в последней неделе есть дни-оценки модели: выкупы ещё приходят)</span>':''}</div>`;}
-  if(!shDrop&&!marDrop)return h+'<div class="psub">Доля и маржа не упали — разбор не нужен.</div>';
-  // товары: при падении маржи — по отставанию от своей лучшей недели (маржа ₽), при падении доли — по потере к рынку; оба — сначала маржа
-  R.forEach(x=>{const E=EX.get(x.p.product_id)||[],c=E[E.length-1],b2=E.filter(w=>w.ok).reduce((m,w)=>!m||w.mar>m.mar?w:m,null);x.mg=c&&b2&&c.mar!=null&&b2!==c&&b2.mar>c.mar?{best:b2,cur:c,gap:b2.mar-c.mar}:null;});
-  const lost=R.filter(x=>x.loss<0).sort((x,y)=>x.loss-y.loss),topM=marDrop?R.filter(x=>x.mg).sort((u,v)=>v.mg.gap-u.mg.gap).slice(0,SH_TOP):[];
-  const top=[...topM,...(shDrop?lost.slice(0,SH_TOP).filter(x=>!topM.includes(x)):[])].slice(0,SH_TOP*2-1);
-  const sumLoss=lost.reduce((s,x)=>s+x.loss,0);
-  h+=`<div class="mkof">Наших товаров в категории: ${P.length} (по ${how}).${marDrop?` Разбор по марже — ${topM.length} с наибольшим отставанием от своей лучшей недели (маржа ₽).`:''}${shDrop?` По доле: потеряли к рынку ${lost.length}, всего ≈ ${mktN(-sumLoss)} ₽ выручки (выручка за 7 дн − выручка пред. 7 дн × рост категории ${shSg(shP(A.cat,B.cat))}%); в разборе — с наибольшей потерей.`:''}</div>`;
-  top.forEach(x=>{const {a,b,p,L,I}=x,Ac=[],pA=a.q>0?a.r/a.q:null,pB=b.q>0?b.r/b.q:null;
-    // 1. наличие
-    if(b.out>=2&&b.out>a.out){const dr=b.inD>0?b.inR/b.inD:a.r/7,e=dr*b.out;
-      Ac.push({first:true,e,t:`<b>Наличие</b>: сейчас ${b.out} дн. из ${b.snap} без запаса на ${SH_STOCK_DAYS} дня продаж (неделей раньше — ${a.out}) → цель 0. Зачем: без остатка товар выпадает из выдачи. <b>Упущено ≈ ${rub(e)} выручки${pB?' / '+mktN(e/pB)+' шт':''}</b> (выручка в день с запасом × дни без него).`});}
-    // 2–3. цена и реклама — по опыту товара (09.11.2026, решение владельца: решать по марже в ₽, а не по выручке и доле; до этого — зоны ДРР
-    // при текущей цене, без маржи и опыта): ориентир — неделя с лучшей маржой ₽ из SH_EXP_W (без нехватки остатков), её цена и реклама;
-    // предупреждение — неделя с большим числом заказов, но меньшей маржой; сценарии модели — снижение цены и сколько заказов нужно, чтобы маржа не упала
-    const Cm=L&&L.b!=null?{b:+L.b,r0:+L.r0,t:+L.t,u:+L.u,comm:{low:+L.comm_low,high:+L.comm_high}}:null,dB=b.r>0?b.ads/b.r*100:null,adsDrop=a.ads>0&&b.ads<a.ads*(1-SH_TOL);
-    const E=EX.get(p.product_id)||[],cur=E[E.length-1],val=E.filter(w=>w.ok),best=val.reduce((m,w)=>!m||w.mar>m.mar?w:m,null),Nt=[];
-    const limAt=P=>{if(!Cm||!P)return '';const pre=unitPct(Cm,P,0),be=Math.max(0,(pre-NET_FLOOR)*Cm.b),pp=L.plan_pct!=null?Math.max(0,(pre-Number(L.plan_pct))*Cm.b):null;return ` <span class="mkof">(лимиты ДРР при цене ${rub(P)}: плановый ${pp!=null?mktN(pp,1)+'%':'— нет плана'} / безубыточный ${mktN(be,1)}%)</span>`;};
-    if(best&&cur&&cur.mar!=null){const dM=best.mar-cur.mar;
-      if(best!==cur&&dM>Math.max(SH_EXP_MIN,Math.abs(cur.mar)*0.05)){const dp=cur.p&&best.p?best.p/cur.p-1:0,da=cur.ads>0?best.ads/cur.ads-1:(best.ads>0?1:0);
-        const lev=[Math.abs(dp)>0.03?`цена ${rub(cur.p)} → ≈ ${rub(best.p)}`:`цена ≈ ${rub(cur.p)} (без изменений)`,Math.abs(da)>SH_TOL?`реклама ${rub(cur.ads)} → ≈ ${rub(best.ads)} за 7 дн`:`реклама ≈ ${rub(cur.ads)} за 7 дн (без изменений)`];
-        Ac.push({exp:true,t:`<b>Цена и реклама — по опыту товара</b>: ${lev.join(', ')}; ДРР ${mktN(cur.drr,1)}% → ${mktN(best.drr,1)}%. Зачем: такая связка ${ddmm(best.from)}–${ddmm(best.to)} дала лучшую маржу за ${E.length} нед — ${rub(best.mar)} против ${cur.est?'≈ ':''}${rub(cur.mar)} сейчас. <b>Эффект ≈ +${rub(dM)} маржи за 7 дн</b>, если повторится (совпадение по времени, не доказанная причина — проверить SMART-гипотезой).${limAt(best.p)}`});}
-      else if(best===cur)Ac.push({exp:true,t:`<b>Цена и реклама</b>: текущая связка (цена ${rub(cur.p)}, реклама ${rub(cur.ads)} за 7 дн) дала лучшую маржу за ${E.length} нед — ${cur.est?'≈ ':''}${rub(cur.mar)}; менять ради доли не нужно.${limAt(cur.p)}`});
-      const mo=val.filter(w=>w!==best&&w.q>best.q*(1+SH_TOL)&&w.mar<best.mar*(1-SH_TOL)).sort((u,v)=>v.q-u.q)[0];   // заметно больше заказов (+10%) и заметно меньше маржи (−10%) — не шум
-      if(mo)Nt.push(`⚠ <b>Опыт</b>: ${ddmm(mo.from)}–${ddmm(mo.to)} при цене ${rub(mo.p)} и рекламе ${rub(mo.ads)} заказов было больше (${mktN(mo.q)} против ${mktN(best.q)}), а маржа меньше — ${rub(mo.mar)} против ${rub(best.mar)}: больше заказов и доли — не больше маржи.`);}
-    else if(adsDrop&&Cm&&pB&&a.r>0){const mA=a.r*Cm.b*unitPct(Cm,pB,a.ads/a.r*100)/100,mB=b.r*Cm.b*unitPct(Cm,pB,dB||0)/100;
-      Nt.push(`<b>Реклама</b> урезана: ${rub(a.ads)} → ${rub(b.ads)} за 7 дн. По модели: если с прежним расходом вернутся и заказы прошлой недели, маржа ≈ ${rub(mA)} против ≈ ${rub(mB)} сейчас.${limAt(pB)} Опыта товара для сравнения мало.`);}
-    if(Cm&&pB){const mo=P=>P*Cm.b*unitPct(Cm,P,dB||0)/100,m0=mo(pB),sc=SH_PRICE_STEPS.map(k=>{const P=pB*(1-k),m1=mo(P);return `−${k*100}% (${rub(P)}): маржа на заказ ${rub(m0)} → ${rub(m1)}${m1>0&&m0>0?`, заказов нужно больше на ${mktN((m0/m1-1)*100)}%`:' — заказ в минус'}`;});
-      Nt.push(`<b>Снизить цену ради охвата?</b> По модели при ДРР ${mktN(dB,1)}%: ${sc.join('; ')} — чтобы маржа в ₽ не упала. ${val.length>=3?'Сверить с опытом в таблице.':'Опыта мало — проверить SMART-гипотезой.'}`);}
-    // 4. показы
-    // эффект одного шага — не больше потери к рынку или отставания выручки от лучшей недели (линейная оценка при сильном падении завышает)
-    const capV=Math.max(-x.loss,x.mg?x.mg.best.r-b.r:0),cap=e=>Math.min(e,capV);
-    if(low(a.v,b.v)&&capV>0){const e=cap(b.r*(a.v/b.v-1));Ac.push({e,t:`<b>Показы</b>: сейчас ${mktN(b.v)} (${pc(a.v,b.v)}) → цель ≥ ${mktN(a.v)}, как неделей раньше. Зачем: охват упал${adsDrop?' вместе с рекламой ('+pc(a.ads,b.ads)+')':''} — меньше людей видят товар. <b>Эффект ≈ +${rub(e)} выручки</b> при прочих равных (не больше потери; маржа — в опыте товара).`});}
-    // 5. конверсия: карточка → корзина, иначе показ → заказ
-    const cA=a.pdp>0?a.cart/a.pdp:null,cB=b.pdp>0?b.cart/b.pdp:null,vA=a.v>0?a.ordF/a.v:null,vB=b.v>0?b.ordF/b.v:null;
-    if(cA&&cB&&low(cA,cB)&&capV>0){const e=cap(b.r*(cA/cB-1));Ac.push({e,t:`<b>Карточка → корзина</b>: сейчас ${mktN(cB*100,1)}% → цель ≥ ${mktN(cA*100,1)}%, как неделей раньше. Зачем: карточка стала хуже убеждать — проверить цену, отзывы и рейтинг, фото, сроки доставки. <b>Эффект ≈ +${rub(e)} выручки</b> при прочих равных (не больше потери; маржа — в опыте товара).`});}
-    else if(vA&&vB&&low(vA,vB)&&capV>0){const e=cap(b.r*(vA/vB-1));Ac.push({e,t:`<b>Показ → заказ</b>: сейчас ${mktN(vB*100,2)}% → цель ≥ ${mktN(vA*100,2)}%, как неделей раньше. Зачем: товар видят, но покупают реже — цена к конкурентам, отзывы, сроки доставки. <b>Эффект ≈ +${rub(e)} выручки</b> при прочих равных (не больше потери; маржа — в опыте товара).`});}
-    // 6. ценовой индекс — есть ли такой же товар дешевле (подсказка, без эффекта)
-    if(I&&pB&&((I.ozon_min&&I.ozon_min<pB*(1-SH_TOL/2))||(I.ext_min&&I.ext_min<pB*(1-SH_TOL/2))))Ac.push({t:`<b>Есть дешевле</b>: такой же товар ${[I.ozon_min?'у других продавцов Ozon — от '+rub(I.ozon_min):'',I.ext_min?'на других площадках — от '+rub(I.ext_min):''].filter(Boolean).join(', ')} (наша цена 7 дн ${rub(pB)}; индекс Ozon на ${mktD(I.day)}). Зачем: покупатель видит цену ниже — проверить, сравнима ли наша цена.`});
-    Ac.sort((u,v)=>(v.first?1:0)-(u.first?1:0)||(v.exp?1:0)-(u.exp?1:0)||(v.e||0)-(u.e||0));   // наличие, затем цена и реклама по опыту, затем по эффекту
-    const li=z=>`<li>${z.t}</li>`,tp=Ac.slice(0,SH_ACT),rs=Ac.slice(SH_ACT);
-    h+=`<div class="mkrec"><b>${esc(p.offer_id)}</b>${ms.some(m=>m&&m.product_id===p.product_id)?' <span class="mkof">(этот товар)</span>':''}: выручка ${rub(a.r)} → ${rub(b.r)} (${pc(a.r,b.r)}), заказы ${mktN(a.q)} → ${mktN(b.q)} шт; ${x.loss<0?`к рынку потеряно ≈ <b>${rub(-x.loss)}</b> выручки`:'к рынку не отстал'}.`
-      +(x.mg?(()=>{const {best:w1,cur:w0}=x.mg,mb=w1.q>0?w1.mar/w1.q:0,mc=w0.q>0?w0.mar/w0.q:0,eq=(w1.q-w0.q)*mb,em=w0.q*(mb-mc);   // отставание = (заказы лучшей − сейчас) × маржа на заказ лучшей + заказы сейчас × (маржа на заказ лучшей − сейчас)
-        return `<div style="margin-top:3px">До лучшей недели ${ddmm(w1.from)}–${ddmm(w1.to)} не хватает ≈ <b>${rub(x.mg.gap)} маржи</b>: заказы ${mktN(w1.q)} → ${mktN(w0.q)} шт (${eq>=0?'−':'+'}${rub(Math.abs(eq))}), маржа на заказ ${rub(mb)} → ${rub(mc)} (${em>=0?'−':'+'}${rub(Math.abs(em))}). ${em>eq?'<b>Главное — маржа на заказ</b>: цена, ДРР, себестоимость.':'<b>Главное — заказы</b>: охват, реклама, наличие.'}</div>`;})():'')
-      +(Ac.length?`<ul>${tp.map(li).join('')}</ul>${rs.length?`<details><summary class="mkof">ещё ${rs.length}</summary><ul>${rs.map(li).join('')}</ul></details>`:''}`
-        :` По нашим данным причин нет (наличие, цена, реклама, показы, конверсия — без изменений больше ${Math.round(SH_TOL*100)}%): заказы ушли к конкурентам — смотрите стол 2 (цены и воронка конкурентов).`)
-      +Nt.map(n=>`<div style="margin-top:4px;font-size:.92em">${n}</div>`).join('')+shExpTable(E,best)
-      +`${!a.snap&&!b.snap?'<div class="mkof">Снимков остатков за период нет — наличие не проверено.</div>':''}${!a.v&&!b.v?'<div class="mkof">Воронки (показы, конверсия) за период нет.</div>':''}</div>`;});
-  // этот товар, если его нет среди разобранных
-  ms.forEach(m=>{if(!m||top.some(x=>x.p.product_id===m.product_id))return;const x=R.find(z=>z.p.product_id===m.product_id);if(!x)return;
-    h+=`<div class="mkof">${esc(m.offer_id)} (этот товар): выручка ${rub(x.a.r)} → ${rub(x.b.r)} (${pc(x.a.r,x.b.r)}); ${x.loss<0?'к рынку потеряно ≈ '+rub(-x.loss)+' — не в числе '+SH_TOP+' худших':'к рынку не отстал'}.</div>`;});
-  return h;}
+// маржа категории на столе 2 (под долями; 09.11.2026): сумма опыта наших товаров категории (маржа ₽ по дате заказа) — последние 7 дней против лучшей недели из 5
+const shNorm=p=>{const [Y,M]=MONTH.split('-').map(Number),dim=new Date(Y,M,0).getDate(),pl=PLAN[p.product_id];return pl&&pl.plan_qty>0?pl.plan_qty/dim*SH_STOCK_DAYS:1;};
+async function shCatLine(C){const el=document.getElementById('shCat');if(!el)return;
+  try{const P=ROWS.filter(p=>p.raw&&p.raw.type_id!=null&&String(p.raw.type_id)===C.id&&p.raw.sku!=null);
+    if(!P.length){el.textContent='Наших товаров этой категории не нашёл по type_id карточки — маржу категории не посчитать.';return;}
+    const y=localISO(new Date(Date.now()-864e5)),EX=await shExp(P.map(p=>({p,norm:shNorm(p)})),y),n=SH_EXP_W,rub=v=>mktN(v)+' ₽';
+    const CW=[...Array(n)].map((_,i)=>{let mar=0,q=0,md=0,est=0,from='',to='';EX.forEach(E=>{const w=E[i];if(!w)return;from=w.from;to=w.to;mar+=w.mar||0;q+=w.q;md=Math.max(md,w.mdays);est+=w.est;});return {from,to,mar,q,md,est};});
+    const cw=CW[n-1],bw=CW.filter(w=>w.md>=5).reduce((m,w)=>!m||w.mar>m.mar?w:m,null);
+    if(!bw){el.textContent='Маржи по дате заказа за 5 недель нет.';return;}
+    const mb=bw.q>0?bw.mar/bw.q:null,mc=cw.q>0?cw.mar/cw.q:null;
+    el.className='mkrec';el.innerHTML=`Наша маржа в категории за 7 дн (${ddmm(cw.from)}–${ddmm(cw.to)}, товаров: ${P.length}): ${cw.est?'≈ ':''}<b>${rub(cw.mar)}</b>, на заказ ${rub(mc)}${bw===cw?' — лучшая за '+n+' нед.':` — против ${rub(bw.mar)} в лучшую неделю ${ddmm(bw.from)}–${ddmm(bw.to)} (<b>${shSg(shP(bw.mar,cw.mar))}%</b>; заказы ${mktN(bw.q)} → ${mktN(cw.q)}, маржа на заказ ${rub(mb)} → ${rub(mc)}).`} <span class="mkof">Рекомендации по товару — на столе 3.</span>`;
+  }catch(e){el.textContent='Маржа категории: ошибка '+e.message;}tellH();}
+// третий «рабочий стол» — рекомендации по товару (09.11.2026, решения владельца): только рассматриваемый товар (у группы перчаток — его размеры,
+// сначала с наибольшим отставанием маржи); формат «Проблема — Цель — Действие — Почему»; опора — сегодняшние цифры: наша цена продавца
+// (product_price_index.our_price, ночная загрузка; нет — цена последнего дня с заказами), наша цена у покупателя и цены конкурентов группы —
+// снимок витрины («Обновляем цены», наименьшая цена карточки; нет свежего — ср. цена отчёта рынка с пометкой); опыт лучшей недели — только справка
+// (рынок мог измениться). Один пункт на рычаг: наличие → цена (коридор ±SH_COMP_TOL к медиане конкурентов сегодня) → реклама (лимиты ДРР при
+// сегодняшней или рекомендуемой цене) → карточка (конверсия к конкурентам или к прошлой неделе) → выкуп; наличие первым, дальше по эффекту в марже ₽.
+const RC_MAX=5;
+async function rcShare(ms){const t=ms.map(p=>p.raw&&p.raw.type_id!=null?String(p.raw.type_id):null).find(Boolean);if(!t)return '';
+  const y=localISO(new Date(Date.now()-864e5)),D=await mktGet(`market_category_daily?category_id=eq.${t}&day=gte.${addDaysISO(y,-40)}&select=category,day,cat_gmv,our_gmv&order=day`).catch(()=>[]);if(!D.length)return '';
+  const L=D[D.length-1].day,sh=(f,t2)=>{const xs=D.filter(x=>x.day>=f&&x.day<=t2),c=xs.reduce((s,x)=>s+Number(x.cat_gmv||0),0),o=xs.reduce((s,x)=>s+Number(x.our_gmv||0),0);return c>0?o/c*100:null;};
+  const b=sh(addDaysISO(L,-6),L),a=sh(addDaysISO(L,-13),addDaysISO(L,-7));
+  return `<div class="mkof" style="margin-bottom:4px">Доля в категории «${esc(D[0].category)}» за 7 дн по ${ddmm(L)}: <b>${mktN(b,1)}%</b> (${shSg(b!=null&&a!=null?b-a:null,1)} п. п. к пред. 7 дн; график — на столе 2).</div>`;}
+async function rcMarket(skus){const M=new Map();const my=await mktGet(`market_groups?sku=in.(${skus.join(',')})&select=grp_key,sku&order=grp_key,sku`).catch(()=>[]);if(!my.length)return M;
+  const keys=[...new Set(my.map(x=>x.grp_key))],mem=await mktGet(`market_groups?grp_key=in.(${keys.map(k=>'"'+k+'"').join(',')})&select=grp_key,title,sku,role&order=grp_key,sku`);
+  const all=[...new Set(mem.map(x=>x.sku))],y=localISO(new Date(Date.now()-864e5)),today=localISO(new Date());
+  const [rep,snap]=await Promise.all([mktGet(`market_report?sku=in.(${all.join(',')})&select=*&order=report_date.desc,category,sku`),
+    mktGet(`market_price_snapshot?sku=in.(${all.join(',')})&day=gte.${addDaysISO(y,-14)}&select=sku,day,price,price_card,in_stock&order=day.desc,sku`).catch(e=>{if(e.noTable)return [];throw e;})]);
+  const R1=new Map(),S1=new Map();rep.forEach(r=>{if(!R1.has(r.sku))R1.set(r.sku,r);});snap.forEach(r=>{if(!S1.has(r.sku))S1.set(r.sku,r);});
+  skus.forEach(s=>{const g=my.find(z=>z.sku===s);if(!g)return;const Gm=mem.filter(z=>z.grp_key===g.grp_key);
+    const rd=Gm.map(z=>R1.get(z.sku)?.report_date).filter(Boolean).sort().pop();
+    const rows=Gm.map(m=>({m,r:R1.get(m.sku),v:R1.get(m.sku)&&R1.get(m.sku).report_date===rd?mktRepVals(R1.get(m.sku)):null}));
+    const comp=Gm.filter(z=>z.role!=='our'&&z.sku!==s),big=comp.filter(z=>{const r=R1.get(z.sku);return r&&Number(r.hits_view)>=MKT_MIN_VIEWS&&Number(r.ordered_qty)>=MKT_MIN_QTY;}),pool=big.length?big:comp;
+    const sOur=S1.get(s),useSnap=!!(sOur&&mktMinP(sOur)&&sOur.day>=addDaysISO(today,-(SH_SNAP_DAYS-1)));
+    const pr=z=>useSnap?mktMinP(S1.get(z)||{}):(R1.get(z)?Number(R1.get(z).avg_price):null);
+    const C=pool.map(z=>({z,p:pr(z.sku)})).filter(o=>o.p>0),our=pr(s),med=C.length?MKT_MED(C.map(o=>o.p)):null;
+    M.set(s,{rows,rd,useSnap,our,med,n:C.length,big:big.length>0,
+      src:useSnap?`снимок витрины ${ddmm(sOur.day)}, наименьшая цена карточки`:(rd?`ср. цена недели в отчёте рынка ${ddmm(rd)}${rd<addDaysISO(y,-SH_REP_OLD)?' — старше '+SH_REP_OLD+' дн':''}; сегодняшние цены — команда «Обновляем цены»`:'нет данных'),
+      near:C.filter(o=>o.z.role==='nearest'||o.z.role==='etalon').map(o=>`${(R1.get(o.z.sku)||{}).seller||o.z.sku} ${mktN(o.p)} ₽`).slice(0,3).join(', '),
+      list:C.slice().sort((a,b)=>a.p-b.p).map(o=>({seller:(R1.get(o.z.sku)||{}).seller||o.z.sku,p:o.p,role:o.z.role})),
+      ourRep:R1.get(s)&&R1.get(s).report_date===rd?mktRepVals(R1.get(s)):null});});
+  return M;}
+function rcProduct(p,E,L,I,MK,G){const rub=v=>mktN(v)+' ₽',pc=(x,y)=>shSg(shP(x,y))+'%';
+  const B=E[E.length-1]||{},A=E[E.length-2]||{},val=E.filter(w=>w.ok),best=val.reduce((m,w)=>!m||w.mar>m.mar?w:m,null);
+  const Cm=L&&L.b!=null?{b:+L.b,r0:+L.r0,t:+L.t,u:+L.u,comm:{low:+L.comm_low,high:+L.comm_high}}:null,planPct=L&&L.plan_pct!=null?Number(L.plan_pct):null;
+  // наша цена продавца сегодня: ночная загрузка (product_price_index.our_price) → последний день с заказами → средняя за 7 дн
+  const P0=I&&Number(I.our_price)>0?{v:Number(I.our_price),src:`цена продавца на ${ddmm(I.day)}`}:E.lastP?{v:E.lastP.p,src:`по заказам ${ddmm(E.lastP.day)} — сегодняшней цены в базе нет`}:B.p?{v:B.p,src:'средняя за 7 дн — сегодняшней цены в базе нет'}:null;
+  const D=B.drr||0,q7=B.q||0,r7=B.r||0,mar7=B.mar,perRub=r7>0&&mar7!=null?mar7/r7:null;
+  const mOrd=P=>Cm&&P?P*Cm.b*unitPct(Cm,P,D)/100:null;   // маржа на заказ при цене P и сегодняшнем ДРР (модель юнит-экономики)
+  const lims=P=>{if(!Cm||!P)return null;const pre=unitPct(Cm,P,0);return {pre,be:Math.max(0,(pre-NET_FLOOR)*Cm.b),pl:planPct!=null?Math.max(0,(pre-planPct)*Cm.b):null};};
+  const k=MK&&MK.our&&P0?MK.our/P0.v:null,d=MK&&MK.our&&MK.med?MK.our/MK.med-1:null;   // k — цена у покупателя ÷ цена продавца (сегодня)
+  const It=[],eff=rv=>perRub!=null&&rv>0?rv*perRub:null,capR=best&&best.r>r7?best.r-r7:r7*0.3;   // эффект по выручке — не больше отставания от лучшей недели (нет — 30%)
+  // 1. наличие
+  const o=MK&&MK.ourRep,nsR=o&&Number(o.nostockOf)>0?Number(o.nostock)/Number(o.nostockOf):0;
+  if((B.out||0)>=2||nsR>MKT_NOSTOCK){const dIn=7-(B.out||0),e=eff(dIn>0?r7/dIn*(B.out||0):0);
+    It.push({first:true,e,t:'Наличие',pr:`${B.out||0} дн. из 7 без запаса на ${SH_STOCK_DAYS} дня продаж${nsR>MKT_NOSTOCK?` (в отчёте рынка — ${o.nostock} дн. без остатка из ${o.nostockOf})`:''}`,go:`0 дней без запаса${e?`; ≈ +${rub(e)} маржи за 7 дн`:''}`,ac:'пополнить склады: запас ≥ 4 дней продаж по плану (не больше 9 — корпоративная цель)',wh:'без остатка товар выпадает из выдачи — остальные рычаги не работают'});}
+  // 2. цена — положение на рынке сегодня (коридор ±SH_COMP_TOL к медиане конкурентов)
+  let Pt=P0?P0.v:null,priceDown=false;
+  if(k&&d!=null){
+    if(d>SH_COMP_TOL){const P1=MK.med*(1+SH_COMP_TOL)/k,m0=mOrd(P0.v),m1=mOrd(P1);Pt=P1;priceDown=true;
+      It.push({pri:1,t:'Цена',pr:`у покупателя ${rub(MK.our)} — на ${mktN(d*100)}% дороже медианы конкурентов ${rub(MK.med)}`,go:`у покупателя ≤ ${rub(MK.med*(1+SH_COMP_TOL))} (медиана +${Math.round(SH_COMP_TOL*100)}%)`,ac:`цена продавца ${rub(P0.v)} → ≈ ${rub(P1)}`,
+        wh:`дороже рынка — теряем заказы${m0!=null&&m1!=null&&m1>0?`; маржа на заказ ${rub(m0)} → ${rub(m1)}: окупится, если заказов станет больше на ≥ ${mktN((m0/m1-1)*100)}%`:m1!=null&&m1<=0?'; но при такой цене заказ в минус — сначала себестоимость и реклама':''}`});}
+    else if(d<-SH_COMP_TOL){const P1=MK.med/k,m0=mOrd(P0.v),m1=mOrd(P1),e=m0!=null&&m1!=null?(m1-m0)*q7:null;Pt=P1;
+      It.push({e,t:'Цена',pr:`у покупателя ${rub(MK.our)} — на ${mktN(-d*100)}% дешевле медианы конкурентов ${rub(MK.med)}`,go:`у покупателя ≈ ${rub(MK.med)} (медиана)${e?`; ≈ +${rub(e)} маржи за 7 дн при тех же заказах`:''}`,ac:`цена продавца ${rub(P0.v)} → ≈ ${rub(P1)}`,
+        wh:`дешевле рынка — отдаём маржу${m0!=null&&m1!=null&&m1>0?`: маржа на заказ ${rub(m0)} → ${rub(m1)}; выгодно, пока заказы падают не больше чем на ${mktN((1-m0/m1)*100)}%`:''}`});}}
+  // 3. реклама — лимиты ДРР при сегодняшней (или рекомендуемой) цене
+  const Lm=lims(Pt),vA=A.v||0,vB=B.v||0,R0=MK&&MK.rows?mktRef(MK.rows,String(p.raw.sku)):null,Rv=R0&&R0.v,vOur=o?o.views:null;
+  const dropWoW=vA>0&&vB<vA*(1-SH_TOL),lowMkt=Rv&&Rv.views&&vOur!=null&&vOur<Rv.views*(1-SH_TOL);
+  if(Lm&&r7>0){const lt=`ДРР ${mktN(D,1)}% (лимиты при цене ${rub(Pt)}: плановый ${Lm.pl!=null?mktN(Lm.pl,1)+'%':'— нет плана'} / безубыточный ${mktN(Lm.be,1)}%)`;
+    if(D>Lm.be){const tg=Lm.pl!=null?Math.min(Lm.pl,Lm.be):Lm.be,e=(D-tg)/100*r7;
+      It.push({e,t:'Реклама',pr:`${lt} — выше безубыточного`,go:`ДРР ≤ ${mktN(tg,1)}%; ≈ +${rub(e)} маржи за 7 дн при тех же заказах`,ac:`расход ${rub(B.ads)} → ≈ ${rub(r7*tg/100)} за 7 дн (снизить ставки)`,wh:'реклама сверх безубыточного лимита — каждая продажа через неё в минус'});}
+    else if((dropWoW||lowMkt)&&(Lm.pl==null||D<Lm.pl)){const tg=Lm.pl!=null?Lm.pl:Lm.be*0.6,e=eff(dropWoW?Math.min(r7*(vA/vB-1),capR):capR*0.5);
+      const rt=[dropWoW?`показы ${mktN(vB)} за 7 дн (${pc(vA,vB)} к пред. 7 дн)`:'',lowMkt?`показы ниже конкурентов: ${mktN(vOur)} против ${mktN(Rv.views)} (отчёт рынка)`:''].filter(Boolean).join('; ');
+      It.push({e,t:'Реклама и охват',pr:`${rt}; ${lt}`,go:`ДРР ≈ ${mktN(tg,1)}%${e?`; ≈ +${rub(e)} маржи за 7 дн`:''}`,ac:`расход ${rub(B.ads)} → ≈ ${rub(r7*tg/100)} за 7 дн`,wh:`запас до ${Lm.pl!=null?'планового':'безубыточного'} лимита есть — докупить охват${priceDown?'; но сначала цена: дороже рынка реклама заказы не вернёт':''}`});}}
+  // 4. карточка — конверсия к конкурентам (отчёт рынка) или к прошлой неделе (воронка API)
+  const cA=A.pdp>0?A.cart/A.pdp*100:null,cB=B.pdp>0?B.cart/B.pdp*100:null,cand=[];
+  if(o&&Rv)[['ctr','CTR (показ → карточка)'],['cart','Карточка → корзина'],['c2o','Корзина → заказ']].forEach(([key,nm])=>{if(o[key]!=null&&Rv[key]!=null&&Rv[key]>0&&o[key]<Rv[key]*(1-MKT_TOL))cand.push({nm,now:o[key],ref:Rv[key],src:'медиана конкурентов, отчёт рынка'});});
+  if(cA&&cB&&cB<cA*(1-SH_TOL))cand.push({nm:'Карточка → корзина',now:cB,ref:cA,src:'неделей раньше'});
+  if(cand.length){const c=cand.sort((x,y)=>y.ref/y.now-x.ref/x.now)[0],e=eff(Math.min(r7*(c.ref/c.now-1),capR));
+    It.push({e,t:'Карточка',pr:`${c.nm}: ${mktN(c.now,1)}% (ориентир ${mktN(c.ref,1)}% — ${c.src})`,go:`≥ ${mktN(c.ref,1)}%${e?`; ≈ +${rub(e)} маржи за 7 дн`:''}`,
+      ac:c.nm.startsWith('CTR')?'главное фото, название и цена в выдаче':c.nm.startsWith('Корзина')?'сроки доставки, наличие на складах кластеров, цена в корзине':'фото, описание, отзывы и рейтинг',wh:'товар видят, но покупают реже ориентира — слабый шаг воронки'});}
+  // 5. выкуп
+  if(o&&Rv&&o.buy!=null&&Rv.buy!=null&&o.buy<Rv.buy*(1-MKT_TOL)){const e=eff(Math.min(r7*(Rv.buy/o.buy-1),capR));
+    It.push({e,t:'Выкуп',pr:`${mktN(o.buy,1)}% (медиана конкурентов ${mktN(Rv.buy,1)}%)`,go:`≥ ${mktN(Rv.buy,1)}%${e?`; ≈ +${rub(e)} маржи`:''}`,ac:'отзывы о браке, соответствие описанию, упаковка',wh:'невыкупленный заказ — логистика без выручки'});}
+  It.sort((x,y)=>(y.first?1:0)-(x.first?1:0)||(y.pri||0)-(x.pri||0)||(y.e||0)-(x.e||0));
+  const gap=best&&B.mar!=null&&best!==B?best.mar-B.mar:0;
+  const st=[`Маржа за 7 дн (${ddmm(B.from||'')}–${ddmm(B.to||'')}): ${B.est?'≈ ':''}<b>${rub(B.mar)}</b>, заказов ${mktN(q7)}, на заказ ${rub(q7?B.mar/q7:null)}`+(best&&best!==B?` · лучшая неделя ${ddmm(best.from)}–${ddmm(best.to)}: ${rub(best.mar)} при цене ${rub(best.p)} и рекламе ${rub(best.ads)} — справка, рынок мог измениться`:best===B?' · лучшая за 5 нед':''),
+    P0?`Цена сегодня: продавца <b>${rub(P0.v)}</b> (${P0.src})${MK&&MK.our?`, у покупателя <b>${rub(MK.our)}</b>`:''}${MK&&MK.med?` · медиана ${MK.n} конкурентов ${rub(MK.med)} (${shSg(d*100)}%)${MK.near?'; ближайший / эталон: '+MK.near:''} · <span class="mkof">${MK.src}</span>`:' · <span class="mkof">цен конкурентов нет — команда «Обновляем цены»</span>'}`:'',
+    Lm?`Реклама за 7 дн: ${rub(B.ads)}, ДРР ${mktN(D,1)}%; лимиты при цене ${rub(Pt)}: плановый ${Lm.pl!=null?mktN(Lm.pl,1)+'%':'нет плана'} / безубыточный ${mktN(Lm.be,1)}%`:'<span class="mkof">Модели юнит-экономики нет — маржа и лимиты ДРР по модели не посчитаны.</span>'].filter(Boolean);
+  const li=x=>`<div class="rcit${x.first?' first':''}"><b>${x.t}</b><div><span class="rcl">Проблема</span>${x.pr}</div><div><span class="rcl">Цель</span>${x.go}</div><div><span class="rcl">Действие</span>${x.ac}</div><div><span class="rcl">Почему</span>${x.wh}</div></div>`;
+  const sc=Cm&&P0?SH_PRICE_STEPS.map(s=>{const P=P0.v*(1-s),m0=mOrd(P0.v),m1=mOrd(P);return `−${s*100}% (${rub(P)}${k?`, у покупателя ≈ ${rub(P*k)}${MK.med?' — '+shSg((P*k/MK.med-1)*100)+'% к медиане':''}`:''}): маржа на заказ ${rub(m0)} → ${rub(m1)}${m1>0&&m0>0?`, заказов нужно больше на ${mktN((m0/m1-1)*100)}%`:' — заказ в минус'}`;}).join('<br>'):'';
+  const comp=MK&&MK.list&&MK.list.length?`<div class="mkof" style="margin-top:6px">Конкуренты группы (${MK.src}):</div><table class="shwk"><thead><tr><th>Продавец</th><th>Роль</th><th>Цена</th></tr></thead><tbody>${MK.list.map(c=>`<tr><td style="text-align:left">${esc(c.seller)}</td><td>${MKT_ROLE[c.role]||esc(c.role)}</td><td>${rub(c.p)}</td></tr>`).join('')}</tbody></table>`:'';
+  const html=`${G?`<div class="rcsz">${esc(p.offer_id)}</div>`:''}<div class="rcst">${st.join('<br>')}</div>`
+    +(It.length?It.slice(0,RC_MAX).map(li).join('')+(It.length>RC_MAX?`<details><summary class="mkof">ещё ${It.length-RC_MAX}</summary>${It.slice(RC_MAX).map(li).join('')}</details>`:''):'<div class="psub">Отклонений нет — действий не требуется.</div>')
+    +`<details><summary class="mkof">Подробнее: опыт 5 недель, сценарии цены, конкуренты</summary>${shExpTable(E,best)}${sc?`<div class="mkof" style="margin:6px 0">Снизить цену ради охвата? По модели при ДРР ${mktN(D,1)}% (чтобы маржа в ₽ не упала):<br>${sc}</div>`:''}${comp}</details>`;
+  return {gap,html};}
+async function embedRecs(pid){const box=document.getElementById('embedRecs');if(!box)return;
+  if(!document.getElementById('rcStyle')){const st=document.createElement('style');st.id='rcStyle';st.textContent='#embedRecs .mkhead{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:6px}#embedRecs .mkhead .psectitle{margin:0}#embedRecs .mkof{color:#94a3b8;font-weight:400;font-size:.85em}#embedRecs .rcst{margin:4px 0 8px;padding:6px 10px;border-radius:8px;background:#f8f6fb;line-height:1.5}#embedRecs .rcit{margin:6px 0;padding:6px 10px;border-left:3px solid #544273;background:#fff;line-height:1.45}#embedRecs .rcit.first{border-left-color:#dc2626}#embedRecs .rcl{display:inline-block;min-width:84px;color:#544273;font-weight:700}#embedRecs .rcsz{margin:14px 0 4px;font-weight:700;color:#544273}#embedRecs .shwk{border-collapse:collapse;font-size:.85em;margin:6px 0}#embedRecs .shwk th{color:#94a3b8;font-weight:400;padding:2px 8px;border-bottom:1px solid rgba(84,66,115,.15)}#embedRecs .shwk td{padding:2px 8px;text-align:center;border-bottom:1px dashed rgba(84,66,115,.12)}#embedRecs details{margin:6px 0}';document.head.appendChild(st);}
+  const G=PROTO_GROUPS[pid],ms=(G?G.members:[BYID[pid]]).filter(p=>p&&p.raw&&p.raw.sku!=null);
+  const head=`<div class="mkhead"><div class="psectitle">🧭 Рекомендации по товару</div><span class="mkof">Проблема — Цель — Действие — Почему · от сегодняшних цен и рынка · опыт прошлых недель — справка</span></div>`;
+  box.innerHTML=head+'<div class="psub">расчёт…</div>';
+  if(!ms.length){box.innerHTML=head+'<div class="psub">У товара нет SKU Ozon.</div>';return;}
+  try{const y=localISO(new Date(Date.now()-864e5)),pids=ms.map(p=>p.product_id).join(',');
+    const [EX,lim,idx,MK,shr]=await Promise.all([shExp(ms.map(p=>({p,norm:shNorm(p)})),y),
+      mktGet(`product_drr_limits?product_id=in.(${pids})&day=gte.${addDaysISO(y,-7)}&select=*&order=day.desc,product_id`).catch(e=>{if(e.noTable)return [];throw e;}),
+      mktGet(`product_price_index?product_id=in.(${pids})&day=gte.${addDaysISO(y,-6)}&select=*&order=day.desc,product_id`).catch(e=>{if(e.noTable)return [];throw e;}),
+      rcMarket(ms.map(p=>String(p.raw.sku))),rcShare(ms)]);
+    const bl=ms.map(p=>rcProduct(p,EX.get(p.product_id)||[],lim.find(x=>x.product_id===p.product_id),idx.find(x=>x.product_id===p.product_id),MK.get(String(p.raw.sku)),G));
+    bl.sort((a,b)=>b.gap-a.gap);
+    box.innerHTML=head+shr+bl.map(b=>b.html).join('');
+  }catch(e){box.innerHTML=head+`<div class="psub">Ошибка: ${esc(e.message)}</div>`;}
+  tellH();}
 // второй «рабочий стол» под таблицей РНП (06.11.2026, решение владельца): свайп / прокрутка вбок (трекпад, касание) или кнопки 1 · 2
 function embedPage(i){const pg=document.getElementById('embedPages');if(!pg)return;const x=i*pg.clientWidth;pg.scrollTo({left:x,behavior:'smooth'});
   setTimeout(()=>{if(Math.abs(pg.scrollLeft-x)>2){pg.style.scrollBehavior='auto';pg.scrollLeft=x;pg.style.scrollBehavior='';}},500);}   // запасной путь: плавная прокрутка не сработала (фоновая вкладка)
@@ -3300,6 +3321,11 @@ function mktApiVals(F,ads,from,to){const s={};let n=0;F.filter(x=>x.day>=from&&x
     drr:s.revenue>0?ad/s.revenue*100:(ad>0?Infinity:null)};}
 // столбцы таблицы: ключ, заголовок, подсказка, знаков, «лучше» (1 — больше, −1 — меньше, 0 — без цвета)
 const MKT_FUNNEL_ON=false;
+// кнопка ручной загрузки отчётов «Аналитика рынка» скрыта (09.11.2026, решение владельца: отчёты снимает Claude по команде «Обновляем аналитику»;
+// менеджеры не должны загружать случайно); запасной путь — адрес с &mktup=1
+const MKT_UP_ON=new URLSearchParams(location.search).has('mktup');
+// наименьшая цена с карточки (09.11.2026, решение владельца: в сравнение идёт наименьшая — обычно с Ozon-банком)
+const mktMinP=s=>{const a=[s&&s.price_card,s&&s.price].filter(v=>v!=null&&Number(v)>0).map(Number);return a.length?Math.min(...a):null;};
 // рекомендации по группе (06.11.2026, решения владельца: по алгоритму, без живого ИИ; алгоритм v2 — после разбора бизнес-аналитиком):
 // 1) наличие — абсолютно: дней без остатка > 10% периода → пополнить (упущено ≈ заказы в день с остатком × дни без остатка);
 // 2) ориентир по долям — медиана конкурентов группы с ≥ 5 000 показов и ≥ 30 шт (эталон — если тоже проходит; мелкие — шум);
@@ -3355,6 +3381,7 @@ async function mktRecs(title,rows,skus,ms){const our=rows.filter(x=>x.m.role==='
     h+=`<div class="mkrec"><b>${nm}${esc(title)}</b>${A.length?`<ul>${top.map(li).join('')}</ul>${rest.length?`<details><summary class="mkof">ещё ${rest.length}</summary><ul>${rest.map(li).join('')}</ul></details>`:''}`:': отклонений нет — действий не требуется.'}${note}${!C?'<div class="mkof">Модели юнит-экономики нет — ДРР к лимитам не сравнивался.</div>':''}</div>`;}
   return h;}
 const MKT_T=[['sum','Заказано, ₽','Заказано на сумму за период отчёта',0,1],['qty','Заказано, шт','',0,1],['price','Ср. цена, ₽','Средняя цена за период',0,-1],
+  ['nowp','Цена сейчас, ₽','Наименьшая цена на карточке Ozon (обычно с Ozon-банком) на дату снятия (команда «Обновляем цены»; в подсказке ячейки — обе цены, зачёркнутая, наличие)',0,-1],
   ['nostock','Дней без остатка','Дней без остатка (из N)',0,-1],['vol','Объём, л','Объём товара — от него зависят логистика и комиссия',1,-1],['views','Показы всего','Охват: сколько раз товар показан',0,1],
   ['share','Доля поиска, %','Просмотры в поиске и каталоге ÷ показы всего',1,1],['ctr','CTR (Показы → карточка), %','Шаг 1 воронки: просмотры карточки ÷ показы всего',1,1],
   ['cart','Карточка → корзина, %','Шаг 2 воронки',1,1],['c2o','Корзина → заказ, %','Шаг 3 воронки: шт ÷ (просмотры в поиске × в корзину из поиска + просмотры карточки × в корзину из карточки); приблизительно — в отчёте штуки, а не заказы, бывает > 100%',0,1],
@@ -3369,11 +3396,13 @@ function mktCell(c,v,S){let val=v[c[0]];let t=val===Infinity?'∞':mktN(val,c[3]
   if(c[0]==='nostock'&&val!=null&&v.nostockOf)t+=` <span class="mkof">из ${v.nostockOf}</span>`;if(c[0]==='promo'&&val!=null&&v.promoOf)t+=` <span class="mkof">из ${v.promoOf}</span>`;
   if(c[0]==='buy'&&v.buyOver!=null)return `<td class="num" title="Доставлено за эти 7 дней больше, чем заказано (${mktN(v.buyOver)}%): доезжают заказы прошлых недель — выкуп так не посчитать">—</td>`;
   if(c[0]==='buy'&&v.buyApprox&&val!=null)t='≈'+t;
+  if(c[0]==='nowp'){const s=v.nowpS;if(!s)return `<td class="num" title="Снимка цены нет — команда «Обновляем цены»">—</td>`;
+    return `<td class="num" style="${mktColor(c,val,S)}" title="${esc(`Снято ${mktD(s.day)}: наименьшая ${mktN(val)} ₽; с Ozon-банком ${mktN(s.price_card)} ₽; с другими банками ${mktN(s.price)} ₽; зачёркнутая ${mktN(s.price_old)} ₽${s.in_stock===false?'; НЕТ В НАЛИЧИИ':''}`)}">${t}${s.in_stock===false?' <span class="mkof">нет</span>':''}</td>`;}
   return `<td class="num" style="${mktColor(c,val,S)}">${t}</td>`;}
 async function embedMarket(pid){const box=document.getElementById('embedMarket');if(!box)return;
   if(!document.getElementById('mktStyle')){const st=document.createElement('style');st.id='mktStyle';st.textContent='.mkrec{margin:6px 0;padding:6px 10px;border-radius:8px;background:#f8f6fb;line-height:1.45}.mkrec ul{margin:4px 0 0 18px;padding:0}.mkrec li{margin:2px 0}.embedpg2{display:block!important;overflow:auto;border:0!important;color:#1C0D2E!important}#embedMarket .mkhead{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px}#embedMarket .mkhead .psectitle{margin:0}#embedMarket table{border-collapse:collapse;font-size:.85em;width:100%}#embedMarket th{color:#94a3b8;font-weight:400;font-size:.85em;padding:3px 5px;border-bottom:1px solid rgba(84,66,115,.15);max-width:110px;white-space:normal;vertical-align:bottom}#embedMarket td{padding:3px 5px;border-bottom:1px dashed rgba(84,66,115,.12);white-space:nowrap}#embedMarket td.num,#embedMarket th{text-align:center}#embedMarket td,#embedMarket th{border-left:1px solid rgba(84,66,115,.18)}#embedMarket td:first-child,#embedMarket th:first-child{border-left:0}#embedMarket tr.mkour td{background:#FCE4EC;font-weight:700}#embedMarket tr.mkref td{background:#E2EFDA}#embedMarket tr.mkapi td{background:rgba(120,166,199,.10);font-style:italic}#embedMarket .mkname{max-width:260px;overflow:hidden;text-overflow:ellipsis}#embedMarket .mkname a{color:inherit;text-decoration:none}#embedMarket .mkname a:hover{text-decoration:underline}#embedMarket .mkof{color:#94a3b8;font-weight:400;font-size:.85em}#embedMarket .mkgrp{margin:12px 0 4px;font-weight:700;color:#544273}#embedMarket .mkidx{font-size:.85em;color:#544273;margin:2px 0 4px}#embedMarket .mkbtn{border:1px solid #544273;background:#fff;color:#544273;border-radius:8px;padding:3px 10px;cursor:pointer;font-size:.85em}#embedMarket .mkst{font-size:.85em;color:#544273}#embedMarket .mkx{border:0;background:none;color:#dc2626;cursor:pointer;padding:0 4px}#embedMarket .mkedit{margin:6px 0 10px;padding:8px;border:1px dashed rgba(84,66,115,.3);border-radius:8px;font-size:.85em}#embedMarket .mkcand{margin:3px 0}#embedMarket .mkcand a{color:#1C0D2E}#embedMarket select{font-size:.95em}';document.head.appendChild(st);}
   const G=PROTO_GROUPS[pid],ms=G?G.members:[BYID[pid]],skus=ms.map(p=>p&&p.raw&&p.raw.sku!=null?String(p.raw.sku):'').filter(Boolean);
-  const head=`<div class="mkhead"><div class="psectitle">📊 Аналитика категории</div><span class="mkst" id="mktInfo"></span><label class="mkbtn" title="Отчёты «Аналитика рынка» из кабинета Ozon (.xlsx), можно несколько файлов сразу; запись — в базы ИП и ООО">⬆ Загрузить отчёты рынка<input type="file" accept=".xlsx" multiple style="display:none" onchange="mktUpload(this,'${pid}')"></label><span class="mkst" id="mktUp"></span></div>`;
+  const head=`<div class="mkhead"><div class="psectitle">📊 Аналитика категории</div><span class="mkst" id="mktInfo"></span>${MKT_UP_ON?`<label class="mkbtn" title="Отчёты «Аналитика рынка» из кабинета Ozon (.xlsx), можно несколько файлов сразу; запись — в базы ИП и ООО">⬆ Загрузить отчёты рынка<input type="file" accept=".xlsx" multiple style="display:none" onchange="mktUpload(this,'${pid}')"></label>`:''}<span class="mkst" id="mktUp"></span></div>`;
   box.innerHTML=head+'<div class="psub">загрузка…</div>';
   if(!skus.length){box.innerHTML=head+'<div class="psub">У товара нет SKU Ozon.</div>';return;}
   try{const y=localISO(new Date(Date.now()-864e5)),f30=addDaysISO(y,-29);
@@ -3385,6 +3414,10 @@ async function embedMarket(pid){const box=document.getElementById('embedMarket')
       mktGet(`product_funnel_daily?sku=in.(${skus.join(',')})&day=gte.${addDaysISO(y,-40)}&select=*&order=day,sku`).catch(e=>{if(e.noTable)return [];throw e;}),
       mktGet(`ozon_ad_spend?offer_id=in.(${skus.join(',')})&spend_date=gte.${addDaysISO(y,-40)}&select=offer_id,spend_date,amount&order=spend_date,offer_id`),
       mktGet(`product_price_index?product_id=in.(${ms.map(p=>p.product_id).join(',')})&day=gte.${addDaysISO(y,-6)}&select=*&order=day.desc,product_id`).catch(e=>{if(e.noTable)return [];throw e;})]);
+    // снимки цен на витрине (09.11.2026, «Обновляем цены»): последний за 14 дней по каждому SKU; нет таблицы — столбец пустой
+    const snapRows=allSku.length?await mktGet(`market_price_snapshot?sku=in.(${allSku.join(',')})&day=gte.${addDaysISO(y,-14)}&select=sku,day,price,price_card,price_old,in_stock&order=day.desc,sku`).catch(e=>{if(e.noTable)return [];throw e;}):[];
+    const SNAP=new Map();snapRows.forEach(x=>{if(!SNAP.has(x.sku))SNAP.set(x.sku,x);});
+    const snapDay=snapRows.length?snapRows[0].day:null;
     const lastRep=new Map();rep.forEach(r=>{if(!lastRep.has(r.sku))lastRep.set(r.sku,r);});
     let html=head;
     // ценовой индекс (последний снимок по каждому размеру)
@@ -3396,13 +3429,14 @@ async function embedMarket(pid){const box=document.getElementById('embedMarket')
       const R=M.map(m=>({m,r:lastRep.get(m.sku)})),rd=R.map(x=>x.r?.report_date).filter(Boolean).sort().pop();
       if(rd)repDates.push(rd);
       const rows=R.map(x=>({...x,v:x.r&&x.r.report_date===rd?mktRepVals(x.r):null})).sort((a,b)=>(b.v?.sum??-1)-(a.v?.sum??-1));
+      rows.forEach(x=>{const s=SNAP.get(x.m.sku);if(x.v&&s){x.v.nowp=mktMinP(s);x.v.nowpS=s;}});
       const S=mktScales(rows.map(x=>x.v));   // шкала цвета — по строкам отчёта группы (как условное форматирование в Excel-разборе)
       const ed=MKT_EDIT.has(k);
       html+=`<div class="mkgrp">${esc(shown)}${rd?` <span class="mkof">· отчёт ${mktD(rd)}</span>`:''} <button class="mkbtn" data-k="${esc(k)}" onclick="mktEditToggle(this.dataset.k,'${pid}')" title="Изменить состав группы: добавить или убрать товар, сменить роль (запись — в базы ИП и ООО)">${ed?'✓ Готово':'✎ Состав'}</button></div>`;
       const ourSkus=M.filter(m=>m.role==='our').map(m=>m.sku).filter(s=>skus.includes(s));
       ourSkus.forEach(s=>{const p=ms.find(q=>String(q.raw?.sku)===s),x=p&&li.get(p.product_id);if(!x)return;
         html+=`<div class="mkidx" title="Ценовой индекс Ozon на ${mktD(x.day)}: индекс = наша цена ÷ минимальная">${ms.length>1?esc(p.offer_id)+': ':''}мин. цена такого же товара — у других продавцов Ozon <b>${mktN(x.ozon_min)} ₽</b>${x.ozon_idx?` (индекс ${mktN(x.ozon_idx,2)})`:''} · на других площадках <b>${mktN(x.ext_min)} ₽</b>${x.ext_idx?` (${mktN(x.ext_idx,2)})`:''} · индекс Ozon: ${esc(x.color||'—')}</div>`;});
-      html+=`<table><thead><tr><th>Место</th><th>Роль</th><th>Продавец · бренд</th><th>Товар</th>${MKT_T.map(c=>`<th title="${esc(c[2])}">${c[1]}</th>`).join('')}</tr></thead><tbody>`;
+      html+=`<table><thead><tr><th>Место</th><th>Роль</th><th>Продавец · бренд</th><th>Товар</th>${MKT_T.map(c=>`<th title="${esc(c[2])}">${c[0]==='nowp'?(snapDay?'Цена '+ddmm(snapDay)+', ₽':'Цена сейчас, ₽'):c[1]}</th>`).join('')}</tr></thead><tbody>`;
       rows.forEach((x,i)=>{const isOur=x.m.role==='our'&&skus.includes(x.m.sku),r=x.r&&x.r.report_date===rd?x.r:null;
         const roleTd=ed?`<td><select data-k="${esc(k)}" data-s="${esc(x.m.sku)}" onchange="mktRoleSet(this,'${pid}')">${Object.entries(MKT_ROLE).map(([v,l])=>`<option value="${v}"${v===x.m.role?' selected':''}>${l}</option>`).join('')}</select></td>`:`<td>${MKT_ROLE[x.m.role]||esc(x.m.role)}</td>`;
         html+=`<tr class="${isOur?'mkour':(x.m.role==='etalon'||x.m.role==='nearest')?'mkref':''}"><td class="num">${ed?`<button class="mkx" data-k="${esc(k)}" data-s="${esc(x.m.sku)}" onclick="mktDel(this,'${pid}')" title="Убрать из группы">✕</button>`:''}${x.v?i+1:''}</td>${roleTd}<td>${r?esc(r.seller||'')+' · '+esc(r.brand||''):'—'}</td>`
@@ -3421,13 +3455,11 @@ async function embedMarket(pid){const box=document.getElementById('embedMarket')
     if(keys.length&&!rep.length)html+=`<div class="psub" style="margin-top:6px">Отчётов «Аналитика рынка» в базе нет — загрузите файлы кнопкой выше.</div>`;
     // наша воронка по дням временно скрыта (06.11.2026, решение владельца): вернуть — MKT_FUNNEL_ON = true
     // на месте воронки — рекомендации по алгоритму (06.11.2026)
-    if(recs.length)html+=`<div class="mkgrp" style="margin-top:16px">🧭 Рекомендации <span class="mkof">(по алгоритму: наличие, воронка и охват к конкурентам, цена и ДРР — с юнит-экономикой; последний отчёт «Аналитика рынка»)</span></div><div id="mktRecs" class="psub">расчёт… (ждём модель юнит-экономики со стола 1)</div>`;
     if(MKT_FUNNEL_ON)html+=`<div class="mkgrp" style="margin-top:16px">Наша воронка по дням (API Ozon, 30 дн${ms.length>1?', сумма размеров':''})</div><div id="mktFunnel"></div>`;
     box.innerHTML=html;
     box.querySelectorAll('.mkcandbox').forEach(mktCandInit);
     const inf=document.getElementById('mktInfo');if(inf&&repDates.length)inf.textContent='последний отчёт: '+mktD(repDates.sort().pop());
     mktFunnel(F,ads,f30,y);
-    if(recs.length)(async()=>{const el=document.getElementById('mktRecs');try{const out=[];for(const [t,r] of recs)out.push(await mktRecs(t,r,skus,ms));if(el&&el.isConnected){el.className='';el.innerHTML=out.join('')||'<div class="psub">Нашего товара нет в последнем отчёте группы.</div>';}}catch(e){if(el)el.textContent='Ошибка расчёта рекомендаций: '+e.message;}})();
   }catch(e){box.innerHTML=head+(e.noTable?'<div class="psub">Нет таблиц аналитики — запустите SQL 2026-11-06_market_analytics.sql и 2026-11-06_market_groups_seed.sql (ИП и ООО).</div>':`<div class="psub">Ошибка: ${esc(e.message)}</div>`);}
   tellH();}
 // график воронки по дням: показы (столбики) и 3 шага — CTR, в корзину из карточки, корзина → заказ (линии), каждый своей полосой

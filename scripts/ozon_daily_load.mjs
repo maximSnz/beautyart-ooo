@@ -559,7 +559,9 @@ try{
     for(let i=0;i<50;i++){const j=await ozon('/v5/product/info/prices',{filter:{visibility:'ALL'},limit:1000,cursor});const it=j?.items||[];
       it.forEach(x=>{const p=x.price_indexes||{},n=v=>v==null||Number(v)===0?null:Number(v);
         pr.push({product_id:x.product_id,day:TODAY,color:p.color_index||null,ozon_min:n(p.ozon_index_data?.min_price),ozon_idx:n(p.ozon_index_data?.price_index_value),
-          ext_min:n(p.external_index_data?.min_price),ext_idx:n(p.external_index_data?.price_index_value),self_min:n(p.self_marketplaces_index_data?.min_price),self_idx:n(p.self_marketplaces_index_data?.price_index_value)});});
+          ext_min:n(p.external_index_data?.min_price),ext_idx:n(p.external_index_data?.price_index_value),self_min:n(p.self_marketplaces_index_data?.min_price),self_idx:n(p.self_marketplaces_index_data?.price_index_value),
+          // наша цена на сегодня (09.11.2026, стол 3 окна товара: рекомендации по цене и рекламе — от сегодняшней цены; products.price бывает 0)
+          our_price:n(x.price?.price),our_mkt_price:n(x.price?.marketing_seller_price??x.price?.marketing_price),our_min_price:n(x.price?.min_price)});});
       cursor=j?.cursor||'';if(!cursor||!it.length)break;}
     console.log(`  ценовой индекс: товаров ${pr.length}, с ценой у других продавцов Ozon ${pr.filter(r=>r.ozon_min!=null).length}`);
     await sbWrite('POST','product_price_index?on_conflict=product_id,day',pr);
