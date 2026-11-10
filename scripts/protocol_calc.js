@@ -13,10 +13,10 @@ const keyOf=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${S
 const dateOf=k=>{const [y,m,d]=k.split('-').map(Number);return new Date(y,m-1,d);};
 const isWe=d=>d.getDay()===0||d.getDay()===6;
 function effDays(y,m){const last=new Date(y,m,0).getDate();let B=0,W=0;for(let dd=1;dd<=last;dd++){const wd=new Date(y,m-1,dd).getDay();if(wd===0||wd===6)W++;else B++;}return B+0.7*W;}
-// перчатки: группа = артикул до цвета включительно (GLV-NIT-BNV-BLU-50-L → GLV-NIT-BNV-BLU)
+// перчатки: группа = артикул до цвета и фасовки включительно (GLV-NIT-BNV-BLU-50-L → GLV-NIT-BNV-BLU-50)
 const GLV_COLORS=new Set(['BLK','BLU','PNK','GRY','YLW','PUR','CLR','WHT','GRN','RED','ORG','BRN','BEG']);
 function gloveFamily(offer){const s=String(offer).split('-');if(s[0]!=='GLV')return null;
-  for(let i=2;i<s.length;i++)if(GLV_COLORS.has(s[i]))return i<s.length-1?s.slice(0,i+1).join('-'):null;return null;}
+  for(let i=2;i<s.length;i++)if(GLV_COLORS.has(s[i])){const e=/^\d+$/.test(s[i+1]||'')?i+1:i;return e>i||e<s.length-1?s.slice(0,e+1).join('-'):null;}return null;}   // фасовка (число после цвета) — часть группы, 10.11.2026
 // лимиты ДРР при цене P — копия unitPct из plan.html при ДРР 0: pre(P) = (r0 − комиссия(P)) − t − u ÷ (P × b);
 // плановый = max(0, (pre − план) × b), безубыточный = max(0, (pre − 5) × b)
 function lim(c,P){if(!c||!(P>0)||!(c.b>0))return null;const pre=((c.r0-(P<=300?c.lo:c.hi))-c.t-c.u/(P*c.b))*100;return {price:P,pre,be:Math.max(0,(pre-NET_FLOOR)*c.b),plan:c.plan==null?null:Math.max(0,(pre-c.plan)*c.b)};}
