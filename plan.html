@@ -2507,11 +2507,13 @@ function pulseRender(D){
     if(X.cal&&X.cal.ok&&a.q>0&&a.rev>0){ const P=a.rev/a.q, Dd=a.ads/a.rev*100; return {v:unitPct(X.cal,P,Dd)/100*a.rev*X.cal.b,est:true}; }
     if(a.gmv>0)return {v:a.pre-a.ads,est:true}; return a.q===0&&a.ads>0?{v:-a.ads,est:true}:null; };
   const marRubOf=(X,iso)=>{ if(!X.sizes)return marRub(X,iso); let v=0,n=0,est=false; X.sizes.forEach(s=>{ const m=marRub(s,iso); if(m){ v+=m.v; n++; est=est||!!m.est; } }); return n?{v,est}:null; };
-  const rowMarRub=(X,lbl,cls)=>{ let h=`<tr${cls}>${lbl}`;
-    days.forEach(iso=>{ const m=marRubOf(X,iso);
-      h+=m?`<td class="num" style="color:${m.v<0?'#E33D78':'#15803d'}${m.est?';font-style:italic':''}" title="${ddmm(iso)}: маржа ${fmt(m.v)} ₽ — ${m.est?'оценка модели (выкупы ещё приходят)':'факт по дате заказа'}">${m.est?'≈':''}${fmt(m.v)}</td>`:'<td class="num">—</td>'; });
+  // заливка — как у «Заказов»: зелёная, чем больше маржа строки, тем зеленее (12.11.2026, решение владельца; цвет текста — обычный)
+  const rowMarRub=(X,lbl,cls)=>{ let h=`<tr${cls}>${lbl}`; const ms=days.map(iso=>marRubOf(X,iso)), nums=ms.filter(Boolean).map(m=>m.v), mn=nums.length?Math.min(...nums):0, mx=nums.length?Math.max(...nums):0;
+    const bg=v=>{ const t=(mx===mn)?0.5:(v-mn)/(mx-mn); return `background:rgba(22,163,74,${(0.06+0.44*t).toFixed(2)});`; };
+    days.forEach((iso,i)=>{ const m=ms[i];
+      h+=m?`<td class="num" style="${bg(m.v)}${m.est?'font-style:italic':''}" title="${ddmm(iso)}: маржа ${fmt(m.v)} ₽ — ${m.est?'оценка модели (выкупы ещё приходят)':'факт по дате заказа'}">${m.est?'≈':''}${fmt(m.v)}</td>`:'<td class="num">—</td>'; });
     return h+'</tr>'; };
-  h+=metric('mrub','Маржа, ₽','Маржа за день в рублях по дате заказа: выручка минус комиссии и расходы Ozon, себестоимость, налог и реклама дня.\n\nПоследние 7 дней («≈», курсив) — оценка по модели при фактических цене и ДРР дня: выкупы ещё приходят. День без заказов — минус реклама дня. Зелёный — плюс, красный — минус.'+(isG?'\n\nГруппа — сумма размеров.':''),rowMarRub);
+  h+=metric('mrub','Маржа, ₽','Маржа за день в рублях по дате заказа: выручка минус комиссии и расходы Ozon, себестоимость, налог и реклама дня.\n\nПоследние 7 дней («≈», курсив) — оценка по модели при фактических цене и ДРР дня: выкупы ещё приходят. День без заказов — минус реклама дня. Заливка — чем больше маржа, тем зеленее.'+(isG?'\n\nГруппа — сумма размеров.':''),rowMarRub);
   h+=metric('stk','Остатки, шт','Остаток на складах Ozon на конец дня, шт (сумма по всем складам)'+(isG?'; группа — сумма размеров.':'.'),rowStock);
   h+='</tbody></table><div class="psub" style="margin-top:6px">* — свежий день (последние 7 дней): выкупы и возвраты по заказам ещё приходят, поэтому маржинальность и маржа дня — оценка по модели («≈», курсив); через 8 дней её заменит факт. ДРР: в ячейке под значением — лимиты при цене этого дня (плановый/безубыточный; одна цена — один лимит).'+(isG?' ▸ у названия строки — размеры группы.':'')+'</div></div>';
   return h;
