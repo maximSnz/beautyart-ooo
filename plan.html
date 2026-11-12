@@ -1414,6 +1414,11 @@ function toggleMetric(k){ EXP[k]=!EXP[k]; render(); }
 function toggleGM(k){ GM[k]=!GM[k]; render(); }
 // группы перчаток (как в отчёте РОПа на главной): ключ — артикул до кода цвета и фасовки включительно; раскрытые — только на время просмотра
 const GLV_COLORS=new Set(['BLK','BLU','PNK','GRY','YLW','PUR','CLR','WHT','GRN','RED','ORG','BRN','BEG']);
+// размеры группы перчаток — от большего к меньшему (12.11.2026, решение владельца: раскрытие группы и РНП — XL … XS); размер — последняя
+// часть артикула из списка (кириллица — как латиница); без размера — в конце, по артикулу
+const SIZE_ORDER=['XXXL','3XL','XXL','2XL','XL','L','M','S','XS','XXS'];
+const sizeRank=o=>{const t=String(o).toUpperCase().replace(/М/g,'M').replace(/Х/g,'X').replace(/С/g,'S').split('-').reverse().find(x=>SIZE_ORDER.includes(x));return t?SIZE_ORDER.indexOf(t):SIZE_ORDER.length;};
+const bySize=(a,b)=>sizeRank(a.offer_id)-sizeRank(b.offer_id)||String(a.offer_id).localeCompare(String(b.offer_id));
 function gloveFamily(offer){
   const s=String(offer).split('-');
   if(s[0]!=='GLV')return null;
@@ -2902,7 +2907,7 @@ renderKpiPnl(g);
   const toItems=list=>{
     const fam=new Map(),out=[];
     list.forEach(p=>{const k=gloveFamily(p.offer_id);if(!k){out.push({p});return;}if(!fam.has(k))fam.set(k,[]);fam.get(k).push(p);});
-    fam.forEach((ms,k)=>{if(ms.length<2){out.push({p:ms[0]});return;}out.push({f:{key:k,members:ms}});});
+    fam.forEach((ms,k)=>{if(ms.length<2){out.push({p:ms[0]});return;}out.push({f:{key:k,members:ms.slice().sort(bySize)}});});
     return out;
   };
   const itemDate=it=>it.p?((PPM[it.p.product_id]&&PPM[it.p.product_id].work_date)||null):(it.f.members.map(p=>PPM[p.product_id]&&PPM[p.product_id].work_date).filter(Boolean).sort()[0]||null);
@@ -2993,7 +2998,7 @@ if(EMBED){document.body.classList.add('embed');const b=document.createElement('d
   if(!BA_AUTH.has(SUPABASE_URL))b.innerHTML='<div class="psub">Нет входа — откройте plan.html и войдите (вход общий с главной).</div>';}
 async function embedPulse(){const b=document.getElementById('embedBox');
   let pid=OFFER_PID[EMBED_KEY]||null;
-  if(!pid){const ms=ROWS.filter(p=>gloveFamily(p.offer_id)===EMBED_KEY);if(ms.length>1){pid='g_'+EMBED_KEY.replace(/[^A-Za-z0-9]/g,'_');PROTO_GROUPS[pid]=PROTO_GROUPS[pid]||{key:EMBED_KEY,members:ms};}}
+  if(!pid){const ms=ROWS.filter(p=>gloveFamily(p.offer_id)===EMBED_KEY).sort(bySize);if(ms.length>1){pid='g_'+EMBED_KEY.replace(/[^A-Za-z0-9]/g,'_');PROTO_GROUPS[pid]=PROTO_GROUPS[pid]||{key:EMBED_KEY,members:ms};}}
   if(!pid){b.innerHTML=`<div class="psub">Товар ${esc(EMBED_KEY)} не найден среди неархивных.</div>`;return;}
   // под таблицей (06.11.2026, решение владельца): слева гипотезы (~60% ширины), справа матрица «цена × ДРР» юнит-экономики — без текста
   b.innerHTML=`<div id="pulsetbl_${pid}" class="psub">загрузка…</div><div class="embedpages" id="embedPages"><div class="embedrow embedpg"><div class="embedleft"><div class="psection" id="embedHyp"><div id="embedHypList"><div class="psectitle">🎯 SMART-гипотезы</div><div class="psub">загрузка…</div></div><div id="embedForm"></div></div>`
@@ -3414,7 +3419,7 @@ async function embedSizeDefault(gk){const G=PROTO_GROUPS[gk];if(EMBED_SZ[gk])ret
   EMBED_SZQ[gk]=q;const best=[...G.members].sort((a,b)=>(q.get(b.offer_id)||0)-(q.get(a.offer_id)||0))[0];
   if(!EMBED_SZ[gk])EMBED_SZ[gk]=String(best.product_id);return EMBED_SZ[gk];}
 function embedSzSelect(gk){const G=PROTO_GROUPS[gk],q=EMBED_SZQ[gk]||new Map(),bad=EMBED_SZBAD[gk]||new Set(),fam=G.key,sh=o=>o.indexOf(fam)===0?o.slice(fam.length).replace(/^-/,''):o;
-  const ms=[...G.members].sort((a,b)=>(q.get(b.offer_id)||0)-(q.get(a.offer_id)||0));
+  const ms=[...G.members].sort(bySize);   // список — от большего размера к меньшему; выбран по умолчанию — самый продаваемый
   return `<label class="embszsel" title="Размер группы ${esc(fam)}: юнит-экономика (стол 1) и аналитика категории (стол 2) — по нему; по умолчанию — больше всего заказов за 14 дней">Размер <select onchange="embedSetSize('${gk}',this.value)">${ms.map(m=>`<option value="${m.product_id}"${String(m.product_id)===String(EMBED_SZ[gk])?' selected':''}>${esc(sh(m.offer_id))} · ${fmt(q.get(m.offer_id)||0)} шт / 14 дн${bad.has(String(m.product_id))?' · модель не рассчитана':''}</option>`).join('')}</select></label>`;}
 function embedSetSize(gk,pid){EMBED_SZ[gk]=String(pid);document.querySelectorAll('.embszsel select').forEach(s=>{s.value=String(pid);});
   if(document.getElementById('embedszbox'))embedUnitSize(gk,pid);embedMarket(gk);embedRecs(gk);}
