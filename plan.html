@@ -3248,8 +3248,9 @@ function rcProduct(p,E,L,I,MK,G){const rub=v=>mktN(v)+' ₽',pc=(x,y)=>shSg(shP(
   return {gap,html};}
 async function embedRecs(pid){const box=document.getElementById('embedRecs');if(!box)return;
   if(!document.getElementById('rcStyle')){const st=document.createElement('style');st.id='rcStyle';st.textContent='#embedRecs .mkhead{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:6px}#embedRecs .mkhead .psectitle{margin:0}#embedRecs .mkof{color:#94a3b8;font-weight:400;font-size:.85em}#embedRecs .rcst{margin:4px 0 8px;padding:6px 10px;border-radius:8px;background:#f8f6fb;line-height:1.5}#embedRecs .rcit{margin:6px 0;padding:6px 10px;border-left:3px solid #544273;background:#fff;line-height:1.45}#embedRecs .rcit.first{border-left-color:#dc2626}#embedRecs .rcl{display:inline-block;min-width:84px;color:#544273;font-weight:700}#embedRecs .rcsz{margin:14px 0 4px;font-weight:700;color:#544273}#embedRecs .shwk{border-collapse:collapse;font-size:.85em;margin:6px 0}#embedRecs .shwk th{color:#94a3b8;font-weight:400;padding:2px 8px;border-bottom:1px solid rgba(84,66,115,.15)}#embedRecs .shwk td{padding:2px 8px;text-align:center;border-bottom:1px dashed rgba(84,66,115,.12)}#embedRecs details{margin:6px 0}';document.head.appendChild(st);}
-  const G=PROTO_GROUPS[pid],ms=(G?G.members:[BYID[pid]]).filter(p=>p&&p.raw&&p.raw.sku!=null);
-  const head=`<div class="mkhead"><div class="psectitle">🧭 Рекомендации по товару</div><span class="mkof">Проблема — Цель — Действие — Почему · от сегодняшних цен и рынка · опыт прошлых недель — справка</span></div>`;
+  const G=PROTO_GROUPS[pid];if(G)await embedSizeDefault(pid);   // группа перчаток — только выбранный размер (12.11.2026, как столы 1 и 2)
+  const ms=(G?G.members.filter(p=>String(p.product_id)===String(EMBED_SZ[pid])):[BYID[pid]]).filter(p=>p&&p.raw&&p.raw.sku!=null);
+  const head=`<div class="mkhead"><div class="psectitle">🧭 Рекомендации по товару</div>${G?embedSzSelect(pid):''}<span class="mkof">Проблема — Цель — Действие — Почему · от сегодняшних цен и рынка · опыт прошлых недель — справка</span></div>`;
   box.innerHTML=head+'<div class="psub">расчёт…</div>';
   if(!ms.length){box.innerHTML=head+'<div class="psub">У товара нет SKU Ozon.</div>';return;}
   try{const y=localISO(new Date(Date.now()-864e5)),pids=ms.map(p=>p.product_id).join(',');
@@ -3402,7 +3403,7 @@ function mktCell(c,v,S){let val=v[c[0]];let t=val===Infinity?'∞':mktN(val,c[3]
   if(c[0]==='nowp'){const s=v.nowpS;if(!s)return `<td class="num" title="Снимка цены нет — команда «Обновляем цены»">—</td>`;
     return `<td class="num" style="${mktColor(c,val,S)}" title="${esc(`Снято ${mktD(s.day)}: наименьшая ${mktN(val)} ₽; с Ozon-банком ${mktN(s.price_card)} ₽; с другими банками ${mktN(s.price)} ₽; зачёркнутая ${mktN(s.price_old)} ₽${s.in_stock===false?'; НЕТ В НАЛИЧИИ':''}`)}">${t}${s.in_stock===false?' <span class="mkof">нет</span>':''}</td>`;}
   return `<td class="num" style="${mktColor(c,val,S)}">${t}</td>`;}
-// окно РНП, группа перчаток (12.11.2026, решение владельца): выбор размера — один на столы 1 и 2. Стол 1 — юнит-экономика выбранного
+// окно РНП, группа перчаток (12.11.2026, решение владельца): выбор размера — один на столы 1, 2 и 3. Стол 1 — юнит-экономика выбранного
 // размера (матрица с полями «Цена заказа», «ДРР» и «Сейчас», как у товара; общей матрицы группы нет); стол 2 — группы сравнения этого размера.
 // По умолчанию — размер с наибольшими заказами за 14 дней; смена размера на любом столе переключает оба
 const EMBED_SZ={}, EMBED_SZQ={}, EMBED_SZBAD={};
@@ -3416,7 +3417,7 @@ function embedSzSelect(gk){const G=PROTO_GROUPS[gk],q=EMBED_SZQ[gk]||new Map(),b
   const ms=[...G.members].sort((a,b)=>(q.get(b.offer_id)||0)-(q.get(a.offer_id)||0));
   return `<label class="embszsel" title="Размер группы ${esc(fam)}: юнит-экономика (стол 1) и аналитика категории (стол 2) — по нему; по умолчанию — больше всего заказов за 14 дней">Размер <select onchange="embedSetSize('${gk}',this.value)">${ms.map(m=>`<option value="${m.product_id}"${String(m.product_id)===String(EMBED_SZ[gk])?' selected':''}>${esc(sh(m.offer_id))} · ${fmt(q.get(m.offer_id)||0)} шт / 14 дн${bad.has(String(m.product_id))?' · модель не рассчитана':''}</option>`).join('')}</select></label>`;}
 function embedSetSize(gk,pid){EMBED_SZ[gk]=String(pid);document.querySelectorAll('.embszsel select').forEach(s=>{s.value=String(pid);});
-  if(document.getElementById('embedszbox'))embedUnitSize(gk,pid);embedMarket(gk);}
+  if(document.getElementById('embedszbox'))embedUnitSize(gk,pid);embedMarket(gk);embedRecs(gk);}
 async function embedGroupUnit(gk){const G=PROTO_GROUPS[gk],box=document.getElementById('unitbox_'+gk);if(!G||!box)return;
   box.id='embedUnitG';box.className='';   // не «unitbox_g_…»: правила CSS встраивания для общей матрицы группы сюда не относятся
   try{await embedSizeDefault(gk);const bad=EMBED_SZBAD[gk]=new Set();
