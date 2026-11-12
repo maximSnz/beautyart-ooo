@@ -20,12 +20,20 @@ async function lastValue(table,col){
   try{const r=await fetch(`${SB}/rest/v1/${table}?select=${col}&order=${col}.desc.nullslast&limit=1`,{headers:SR,signal:AbortSignal.timeout(30000)});
     if(!r.ok)return null;const j=await r.json();return j[0]?.[col]??null;}catch(e){return null;}
 }
+// последний день с данными без сортировки всей таблицы: по дням назад от вчера (до 7), запрос «день = X, 1 строка».
+// Для ozon_charges (~2 млн строк ИП): order=charge_date.desc не укладывался в лимит времени базы — бот писал «начисления —» (12.11.2026).
+async function lastDayEq(table,col){
+  for(let i=1;i<=7;i++){const d=addDays(TODAY,-i);
+    try{const r=await fetch(`${SB}/rest/v1/${table}?${col}=eq.${d}&select=${col}&limit=1`,{headers:SR,signal:AbortSignal.timeout(30000)});
+      if(!r.ok)return null;if((await r.json()).length)return d;}catch(e){return null;}}
+  return null;
+}
 // свежесть: заказы/начисления/остатки/маржа/реклама — по вчера (реклама из API с 30.10.2026); спрос — не старше суток
 async function freshness(){
   const f=[['заказы','product_sales','sale_date',YEST],['начисления','ozon_charges','charge_date',YEST],['остатки','stock_history','report_date',YEST],
            ['маржа CF','cf_daily','day',YEST],['реклама','ozon_ad_spend','spend_date',YEST]];
   const out=[];let bad=0;
-  for(const [name,t,c,need] of f){const v=await lastValue(t,c);const ok=v&&String(v).slice(0,10)>=need;if(!ok)bad++;out.push(`${ok?'':'⚠️'}${name} ${dm(v&&String(v).slice(0,10))}`);}
+  for(const [name,t,c,need] of f){const v=t==='ozon_charges'?await lastDayEq(t,c):await lastValue(t,c);const ok=v&&String(v).slice(0,10)>=need;if(!ok)bad++;out.push(`${ok?'':'⚠️'}${name} ${dm(v&&String(v).slice(0,10))}`);}
   const cd=await lastValue('cluster_demand','updated_at');const cdOk=cd&&(Date.now()-new Date(cd).getTime())<26*3600e3;if(!cdOk)bad++;
   out.push(`${cdOk?'':'⚠️'}спрос ${cd?dm(mskDay(cd))+' '+mskTime(cd):'—'}`);
   return {text:out.join(' · '),bad};
@@ -56,6 +64,7 @@ if(MODE==='load'){
   const body=lines.map(esc).join('\n')||(ok?'':'итогов шагов нет — упала в самом начале');
   const logged=await log({kind:'load',day:process.env.DAY||YEST,status:st,write,summary:lines.join('\n')||null,freshness:fr.text,run_url:RUN_URL});
   if(!ok||!logged)await send(`${head}\n${body}\n\n<i>Свежесть:</i> ${fr.text}\n<a href="${RUN_URL}">лог запуска</a>${logged?'':'\n<i>журнал admin_load_log недоступен — сводка отправлена сообщением</i>'}`);
+  else if(lines.some(l=>l.startsWith('ℹ️')))await send(`${head}\n${lines.filter(l=>l.startsWith('ℹ️')).map(esc).join('\n')}\n<a href="${RUN_URL}">лог запуска</a>`); // ℹ️ — присылать и при успехе (12.11.2026: «Оплата за заказ» с артикулами)
   else console.log('Загрузка успешна, итоги — в журнале, сообщение не отправлено');
 }else{
   const alerts=[];

@@ -289,11 +289,22 @@ else{
   if(!tk.access_token)throw new Error('Performance: токен не получен');
   PT=tk.access_token;
   const ex=await perf(`/api/client/statistics/expense?dateFrom=${ADS_DAYS[0]}&dateTo=${ADS_DAYS[1]}`);
-  const spent=new Set();String(ex).split('\n').slice(1).forEach(l=>{const c=l.split(';');if(c.length>3&&Number(String(c[3]).replace(',','.'))>0)spent.add(String(c[0]).trim());});
-  const ids=[...spent];const sum=new Map();let reports=0;
+  const spent=new Set(),exp=new Map();String(ex).split('\n').slice(1).forEach(l=>{const c=l.split(';');const v=Number(String(c[3]).replace(',','.'));if(c.length>3&&v>0){const id=String(c[0]).trim();spent.add(id);exp.set(id,(exp.get(id)||0)+v);}});
+  // «Оплата за заказ» (SEARCH_PROMO, CPO): отчёта по SKU Ozon не даёт — в пачке с другими кампаниями молча пропускал, одной — отказ (12.11.2026).
+  // В рекламу её расход не входил никогда (и в начислениях с товаром его нет) — заказываем без неё, в сводке — сумма без ⚠️ (решение владельца 12.11.2026).
+  let promo=new Set();try{const cl=await perf('/api/client/campaign');promo=new Set((cl?.list||[]).filter(c=>c.advObjectType==='SEARCH_PROMO').map(c=>String(c.id)));}catch(e){console.log('  список кампаний:',e.message);}
+  const promoExp=[...spent].filter(id=>promo.has(id)).reduce((a,id)=>a+(exp.get(id)||0),0);
+  const ids=[...spent].filter(id=>!promo.has(id));const sum=new Map();let reports=0;
+  // 12.11.2026: Ozon отказал в отчёте по SKU для части кампаний (HTTP 400 «generation of this type of report is forbidden») — вся загрузка
+  // падала. Теперь пачка с отказом заказывается по одной кампании; кампании с отказом пропускаются и перечисляются в сводке с расходом.
+  const FORBID=/forbidden/i, skipped=[];
+  const order=async c=>{try{return await perf('/api/client/statistics',{method:'POST',body:{campaigns:c,dateFrom:ADS_DAYS[0],dateTo:ADS_DAYS[1],groupBy:'DATE'}});}
+    catch(e){if(FORBID.test(e.message))return null;throw e;}};
+  const batches=[];for(let i=0;i<ids.length;i+=10)batches.push(ids.slice(i,i+10));
   const isoOf=v=>{v=String(v).trim();let m=v.match(/^(\d{2})\.(\d{2})\.(\d{4})/);if(m)return `${m[3]}-${m[2]}-${m[1]}`;m=v.match(/^(\d{4})-(\d{2})-(\d{2})/);return m?m[0]:null;};
-  for(let i=0;i<ids.length;i+=10){
-    const r=await perf('/api/client/statistics',{method:'POST',body:{campaigns:ids.slice(i,i+10),dateFrom:ADS_DAYS[0],dateTo:ADS_DAYS[1],groupBy:'DATE'}});
+  while(batches.length){
+    const b=batches.shift();const r=await order(b);
+    if(!r){if(b.length>1)batches.unshift(...b.map(x=>[x]));else skipped.push(b[0]);continue;}
     const uuid=r.UUID||r.uuid;if(!uuid)throw new Error('Performance: отчёт не заказан');
     let st='';for(let k=0;k<100&&st!=='OK';k++){await sleep(3000);st=(await perf(`/api/client/statistics/${uuid}`)).state;if(st==='ERROR')throw new Error('Performance: отчёт с ошибкой');}
     if(st!=='OK')throw new Error('Performance: отчёт не готов за 5 минут');
@@ -314,6 +325,21 @@ else{
     if(dbA.length)cmp(`реклама ${d} по SKU (сверка с базой)`,sumBy(apiAds.filter(r=>r.spend_date===d),r=>r.offer_id,r=>r.amount),sumBy(dbA.filter(r=>Number(r.amount)!==0),r=>r.offer_id,r=>Number(r.amount)),0.05);
   }
   const unk=apiAds.filter(r=>!SKU_PID.has(String(r.offer_id))).length;
+  if(skipped.length){const v=skipped.reduce((a,id)=>a+(exp.get(id)||0),0);
+    console.log(`  Ozon отказал в отчёте по SKU для кампаний: ${skipped.length} — пропущены`);
+    note(`⚠️ Реклама: Ozon отказал в отчёте по SKU для ${skipped.length} кампаний (${skipped.join(', ')}), их расход ${nf(v)} ₽ за ${ADS_DAYS.map(d=>d.slice(8,10)+'.'+d.slice(5,7)).join('–')} не загружен`);}
+  if(promoExp>0){ // артикулы — из отчёта по заказам «Оплаты за заказ»; строка «ℹ️» — бот присылает в Telegram и при успешной загрузке (решение владельца 12.11.2026)
+    const by=new Map();let how='';
+    try{const g=await perf('/api/client/statistic/orders/generate',{method:'POST',body:{from:`${ADS_DAYS[0]}T00:00:00Z`,to:`${ADS_DAYS[1]}T23:59:59Z`}});const uuid=g.UUID||g.uuid;
+      let st='';for(let k=0;k<60&&uuid&&st!=='OK';k++){await sleep(3000);st=(await perf(`/api/client/statistics/${uuid}`)).state;if(st==='ERROR')break;}
+      if(st==='OK'){const txt=(await perf(`/api/client/statistics/report?UUID=${uuid}`,{raw:true})).toString('utf8');let hdr=null;
+        txt.split('\n').forEach(l=>{const c=l.split(';').map(x=>x.replace(/^"|"$/g,'').trim());if(!hdr){if(c.some(x=>/^sku$/i.test(x)))hdr=c;return;}if(c.length!==hdr.length)return;
+          const a=c[hdr.findIndex(x=>/^артикул/i.test(x))]||('SKU '+c[hdr.findIndex(x=>/^sku$/i.test(x))]),v=Number(String(c[hdr.findIndex(x=>/^расход/i.test(x))]||'').replace(/\s/g,'').replace(',','.'))||0;
+          const m=by.get(a)||{n:0,v:0};m.n++;m.v+=v;by.set(a,m);});}
+      else how=' (отчёт по заказам не получен)';}catch(e){how=' (отчёт по заказам: '+e.message.slice(0,60)+')';}
+    const arts=[...by].sort((x,y)=>y[1].v-x[1].v).map(([a,m])=>`${a} — ${m.n} зак., ${nf(m.v)} ₽`).join('; ');
+    note(`ℹ️ Реклама: «Оплата за заказ» — ${nf(promoExp)} ₽ за ${ADS_DAYS.map(d=>d.slice(8,10)+'.'+d.slice(5,7)).join('–')}, в рекламу по товарам не входит${arts?': '+arts:how}`);
+    console.log(`  «Оплата за заказ»: расход есть, артикулов ${by.size}${how}`);}
   console.log(`  кампаний с расходом ${ids.length}, отчётов ${reports}, строк SKU×день ${apiAds.length}${unk?`, SKU не из активных товаров ${unk}`:''}`);
   note(`Реклама: ${ADS_DAYS.map(d=>`${d.slice(8,10)}.${d.slice(5,7)} — ${nf(apiAds.filter(r=>r.spend_date===d).reduce((a,r)=>a+r.amount,0))} ₽`).join(', ')} (кампаний с расходом ${ids.length})`);
   for(const d of ADS_DAYS){await sbWrite('DELETE',`ozon_ad_spend?spend_date=eq.${d}`);const rows=apiAds.filter(r=>r.spend_date===d);if(rows.length)await sbWrite('POST','ozon_ad_spend?on_conflict=offer_id,spend_date',rows);}
