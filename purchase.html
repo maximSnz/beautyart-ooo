@@ -237,7 +237,7 @@
     <div class="sec">Потребность месяца</div>
     <div class="scroll"><table id="tn" class="pt"></table></div>
 
-    <div class="sec">Закупщик: на ФФ и согласование с поставщиком</div>
+    <div class="sec">Закупщик: на ФФ и согласование с поставщиком <span class="note">— вносится в <a href="https://maximsnz.github.io/beautyart-home/supply.html" target="_blank">сводной заявке поставщику</a>, здесь только просмотр</span></div>
     <div class="scroll"><table id="t2" class="pt"></table></div>
     <div class="cards" id="sup"></div>
 
@@ -269,7 +269,9 @@ const HD={apikey:ANON,Authorization:'Bearer '+ANON};
 function matrixOf(offer){ return (/^(CAP|INS|FW|MS|ML|SE)-/.test(offer))?'m1':'m2'; } // ООО: Илья — CAP, INS, FW, MS, ML, SE; остальные — Ольга
 const MGR={m1:'Илья',m2:'Ольга'};
 const STAGES=[['draft','Заявка менеджера · пн'],['at_buyer','Закупщик: ФФ и согласование · до чт'],['distribution','Распределение по кластерам'],['closed','Закрыта']];
-const STAGE_BTN={draft:'Отправить закупщику',at_buyer:'Согласовано',distribution:'Подтвердить распределение'};
+// «Согласовано», ФФ, согласовано и факт — в сводной заявке поставщику (beautyart-home/supply.html, 16.11.2026): здесь блок закупщика — только просмотр
+const STAGE_BTN={draft:'Отправить закупщику',distribution:'Подтвердить распределение'};
+const SUPPLY_URL='https://maximsnz.github.io/beautyart-home/supply.html';
 const LT_F=['force_majeure_days','approval_days','supplier_to_ff_days','ff_assembly_days','ff_to_ozon_days','acceptance_days'];
 const LT_H=['Форс-мажор','Согласование','Поставщик → ФФ','Сборка на ФФ','ФФ → Ozon','Приёмка'];
 
@@ -440,7 +442,7 @@ function render(){
   document.getElementById('steps').innerHTML=STAGES.map((s,i)=>`<div class="step ${i===stIdx?'on':i<stIdx?'done':''}">${i<stIdx?'✓ ':''}${s[1]}</div>`).join('');
   const a=document.getElementById('actions');
   if(!st) a.innerHTML=`<button onclick="createWeek()">Создать заявку на ${ddmm(WEEK)}</button>`;
-  else a.innerHTML=(STAGE_BTN[st]?`<button onclick="nextStage()">${STAGE_BTN[st]}</button> `:'<span class="ok">Неделя закрыта</span> ')+(stIdx>0?`<button class="btn2" onclick="prevStage()">↩ Вернуть на шаг</button>`:'');
+  else a.innerHTML=(STAGE_BTN[st]?`<button onclick="nextStage()">${STAGE_BTN[st]}</button> `:st==='at_buyer'?`<a href="${SUPPLY_URL}" target="_blank">Согласование — в сводной заявке поставщику ↗</a> `:'<span class="ok">Неделя закрыта</span> ')+(stIdx>0?`<button class="btn2" onclick="prevStage()">↩ Вернуть на шаг</button>`:'');
   const dAt=DEM_AT?new Date(DEM_AT):null, old=dAt&&(Date.now()-dAt)>36*3600e3;
   document.getElementById('meta').innerHTML=`Спрос и остатки Ozon (API): ${dAt?dAt.toLocaleString('ru-RU'):'нет данных'}${old?' <span class="bad">— данные старше 36 ч</span>':''}`
     +(st&&st!=='draft'?(MODEL.some(p=>p.rows.some(r=>r.noSnap))?' • <span class="warn">неделя перенесена из Google-таблицы: спроса и остатков на ту дату нет</span>':' • показан снимок на момент отправки'):'')
@@ -534,7 +536,7 @@ const shipOf=p=>(p.ag??buyOf(p))+p.debt;
 const sgn=x=>x>0?'+'+x:String(x);
 let SUP_LIST=[];
 function renderT2(){
-  const st=ST(), v=vis().filter(p=>reqOf(p)>0||p.ff||p.ag!=null||p.debt), ed=st==='at_buyer', edF=st==='closed'&&FACT_OK, q=document.getElementById('q').value.trim();
+  const st=ST(), v=vis().filter(p=>reqOf(p)>0||p.ff||p.ag!=null||p.debt), ed=false, edF=false, q=document.getElementById('q').value.trim();
   let h=`<colgroup><col style="width:22%"><col span="9"><col style="width:13%"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th class="mhead sep">Заявка</th><th colspan="5" class="whead sep">Закупщик</th><th colspan="3" class="whead sep">Поставка</th><th rowspan="2" class="wsub sep">Комментарий</th></tr>
     <tr><th class="sub sep n">Заявлено, кор.</th><th class="wsub sep n">На ФФ, кор.</th><th class="wsub n">К закупке, кор.</th><th class="wsub n">К закупке, шт</th><th class="wsub n">Согласовано, кор.</th><th class="wsub n">%</th>
     <th class="wsub sep n" title="Накопительно по прошлым неделям: согласовано − факт. «+» — поставщик должен довезти, «−» — мы должны">Долг поставщика, кор.</th><th class="wsub n" title="Согласовано (пока нет — к закупке) + долг поставщика">Привезти, кор.</th><th class="wsub n" title="По умолчанию = согласовано; правится на шаге «Закрыта»">Факт, кор.</th></tr></thead><tbody>`;
@@ -682,6 +684,7 @@ async function nextStage(){
       await upsert('purchase_lines',rows,'week,product_id,cluster');
       await patchWeek({status:'at_buyer',submitted_at:now});
     }else if(st==='at_buyer'){
+      err.innerHTML=`Согласование — в <a href="${SUPPLY_URL}" target="_blank">сводной заявке поставщику</a>.`; return;
       const miss=MODEL.filter(p=>buyOf(p)>0&&p.ag==null);
       if(miss.length){ err.textContent=`Заполните «Согласовано» по всем товарам к закупке (не заполнено: ${miss.length}, напр. ${miss.slice(0,3).map(p=>p.offer_id).join(', ')})`; return; }
       if(!confirm('Отметить заявку согласованной? Обеспеченное (ФФ + согласовано) распределится по кластерам пропорционально заявленному.')) return;
