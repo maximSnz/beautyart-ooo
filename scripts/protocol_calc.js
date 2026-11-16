@@ -1,12 +1,12 @@
 // «Протокол работ» — общий расчёт списка позиций (03.11.2026, решение владельца: план дня фиксирует ночная загрузка).
 // Один код для главной (beautyart-home/index.html) и ночной загрузки (scripts/ozon_daily_load.mjs, шаг 9 — копии этого файла
 // в beautyart/scripts и beautyart-ooo/scripts; правка логики — здесь, затем скопировать в оба репозитория, как need_calc.js).
-// Только чтение базы. Даты — локальные (браузер — свой часовой пояс, загрузка передаёт день по Москве строкой).
+// WB ИП — loadWB (13.11.2026): те же правила на данных WB (ночная загрузка WB, шаг 9, — та же копия в beautyart/scripts). Только чтение базы. Даты — локальные (браузер — свой часовой пояс, загрузка передаёт день по Москве строкой).
 // Правила — CLAUDE.md, 5.13.
 (function(root){
 const DROP_PCT=15,DROP_QTY=5;                       // просадка: заказы А ниже Б на ≥ 15% и ≥ 5 шт (% — округлённый до целого)
 const DEEP_PCT=15,PRICE_TOL=10,DEEP_DAYS=3,DEEP_LO=0.7,DEEP_HI=1.3;   // глубокая аналитика: окно 3 дня
-const DAY_MIN={ip:{wd:3100000,we:2500000},ooo:{wd:100000,we:70000}};  // корпоративный минимум выручки в день, ₽ (будни / выходные)
+const DAY_MIN={ip:{wd:3100000,we:2500000},ooo:{wd:100000,we:70000},wb:{wd:250000,we:175000}};  // корпоративный минимум выручки в день, ₽ (будни / выходные); WB ИП — 13.11.2026, решение владельца (выходные × 0,7)
 const UNDER=0.7, NET_FLOOR=5, STOCK_DAYS=4, HRANK={late:0,none:1,moved:2,hyp:3};
 const addDays=(d,n)=>{const r=new Date(d);r.setDate(r.getDate()+n);return r;};
 const keyOf=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -29,9 +29,11 @@ function defB(yKey){const yD=dateOf(yKey),t=isWe(yD);let d=addDays(yD,-1);while(
 // показатели позиции (товар или группа перчаток) — из сумм её рядов
 function evalUnit(u,C){
   const sum=(a,ix)=>ix.reduce((s,i)=>s+(a[i]||0),0),I7=C.i7;
-  u.q7=sum(u.ord,I7);u.r7=sum(u.rev,I7);u.qPlan7=u.plan7.reduce((s,x)=>s+x,0);
+  // ДРР и цена дня для лимитов: у WB — по всем заказам ленты (с отменами, как модель wb_drr_limits; ряды revA / ordA), у Ozon — те же ряды
+  const RA=u.revA||u.rev,OA=u.ordA||u.ord;
+  u.q7=sum(u.ord,I7);u.r7=sum(u.rev,I7);u.r7d=sum(RA,I7);u.qPlan7=u.plan7.reduce((s,x)=>s+x,0);
   u.price7=u.q7>0?u.r7/u.q7:null;u.planPrice=u.planQ>0?u.planRev/u.planQ:0;u.planPct=u.planRevPct>0?u.planMarW/u.planRevPct:null;
-  u.drr7=u.r7>0?u.a7/u.r7*100:(u.a7>0?Infinity:0);
+  u.drr7=u.r7d>0?u.a7/u.r7d*100:(u.a7>0?Infinity:0);
   u.marCF=u.cfRevn>0?u.cfMar/u.cfRevn*100:null;u.mar=u.marCF!=null?u.marCF:u.planPct;
   u.ordDev7=u.qPlan7>0?(u.q7-u.qPlan7)/u.qPlan7*100:null;
   // просадка заказов; план дня — вчерашний (выходной × 0,7)
@@ -39,12 +41,13 @@ function evalUnit(u,C){
   u.revY=u.rev[C.iy]||0;u.planRY=u.planR7[u.planR7.length-1]||0;u.planR7s=u.planR7.reduce((s,x)=>s+x,0);
   dropAt(u,C.ip,C.ia);
   // ДРР вчера = реклама вчера ÷ выручка PNL вчера; лимиты — от цены дня (нет заказов — средняя за 7 дн, нет — плановая)
-  u.drrY=u.revY>0?u.aY/u.revY*100:(u.aY>0?Infinity:null);
-  if(u.coef)u.limY=lim(u.coef,u.yest>0?u.revY/u.yest:(u.price7||u.planPrice));
+  u.revYd=RA[C.iy]||0;const qYd=OA[C.iy]||0;
+  u.drrY=u.revYd>0?u.aY/u.revYd*100:(u.aY>0?Infinity:null);
+  if(u.coef)u.limY=lim(u.coef,qYd>0?u.revYd/qYd:(u.price7||u.planPrice));
   u.drrState=null;u.drrRub=0;
   if(u.lim){const be=u.lim.drr_be,tp=u.lim.drr_plan;
     u.drrState=u.drr7>be?'red':(tp!=null&&u.drr7>tp?'yellow':(tp!=null&&u.drr7<tp*UNDER&&u.q7<u.qPlan7?'under':null));
-    u.drrRub=u.drrState==='under'?(tp-u.drr7)/100*u.r7:(u.drrState?(u.drr7-(u.drrState==='red'?be:tp))/100*u.r7:0);}
+    u.drrRub=u.drrState==='under'?(tp-u.drr7)/100*u.r7d:(u.drrState?(u.drr7-(u.drrState==='red'?be:tp))/100*u.r7d:0);}
   // наличие — последний снимок (Σ по складам) ≥ план месяца ÷ дней месяца × STOCK_DAYS
   u.stockNow=C.lastI>=0?(u.stock[C.lastI]||0):null;u.stockNeed=C.lastI>=0?(u.need[C.lastI]||0):null;
   u.oos=u.stockNow!=null&&!(u.stockNow>0&&u.stockNow>=u.stockNeed);
@@ -79,6 +82,34 @@ async function restockInfo(api,yKey,PLAN,mk,products){
   }catch(e){return {ok:false,map,err:e.message};}
 }
 async function pool(keys,f){const out=new Array(keys.length);let i=0;await Promise.all([0,1,2,3,4,5].map(async()=>{while(i<keys.length){const k=i++;out[k]=await f(keys[k]);}}));return out;}
+// перчатки — одна позиция на производителя, цвет и фасовку (от 2 товаров с планом): ряды и план — суммы (Ozon и WB)
+function famGroups(units,C){
+  const fam=new Map(),out=[];
+  units.forEach(u=>{const k=gloveFamily(u.offer);if(!k){out.push(u);return;}if(!fam.has(k))fam.set(k,[]);fam.get(k).push(u);});
+  fam.forEach((ms,k)=>{
+    if(ms.length<2){out.push(...ms);return;}
+    const sA=f=>ms[0][f].map((_,i)=>ms.reduce((s,m)=>s+(m[f][i]||0),0)),sN=f=>ms.reduce((s,m)=>s+(m[f]||0),0);
+    const g={fam:k,offer:k,name:ms[0].name||'',pid:'f:'+k,members:ms,mgr:ms[0].mgr,ord:sA('ord'),rev:sA('rev'),plan7:sA('plan7'),planR7:sA('planR7'),ad7:sA('ad7'),stock:sA('stock'),need:sA('need')};
+    if(ms[0].revA){g.revA=sA('revA');g.ordA=sA('ordA');}   // WB: все заказы (с отменами) — для ДРР
+    ['a7','aY','planQ','planRev','planRevPct','planMarW','cfMar','cfRevn'].forEach(f=>g[f]=sN(f));
+    // лимиты вчерашнего дня у группы — по размерам, взвешенные выручкой вчера (нет — планом дня)
+    {const wm=ms.filter(m=>m.limY),wv=m=>m.revY>0?m.revY:0,WV=wm.reduce((s,m)=>s+wv(m),0),ww=m=>WV>0?wv(m):m.planRY,WW=wm.reduce((s,m)=>s+ww(m),0),wpm=wm.filter(m=>m.limY.plan!=null),WPM=wpm.reduce((s,m)=>s+ww(m),0);
+     g.limY=wm.length&&WW>0?{be:wm.reduce((s,m)=>s+m.limY.be*ww(m),0)/WW,plan:WPM>0?wpm.reduce((s,m)=>s+m.limY.plan*ww(m),0)/WPM:null,price:null}:null;}
+    // лимиты группы — средние по размерам с лимитами, взвешенные выручкой 7 дн (нет выручки — плановой)
+    const wl=ms.filter(m=>m.lim),w=m=>m.r7>0?m.r7:0,W=wl.reduce((s,m)=>s+w(m),0),wt=m=>W>0?w(m):m.planRev,WT=wl.reduce((s,m)=>s+wt(m),0);
+    const wp=wl.filter(m=>m.lim.drr_plan!=null),WP=wp.reduce((s,m)=>s+wt(m),0);
+    g.lim=wl.length&&WT>0?{drr_be:wl.reduce((s,m)=>s+m.lim.drr_be*wt(m),0)/WT,drr_plan:WP>0?wp.reduce((s,m)=>s+m.lim.drr_plan*wt(m),0)/WP:null}:null;
+    {const wm=ms.filter(m=>m.lim3),wv=m=>m.r3>0?m.r3:0,WV=wm.reduce((s,m)=>s+wv(m),0),ww=m=>WV>0?wv(m):m.planRY,WW=wm.reduce((s,m)=>s+ww(m),0),wpm=wm.filter(m=>m.lim3.plan!=null),WPM=wpm.reduce((s,m)=>s+ww(m),0);
+     g.lim3=wm.length&&WW>0?{be:wm.reduce((s,m)=>s+m.lim3.be*ww(m),0)/WW,plan:WPM>0?wpm.reduce((s,m)=>s+m.lim3.plan*ww(m),0)/WPM:null,price:null}:null;}
+    // гипотезы — по размерам: у группы худшее состояние; поступления — если есть у любого размера
+    g.hState=ms.reduce((a,m)=>HRANK[m.hState]<HRANK[a]?m.hState:a,'hyp');g.dueToday=ms.some(m=>m.dueToday);
+    g.due=ms.map(m=>m.due).filter(Boolean).sort()[0]||null;
+    g.restock=ms.some(m=>m.restock);g.afterZero=ms.map(m=>m.afterZero).filter(Boolean).sort().pop()||null;
+    const rs=ms.map(m=>m.rs).filter(Boolean);g.rs=rs.length?{before:rs.reduce((s,x)=>s+x.before,0),now:rs.reduce((s,x)=>s+x.now,0),d:rs.reduce((s,x)=>s+x.d,0),plan:rs.reduce((s,x)=>s+x.plan,0),up:rs.some(x=>x.up)}:null;
+    out.push(evalUnit(g,C));
+  });
+  return out;
+}
 // загрузка и расчёт позиций. api: {all(path) — все строки постранично, one(path) — один запрос}; today — 'YYYY-MM-DD' (день протокола,
 // данные — за вчера); m1 — RegExp менеджера m1 (matrixOf юрлица); bKey — день сравнения Б (нет — по умолчанию defB);
 // aRange / bRange — периоды просадки [с, по] (06.11.2026, ручная правка дня: среднее в день А против среднего Б; Б раньше А) — только просадка
@@ -143,34 +174,86 @@ async function load(api,{today,m1,bKey,aRange,bRange}){
     u.afterZero=z>=0&&st[lastI]>0&&st[lastI]>=u.need[lastI]?cur7[z]:null;u.restock=!!(u.rs&&u.rs.up)||!!u.afterZero;
     units.push(evalUnit(u,C));
   });
-  // перчатки — одна позиция на производителя и цвет (от 2 товаров с планом): ряды и план — суммы
-  const fam=new Map(),out=[];
-  units.forEach(u=>{const k=gloveFamily(u.offer);if(!k){out.push(u);return;}if(!fam.has(k))fam.set(k,[]);fam.get(k).push(u);});
-  fam.forEach((ms,k)=>{
-    if(ms.length<2){out.push(...ms);return;}
-    const sA=f=>ms[0][f].map((_,i)=>ms.reduce((s,m)=>s+(m[f][i]||0),0)),sN=f=>ms.reduce((s,m)=>s+(m[f]||0),0);
-    const g={fam:k,offer:k,name:ms[0].name||'',pid:'f:'+k,members:ms,mgr:ms[0].mgr,ord:sA('ord'),rev:sA('rev'),plan7:sA('plan7'),planR7:sA('planR7'),ad7:sA('ad7'),stock:sA('stock'),need:sA('need')};
-    ['a7','aY','planQ','planRev','planRevPct','planMarW','cfMar','cfRevn'].forEach(f=>g[f]=sN(f));
-    // лимиты вчерашнего дня у группы — по размерам, взвешенные выручкой вчера (нет — планом дня)
-    {const wm=ms.filter(m=>m.limY),wv=m=>m.revY>0?m.revY:0,WV=wm.reduce((s,m)=>s+wv(m),0),ww=m=>WV>0?wv(m):m.planRY,WW=wm.reduce((s,m)=>s+ww(m),0),wpm=wm.filter(m=>m.limY.plan!=null),WPM=wpm.reduce((s,m)=>s+ww(m),0);
-     g.limY=wm.length&&WW>0?{be:wm.reduce((s,m)=>s+m.limY.be*ww(m),0)/WW,plan:WPM>0?wpm.reduce((s,m)=>s+m.limY.plan*ww(m),0)/WPM:null,price:null}:null;}
-    // лимиты группы — средние по размерам с лимитами, взвешенные выручкой 7 дн (нет выручки — плановой)
-    const wl=ms.filter(m=>m.lim),w=m=>m.r7>0?m.r7:0,W=wl.reduce((s,m)=>s+w(m),0),wt=m=>W>0?w(m):m.planRev,WT=wl.reduce((s,m)=>s+wt(m),0);
-    const wp=wl.filter(m=>m.lim.drr_plan!=null),WP=wp.reduce((s,m)=>s+wt(m),0);
-    g.lim=wl.length&&WT>0?{drr_be:wl.reduce((s,m)=>s+m.lim.drr_be*wt(m),0)/WT,drr_plan:WP>0?wp.reduce((s,m)=>s+m.lim.drr_plan*wt(m),0)/WP:null}:null;
-    {const wm=ms.filter(m=>m.lim3),wv=m=>m.r3>0?m.r3:0,WV=wm.reduce((s,m)=>s+wv(m),0),ww=m=>WV>0?wv(m):m.planRY,WW=wm.reduce((s,m)=>s+ww(m),0),wpm=wm.filter(m=>m.lim3.plan!=null),WPM=wpm.reduce((s,m)=>s+ww(m),0);
-     g.lim3=wm.length&&WW>0?{be:wm.reduce((s,m)=>s+m.lim3.be*ww(m),0)/WW,plan:WPM>0?wpm.reduce((s,m)=>s+m.lim3.plan*ww(m),0)/WPM:null,price:null}:null;}
-    // гипотезы — по размерам: у группы худшее состояние; поступления — если есть у любого размера
-    g.hState=ms.reduce((a,m)=>HRANK[m.hState]<HRANK[a]?m.hState:a,'hyp');g.dueToday=ms.some(m=>m.dueToday);
-    g.due=ms.map(m=>m.due).filter(Boolean).sort()[0]||null;
-    g.restock=ms.some(m=>m.restock);g.afterZero=ms.map(m=>m.afterZero).filter(Boolean).sort().pop()||null;
-    const rs=ms.map(m=>m.rs).filter(Boolean);g.rs=rs.length?{before:rs.reduce((s,x)=>s+x.before,0),now:rs.reduce((s,x)=>s+x.now,0),d:rs.reduce((s,x)=>s+x.d,0),plan:rs.reduce((s,x)=>s+x.plan,0),up:rs.some(x=>x.up)}:null;
-    out.push(evalUnit(g,C));
-  });
+  const out=famGroups(units,C);
   // выручка юрлица вчера — все товары (и без плана)
   const revAllY=salesDays[C.iy].reduce((s,x)=>s+Number(x.revenue||0),0);
   const SKU_OF={};Object.entries(SKU_PID).forEach(([sku,pid])=>{SKU_OF[pid]=sku;});
   return {days,cur7,yKey,todayKey,pKey:bR[0],pDef,aR,bR,yWe:isWe(yD),revAllY,rows:out,limKey,SKU_OF,hypOk:hyp.ok,hypErr:hyp.err,restockOk:restock.ok};
+}
+// ===== WB ИП (13.11.2026, решения владельца: «Протокол работ» WB — полностью как Ozon; шаг 3 этапа 7 ROADMAP) =====
+// Те же правила (evalUnit / work / gapSel / planRows), другие данные (база ИП, таблицы wb_*): позиция — размер WB (chrt_id; артикул =
+// «артикул продавца-размер», как wb-pulse.html), перчатки — группой (gloveFamily); всё WB — у Ильи (m1). Заказы и выручка — «Лента заказов»
+// без отмен (wb_orders, source = feed; полная с 12.10.2026), ДРР и цена дня для лимитов — по всем заказам ленты (с отменами, как модель
+// wb_drr_limits и РНП WB); реклама — wb_cf_daily.ads (расход карточки, делённый на размеры по выручке заказов дня); лимиты — wb_drr_limits
+// (pre(P) = r − t − u ÷ (P × b), ступени комиссии нет); план — wb_sales_plan; остатки — wb_stock_history без «В пути…»; гипотезы —
+// wb_protocol / wb_plan_meta; минимум выручки — DAY_MIN.wb. Маржинальность CF прошлой недели — wb_cf_daily (Σ mar ÷ Σ retail).
+const WB_FEED_FROM='2026-10-12',WB_PSEUDO=/^В пути/;
+const wbOffer=p=>{const sz=String(p.tech_size||'').trim();return String(p.vendor_code||p.chrt_id).toUpperCase()+(sz&&sz!=='0'?'-'+sz.toUpperCase():'');};
+async function loadWB(api,{today,bKey,aRange,bRange}){
+  const tD=dateOf(today),yD=addDays(tD,-1),yKey=keyOf(yD),todayKey=today,mk=yKey.slice(0,7);
+  const days=[];for(let i=34;i>=0;i--)days.push(keyOf(addDays(yD,-i)));   // 35 дней
+  const cur7=days.slice(-7),months=[...new Set(days.map(k=>k.slice(0,7)))];
+  const curMon=addDays(tD,-((tD.getDay()+6)%7)),wkFrom=keyOf(addDays(curMon,-7)),wkTo=keyOf(addDays(curMon,-1));   // последняя закрытая неделя
+  const stFrom=keyOf(addDays(yD,-9));
+  const [prodAll,plans,ordRows,cfRows,hyp,ppm,stkRows,limDay]=await Promise.all([
+    api.all('wb_products?select=chrt_id,vendor_code,tech_size,title,archived,wb_archived&order=chrt_id'),
+    api.all(`wb_sales_plan?month=in.(${months.join(',')})&select=month,chrt_id,plan_qty,price,margin_pct&order=month,chrt_id`),
+    api.all(`wb_orders?source=eq.feed&order_day=gte.${days[0]}&order_day=lte.${yKey}&select=srid,order_day,chrt_id,price_with_disc,is_cancel&order=srid`),
+    api.all(`wb_cf_daily?day=gte.${days[0]}&day=lte.${yKey}&select=chrt_id,day,ads,mar,retail&order=chrt_id,day`),
+    api.all('wb_protocol?parent_id=is.null&deadline=not.is.null&select=id,chrt_id,action,deadline,created_at,metric,target_orders,baseline_ctx,fact_ctx,fact_dev&order=id').then(r=>({ok:true,rows:r})).catch(e=>({ok:false,err:e.message,rows:[]})),
+    api.all('wb_plan_meta?work_date=not.is.null&select=chrt_id,month,work_date&order=chrt_id,month').catch(()=>[]),
+    api.all(`wb_stock_history?report_date=gte.${stFrom}&report_date=lte.${yKey}&qty=gt.0&select=report_date,barcode,warehouse_name,chrt_id,qty&order=report_date,barcode,warehouse_name`),
+    api.one(`wb_drr_limits?day=lte.${todayKey}&select=day&order=day.desc&limit=1`).catch(()=>null)
+  ]);
+  const limKey=limDay&&limDay[0]?limDay[0].day:null;
+  const LIM=new Map();if(limKey)(await api.all(`wb_drr_limits?day=eq.${limKey}&select=chrt_id,price,pre_pct,plan_pct,drr_plan,drr_be,b,r,t,u&order=chrt_id`)).forEach(x=>LIM.set(String(x.chrt_id),x));
+  const products=prodAll.filter(p=>!p.archived&&!p.wb_archived).map(p=>({product_id:Number(p.chrt_id),offer_id:wbOffer(p),name:p.title||''}));
+  const PLAN={};plans.forEach(r=>{PLAN[r.month+'|'+r.chrt_id]=r;});
+  const DI=new Map(days.map((k,i)=>[k,i])),zeros=n=>new Array(n).fill(0);
+  const S={ord:new Map(),rev:new Map(),ordA:new Map(),revA:new Map()},arr=(m,c)=>{let a=m.get(c);if(!a){a=zeros(days.length);m.set(c,a);}return a;};
+  let revAllY=0;
+  ordRows.forEach(o=>{const i=DI.get(o.order_day);if(i==null)return;const c=String(o.chrt_id),v=Number(o.price_with_disc||0);
+    arr(S.ordA,c)[i]++;arr(S.revA,c)[i]+=v;if(!o.is_cancel){arr(S.ord,c)[i]++;arr(S.rev,c)[i]+=v;if(o.order_day===yKey)revAllY+=v;}});
+  const advD=new Map(),cf=new Map();
+  cfRows.forEach(x=>{const c=String(x.chrt_id),j=cur7.indexOf(x.day);
+    if(j>=0){let a=advD.get(c);if(!a){a=zeros(7);advD.set(c,a);}a[j]+=Number(x.ads||0);}
+    if(x.day>=wkFrom&&x.day<=wkTo){const e=cf.get(c)||{mar:0,revn:0};e.mar+=Number(x.mar||0);e.revn+=Number(x.retail||0);cf.set(c,e);}});
+  const hy=new Map();hyp.rows.forEach(r=>{const k=String(r.chrt_id),c=hy.get(k);if(!c||r.deadline>c.deadline||(r.deadline===c.deadline&&r.created_at>c.created_at))hy.set(k,r);});
+  const WD=new Map();ppm.forEach(x=>{const k=String(x.chrt_id);if(!WD.has(k)||x.work_date>WD.get(k))WD.set(k,x.work_date);});
+  // остатки по дням (Σ по складам, без «В пути…»): ряд 7 дней и снимки для правила ▲
+  const SNAP=new Map();stkRows.forEach(x=>{if(WB_PSEUDO.test(x.warehouse_name||''))return;let m=SNAP.get(x.report_date);if(!m){m=new Map();SNAP.set(x.report_date,m);}const c=String(x.chrt_id);m.set(c,(m.get(c)||0)+Number(x.qty||0));});
+  stkRows.forEach(x=>{if(!SNAP.has(x.report_date))SNAP.set(x.report_date,new Map());});   // снимок дня есть, даже если всё «в пути»
+  const hasSnap=cur7.map(k=>SNAP.has(k)),stockOf=c=>cur7.map(k=>{const m=SNAP.get(k);return m?(m.get(c)||0):0;});
+  // пополнения — правило ▲ plan.html: последний снимок (не позже вчера) против снимка не позже чем за 2 дня до него, рост > 10% плана месяца
+  const snapDays=[...SNAP.keys()].sort(),last=snapDays.filter(k=>k<=yKey).pop()||null,prev=last?snapDays.filter(k=>k<=keyOf(addDays(dateOf(last),-2))).pop()||null:null;
+  const pDef=defB(yKey),pKey=bKey&&DI.has(bKey)&&bKey<yKey?bKey:pDef;
+  const idx=r=>days.map((k,i)=>k>=r[0]&&k<=r[1]?i:-1).filter(i=>i>=0);
+  const aR=aRange&&aRange[1]<=yKey&&idx(aRange).length?aRange:[yKey,yKey];
+  const bR=bRange&&bRange[1]<aR[0]&&idx(bRange).length?bRange:[pKey,pKey];
+  const C={i7:cur7.map(k=>DI.get(k)),iy:DI.get(yKey),ip:idx(bR),ia:idx(aR),hasSnap,lastI:hasSnap.lastIndexOf(true)};
+  const planDay=(c,k)=>{const pl=PLAN[k.slice(0,7)+'|'+c];if(!pl||!(Number(pl.plan_qty)>0))return 0;const [y,m,d]=k.split('-').map(Number);const e=effDays(y,m);return e>0?Number(pl.plan_qty)/e*(isWe(new Date(y,m-1,d))?0.7:1):0;};
+  const units=[];
+  products.forEach(p=>{
+    const pid=p.product_id,c=String(pid),o=p.offer_id,pl=PLAN[mk+'|'+pid];
+    if(!pl||!(Number(pl.plan_qty)>0))return;                                  // размеры с планом на месяц вчерашнего дня
+    const q=Number(pl.plan_qty),pp=Number(pl.price||0),pct=pl.margin_pct!=null?Number(pl.margin_pct):null,e=cf.get(c),L=LIM.get(c),st=stockOf(c),ad7=advD.get(c)||zeros(7);
+    const u={pid,offer:o,name:p.name,mgr:'m1',ord:S.ord.get(c)||zeros(days.length),rev:S.rev.get(c)||zeros(days.length),ordA:S.ordA.get(c)||zeros(days.length),revA:S.revA.get(c)||zeros(days.length),
+      a7:ad7.reduce((s,x)=>s+x,0),aY:ad7[6],ad7,
+      plan7:cur7.map(k=>planDay(pid,k)),planR7:cur7.map(k=>{const pk=PLAN[k.slice(0,7)+'|'+pid];return planDay(pid,k)*(pk?Number(pk.price||0):0);}),planQ:q,planRev:q*pp,planRevPct:pct!=null?q*pp:0,planMarW:pct!=null?q*pp*pct:0,
+      cfMar:e?e.mar:0,cfRevn:e?e.revn:0,lim:L?{drr_plan:L.drr_plan!=null?Number(L.drr_plan):null,drr_be:Number(L.drr_be)}:null,
+      // план маржинальности — wb_sales_plan месяца (как РНП WB), нет — из модели
+      coef:L&&L.b!=null?{b:+L.b,r0:+L.r,lo:0,hi:0,t:+L.t,u:+L.u,plan:pct!=null?pct:(L.plan_pct!=null?+L.plan_pct:null)}:null,stock:st,
+      need:cur7.map(k=>{const pk=PLAN[k.slice(0,7)+'|'+pid]||pl;return Number(pk.plan_qty||0)/new Date(+k.slice(0,4),+k.slice(5,7),0).getDate()*STOCK_DAYS;})};
+    const h=hy.get(c),wd=WD.get(c)||null;u.hypo=h||null;u.wd=wd;
+    const due=[h&&h.deadline,wd].filter(Boolean).sort().pop()||null;u.due=due;u.dueToday=due===todayKey;
+    u.hState=h&&h.deadline>=todayKey?'hyp':(wd&&wd>=todayKey?'moved':(due?'late':'none'));
+    if(last&&prev){const n=SNAP.get(last).get(c)||0,bf=SNAP.get(prev).get(c)||0,d=n-bf;u.rs={before:bf,now:n,d,plan:q,up:q>0&&d>0.1*q,last,prev};}else u.rs=null;
+    const lastI=C.lastI;let z=-1;for(let i=0;i<lastI;i++)if(hasSnap[i]&&!(st[i]>0))z=i;
+    u.afterZero=z>=0&&st[lastI]>0&&st[lastI]>=u.need[lastI]?cur7[z]:null;u.restock=!!(u.rs&&u.rs.up)||!!u.afterZero;
+    units.push(evalUnit(u,C));
+  });
+  const out=famGroups(units,C);
+  return {wb:true,idCol:'chrt_id',minDay:WB_FEED_FROM,days,cur7,yKey,todayKey,pKey:bR[0],pDef,aR,bR,yWe:isWe(yD),revAllY,rows:out,limKey,SKU_OF:{},hypOk:hyp.ok,hypErr:hyp.err,restockOk:true};
 }
 const posKey=r=>r.fam?'f:'+r.fam:String(r.pid);
 const pot=r=>Math.max(0,r.planRY-r.revY), below=r=>r.revY<r.planRY, redY=r=>!!(r.limY&&r.drrY!=null&&r.drrY>r.limY.be);
@@ -196,7 +279,7 @@ function info(P,W,r){const o={yest:rd(r.yest,1),planY:rd(r.planY,1),revY:rd(r.re
   const w=W.why(r);
   if(w.includes('drop'))o.drop={cur:rd(r.cur,1),prev:rd(r.prev,1),revC:rd(r.revC,0),revP:rd(r.revP,0),pct:rd(r.dropPct,1)};
   if(w.includes('gap'))o.gap={pot:rd(pot(r),0),gap:rd(W.gap,0),min:W.dMin,revAll:rd(P.revAllY,0)};
-  if(w.includes('drr')||r.limY)o.drr={drr:rd(r.drrY,1),ads:rd(r.aY,0),price:r.limY&&r.limY.price?rd(r.limY.price,0):null,plan:r.limY?rd(r.limY.plan,1):null,be:r.limY?rd(r.limY.be,1):null};
+  if(w.includes('drr')||r.limY)o.drr={drr:rd(r.drrY,1),ads:rd(r.aY,0),rev:rd(r.revYd,0),price:r.limY&&r.limY.price?rd(r.limY.price,0):null,plan:r.limY?rd(r.limY.plan,1):null,be:r.limY?rd(r.limY.be,1):null};
   if(w.includes('deep'))o.deep={q3:rd(r.q3,1),qPlan3:rd(r.qPlan3,1),dev:rd(r.ordDev3,1),price3:rd(r.price3,0),planPrice:rd(r.planPrice,0),drr3:rd(r.drr3,1),plan:r.lim3?rd(r.lim3.plan,1):null,be:r.lim3?rd(r.lim3.be,1):null,days:DEEP_DAYS};
   if(w.includes('hyp'))o.hyp={state:r.hState,due:r.due||null,deadline:r.hypo?r.hypo.deadline:null,action:r.hypo?String(r.hypo.action||'').slice(0,200):null,wd:r.wd||null,
     sizes:r.members?r.members.filter(m=>m.hState!=='hyp').map(m=>[m.offer,m.hState]):undefined};
@@ -205,7 +288,7 @@ function info(P,W,r){const o={yest:rd(r.yest,1),planY:rd(r.planY,1),revY:rd(r.re
 // строки таблицы product_protocol_plan за день протокола
 // периоды не по умолчанию (А ≠ вчера или Б — больше дня) — в a_from / a_to / cmp_to (06.11.2026; ночью не пишутся — колонки могут отсутствовать)
 function planRows(P,W,src){const rng=P.aR[0]!==P.yKey||P.aR[1]!==P.yKey||P.bR[0]!==P.bR[1];
-  return W.list.map(r=>({day:P.todayKey,pos_key:posKey(r),product_id:r.fam?null:r.pid,offer_id:r.offer,mgr:r.mgr,reasons:W.why(r).join(','),y_day:P.yKey,cmp_day:P.bR[0],src,info:info(P,W,r),
+  return W.list.map(r=>({day:P.todayKey,pos_key:posKey(r),[P.idCol||'product_id']:r.fam?null:r.pid,offer_id:r.offer,mgr:r.mgr,reasons:W.why(r).join(','),y_day:P.yKey,cmp_day:P.bR[0],src,info:info(P,W,r),
     ...(rng?{a_from:P.aR[0],a_to:P.aR[1],cmp_to:P.bR[1]}:{})}));}
 // маржа товара за день по дате заказа (03.11.2026, «Позиции по дням» — разница маржи соседних дней) — как окно товара (prItem) и «Рука на
 // пульсе»: созревшие дни (≤ сегодня − 8) — факт (pnl − себестоимость на дату − 3% × выручка P − реклама дня) ÷ по начислениям ozon_charges_by_event;
@@ -241,6 +324,6 @@ async function marginDays(api,P){
     out.push({product_id:u.pid,day:d,mar:r2(mar),gmv:r2(gmv),rev:r2(r),est});}));
   return out;
 }
-root.PROTO={load,work,planRows,marginDays,gapSel,evalUnit,dropAt,lim,defB,posKey,pot,below,redY,gloveFamily,
+root.PROTO={load,loadWB,wbOffer,work,planRows,marginDays,gapSel,evalUnit,dropAt,lim,defB,posKey,pot,below,redY,gloveFamily,
   DROP_PCT,DROP_QTY,DEEP_PCT,PRICE_TOL,DEEP_DAYS,DEEP_LO,DEEP_HI,DAY_MIN,UNDER,NET_FLOOR,STOCK_DAYS,HRANK};
 })(typeof window!=='undefined'?window:globalThis);
