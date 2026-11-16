@@ -219,16 +219,6 @@
       <div class="inner" id="lt"></div>
     </details>
 
-    <details class="box" id="gsBox">
-      <summary>📋 Перенос в Google-таблицу «Еженедельные заявки» (временно, пока WB не в приложении)</summary>
-      <div class="inner">
-        <div class="note">1) В Google-таблице откройте лист недели (<b>«Озон дд.мм»</b> / <b>«Озон дд.мм ООО»</b>), скопируйте столбец A с ячейки A4 вниз (артикулы) и вставьте сюда.
-          2) Нажмите кнопку — в буфер скопируются короба по 24 кластерам (столбцы F–AC) в порядке ваших строк; Σ лист считает сам. 3) Встаньте в ячейку F4 листа и вставьте (Cmd+V).
-          Переносится «заявлено» выбранной недели; Алматы + Астана → «Казахстан».</div>
-        <textarea id="gsArts" rows="5" style="width:100%;box-sizing:border-box;font-family:monospace" placeholder="Вставьте артикулы из столбца A (с A4 вниз)"></textarea>
-        <div style="margin-top:6px"><button onclick="copyGs()">📋 Скопировать короба F–AC</button> <span id="gsRes" class="note"></span></div>
-      </div>
-    </details>
 
     <div class="sec" id="h1">Заявка менеджера</div>
     <div class="note">Расчёт = (спрос × (покрытие + запас) − остаток − в пути) ÷ штук в коробе, вверх до целого короба, − заявки прошлых недель. Нажмите на товар, чтобы раскрыть кластеры.</div>
@@ -237,9 +227,6 @@
     <div class="sec">Потребность месяца</div>
     <div class="scroll"><table id="tn" class="pt"></table></div>
 
-    <div class="sec">Закупщик: на ФФ и согласование с поставщиком <span class="note">— вносится в <a href="https://maximsnz.github.io/beautyart-home/supply.html" target="_blank">сводной заявке поставщику</a>, здесь только просмотр</span></div>
-    <div class="scroll"><table id="t2" class="pt"></table></div>
-    <div class="cards" id="sup"></div>
 
     <div class="sec">Паллеты по кластерам</div>
     <div class="note">Норма — средняя загрузка 0,8–1,15 на паллету. Считается по всем товарам юрлица.</div>
@@ -447,12 +434,12 @@ function render(){
   document.getElementById('meta').innerHTML=`Спрос и остатки Ozon (API): ${dAt?dAt.toLocaleString('ru-RU'):'нет данных'}${old?' <span class="bad">— данные старше 36 ч</span>':''}`
     +(st&&st!=='draft'?(MODEL.some(p=>p.rows.some(r=>r.noSnap))?' • <span class="warn">неделя перенесена из Google-таблицы: спроса и остатков на ту дату нет</span>':' • показан снимок на момент отправки'):'')
     +` • товаров в расчёте: ${PROD.length-NOBOX.length}`+(NOBOX.length?` • <span class="warn">без «в коробе»: ${NOBOX.length}</span> (в таблице — красная ячейка; заполните в «Базе товаров»)`:'');
-  renderLT(); renderCards(); renderT1(); renderNeeds(); renderT2(); renderPal();
+  renderLT(); renderCards(); renderT1(); renderNeeds(); renderPal();
 }
 function renderCards(){
   const v=vis(), q=S(v,reqOf), b=S(v,buyOf), ag=S(v,p=>p.ag), has=v.some(p=>p.ag!=null);
-  document.getElementById('cards').innerHTML=[['Расчёт, кор.',v.length&&v.every(p=>p.rows.every(r=>r.noSnap))?'—':nf.format(S(v,calcOf))],['Заявлено, кор.',nf.format(q)],['На ФФ, кор.',nf.format(S(v,p=>p.ff))],['К закупке, кор.',nf.format(b)],['Согласовано',has&&b?Math.round(ag/b*100)+'%':'—']]
-    .map(([l,x])=>`<div class="card"><div class="l">${l}</div><div class="v">${x}</div></div>`).join('');
+  document.getElementById('cards').innerHTML=[['Расчёт, кор.',v.length&&v.every(p=>p.rows.every(r=>r.noSnap))?'—':nf.format(S(v,calcOf))],['Заявлено, кор.',nf.format(q)],['На ФФ, кор.',nf.format(S(v,p=>p.ff))],['Согласовано, кор.',has?nf.format(ag):'—',has&&b?Math.round(ag/b*100)+'% к закупке ('+nf.format(b)+' кор.)':'вносит закупщик в сводной заявке']]
+    .map(([l,x,sub])=>`<div class="card"><div class="l">${l}</div><div class="v">${x}</div>${sub?`<div class="l">${sub}</div>`:''}</div>`).join('');
 }
 function renderLT(){
   const st=ST(), ed=st==='draft';
@@ -474,25 +461,32 @@ function renderLT(){
 function palOf(p,boxes){return p.boxes_per_pallet>0?boxes/p.boxes_per_pallet:null;}
 const supOf=p=>p.supplier||'—';
 function groupsOf(v,key){ const by=new Map(); v.forEach(p=>{const s=supOf(p); if(!by.has(s))by.set(s,[]); by.get(s).push(p);}); return [...by.entries()].sort((a,b)=>S(b[1],key)-S(a[1],key)||a[0].localeCompare(b[0],'ru')); }
-function toggleG(t,i){ const set=[,OPEN1,OPEN2,OPEN3][t], k=[,K1,K2,K3][t][i]; set.has(k)?set.delete(k):set.add(k); [,renderT1,renderT2,renderNeeds][t](); }
+function toggleG(t,i){ const set=[,OPEN1,OPEN2,OPEN3][t], k=[,K1,K2,K3][t][i]; set.has(k)?set.delete(k):set.add(k); [,renderT1,null,renderNeeds][t](); }
+// «Согласовано» в таблице менеджера (16.11.2026, решение владельца): обеспечено (ФФ + согласовано) больше заявленного — зелёный, меньше — красный;
+// подсветка остаётся и после распределения. Вносит закупщик в сводной заявке поставщику.
+function agCell(p,req){
+  if(p.ag==null) return '<td class="n sep mute" title="Ещё не согласовано — вносит закупщик в сводной заявке поставщику">—</td>';
+  const sec=(p.ff||0)+p.ag, d=sec-req, bg=d>0?'background:rgba(34,197,94,.22);':d<0?'background:rgba(227,61,120,.22);':'';
+  return `<td class="n sep" style="${bg}" title="Согласовано ${p.ag} кор.${p.ff?` + на ФФ ${p.ff}`:''} = ${sec} к заявленным ${req} (${d>0?'+':''}${d})"><b>${p.ag}</b>${p.ff?`<div class="mute" style="font-size:.75em">+ФФ ${p.ff}</div>`:''}</td>`;
+}
 function renderT1(){
   const st=ST(), v=vis(), ed=st==='draft', dist=st==='distribution'||st==='closed', edD=st==='distribution', q=document.getElementById('q').value.trim();
   document.getElementById('h1').textContent=dist?'Распределение обеспеченного по кластерам':'Заявка менеджера';
   const dash='<span class="mute">—</span>';
-  const NC=dist?10:9;
-  let h=`<colgroup><col style="width:26%"><col span="${NC-1}"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="3" class="mhead sep">Ozon сейчас</th><th colspan="3" class="mhead sep">Заявка</th><th colspan="2" class="mhead sep">Упаковка</th>${dist?'<th rowspan="2" class="sub sep n">Распре&shy;делено, кор.</th>':''}</tr>
+  const showAg=!!st&&st!=='draft', NC=9+(showAg?1:0)+(dist?1:0);
+  let h=`<colgroup><col style="width:26%"><col span="${NC-1}"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="3" class="mhead sep">Ozon сейчас</th><th colspan="3" class="mhead sep">Заявка</th><th colspan="2" class="mhead sep">Упаковка</th>${showAg?'<th rowspan="2" class="sub sep n" title="ФФ + согласовано против заявленного: больше — зелёный, меньше — красный">Согласо&shy;вано, кор.</th>':''}${dist?'<th rowspan="2" class="sub sep n">Распре&shy;делено, кор.</th>':''}</tr>
     <tr><th class="sub sep n">Спрос, шт/дн</th><th class="sub n">Остаток + в пути, шт</th><th class="sub n" title="Сумма двух прошлых недельных заявок (вычитаются из расчёта), в штуках">Прошлые заявки, шт</th><th class="sub sep n">Расчёт, кор.</th><th class="sub n">Заявлено, кор.</th><th class="sub n">Заявлено, шт</th><th class="sub sep n">В коробе, шт</th><th class="sub n">На паллете, кор.</th></tr></thead><tbody>`;
   if(!v.length) h+=`<tr><td colspan="${NC}" class="mute">Нет товаров</td></tr>`;
   const G=groupsOf(v,reqOf); K1=G.map(g=>g[0]);
   G.forEach(([sup,g],gi)=>{
     const open=OPEN1.has(sup)||!!q, gq=S(g,reqOf);
-    h+=`<tr class="mgroup" onclick="toggleG(1,${gi})"><td colspan="${NC}"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,calcOf))} кор. · заявлено ${nf.format(gq)} кор. · ${nf.format(S(g,p=>reqOf(p)*(p.box_qty||0)))} шт${dist?` · распределено ${nf.format(S(g,p=>S(p.rows,r=>r.dist)))} кор.`:''}</td></tr>`;
+    h+=`<tr class="mgroup" onclick="toggleG(1,${gi})"><td colspan="${NC}"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,calcOf))} кор. · заявлено ${nf.format(gq)} кор. · ${nf.format(S(g,p=>reqOf(p)*(p.box_qty||0)))} шт${showAg&&g.some(p=>p.ag!=null)?` · согласовано ${nf.format(S(g,p=>p.ag))} кор.`:''}${dist?` · распределено ${nf.format(S(g,p=>S(p.rows,r=>r.dist)))} кор.`:''}</td></tr>`;
     if(!open) return;
     for(const p of g){
       const qv=reqOf(p), ns=p.rows.length&&p.rows.filter(r=>r.keep).every(r=>r.noSnap), bq=p.box_qty||0;
       h+=`<tr class="prow" onclick="toggle(${p.product_id})"><td>${OPEN===p.product_id?'▾':'▸'} <b>${esc(p.offer_id)}</b><div class="pname">${esc(p.name)}</div></td>
         <td class="n sep">${ns?dash:nf.format(S(p.rows,r=>r.ads))}</td><td class="n">${ns?dash:nf.format(S(p.rows,r=>r.av+r.tr))}</td><td class="n" title="${nf.format(S(p.rows,r=>r.prev))} кор. × ${bq} шт">${nf.format(S(p.rows,r=>r.prev)*bq)}</td><td class="n sep">${ns?dash:p.nobox?'<span class="bad" title="Нет «в коробе» — расчёт не идёт">—</span>':nf.format(calcOf(p))}</td><td class="n"><b>${qv}</b></td><td class="n mute" title="${bq} шт в коробе">${nf.format(qv*bq)}</td>
-        <td class="n sep${p.box_qty>0?'':' miss'}" title="${p.box_qty>0?'':'Не заполнено — заполните в «Базе товаров»'}">${p.box_qty>0?p.box_qty:''}</td><td class="n${p.boxes_per_pallet>0?'':' miss'}" title="${p.boxes_per_pallet>0?'':'Не заполнено — заполните в «Базе товаров»'}">${p.boxes_per_pallet>0?p.boxes_per_pallet:''}</td>${dist?`<td class="n sep">${S(p.rows,r=>r.dist)}</td>`:''}</tr>`;
+        <td class="n sep${p.box_qty>0?'':' miss'}" title="${p.box_qty>0?'':'Не заполнено — заполните в «Базе товаров»'}">${p.box_qty>0?p.box_qty:''}</td><td class="n${p.boxes_per_pallet>0?'':' miss'}" title="${p.boxes_per_pallet>0?'':'Не заполнено — заполните в «Базе товаров»'}">${p.boxes_per_pallet>0?p.boxes_per_pallet:''}</td>${showAg?agCell(p,qv):''}${dist?`<td class="n sep">${S(p.rows,r=>r.dist)}</td>`:''}</tr>`;
       if(OPEN!==p.product_id) continue;
       h+=`<tr class="sub"><td colspan="${NC}"><table class="ct"><tr><th>Кластер</th><th class="n">Спрос, шт/дн</th><th class="n">Остаток, шт</th><th class="n">В пути, шт</th><th class="n">Прошлые заявки, кор.</th><th class="n">Расчёт, кор.</th><th class="n">Заявлено, кор.</th>${dist?'<th class="n">Распределено, кор.</th>':''}</tr>`;
       for(const r of p.rows){
@@ -530,70 +524,8 @@ function renderNeeds(){
   document.getElementById('tn').innerHTML=h+'</tbody>';
 }
 // факт поставки (27.10.2026): по умолчанию = согласовано, правится на шаге «Закрыта»; хранится, только если отличается
-const factOf=p=>p.fact??p.ag;
 // привезти = согласовано (пока нет — к закупке) + долг прошлых недель; долг на расчёты не влияет (учёт оплаченного)
-const shipOf=p=>(p.ag??buyOf(p))+p.debt;
-const sgn=x=>x>0?'+'+x:String(x);
-let SUP_LIST=[];
-function renderT2(){
-  const st=ST(), v=vis().filter(p=>reqOf(p)>0||p.ff||p.ag!=null||p.debt), ed=false, edF=false, q=document.getElementById('q').value.trim();
-  let h=`<colgroup><col style="width:22%"><col span="9"><col style="width:13%"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th class="mhead sep">Заявка</th><th colspan="5" class="whead sep">Закупщик</th><th colspan="3" class="whead sep">Поставка</th><th rowspan="2" class="wsub sep">Комментарий</th></tr>
-    <tr><th class="sub sep n">Заявлено, кор.</th><th class="wsub sep n">На ФФ, кор.</th><th class="wsub n">К закупке, кор.</th><th class="wsub n">К закупке, шт</th><th class="wsub n">Согласовано, кор.</th><th class="wsub n">%</th>
-    <th class="wsub sep n" title="Накопительно по прошлым неделям: согласовано − факт. «+» — поставщик должен довезти, «−» — мы должны">Долг поставщика, кор.</th><th class="wsub n" title="Согласовано (пока нет — к закупке) + долг поставщика">Привезти, кор.</th><th class="wsub n" title="По умолчанию = согласовано; правится на шаге «Закрыта»">Факт, кор.</th></tr></thead><tbody>`;
-  if(!v.length) h+=`<tr><td colspan="11" class="mute">Нет заявленных товаров</td></tr>`;
-  const G=groupsOf(v,buyOf); K2=G.map(g=>g[0]);
-  G.forEach(([sup,g],gi)=>{
-    const open=OPEN2.has(sup)||!!q, gb=S(g,buyOf), ga=S(g,x=>x.ag), gd=S(g,x=>x.debt);
-    h+=`<tr class="mgroup" onclick="toggleG(2,${gi})"><td colspan="11"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · к закупке ${gb} кор. · ${nf.format(S(g,p=>buyOf(p)*(p.box_qty||0)))} шт${g.some(x=>x.ag!=null)&&gb?` · согласовано ${ga} кор. (${Math.round(ga/gb*100)}%)`:''}${gd?` · долг поставщика ${sgn(gd)} кор. · привезти ${S(g,shipOf)} кор.`:''}</td></tr>`;
-    if(!open) return;
-    for(const p of g.sort((a,b)=>buyOf(b)-buyOf(a)||a.offer_id.localeCompare(b.offer_id))){
-      const b=buyOf(p), f=factOf(p);
-      h+=`<tr><td><b>${esc(p.offer_id)}</b><div class="pname">${esc(p.name)}</div></td><td class="n sep">${reqOf(p)}</td>
-        <td class="n sep">${ed?`<input class="num" type="number" min="0" step="1" value="${p.ff}" onchange="setSup(${p.product_id},'ff_boxes',this.value)">`:p.ff}</td>
-        <td class="n"><b>${b}</b></td><td class="n mute" title="${p.box_qty||0} шт в коробе">${nf.format(b*(p.box_qty||0))}</td>
-        <td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${p.ag??''}" placeholder="—" onchange="setSup(${p.product_id},'agreed_boxes',this.value)">`:(p.ag??'—')}</td>
-        <td class="n">${p.ag!=null&&b?Math.round(p.ag/b*100)+'%':'—'}</td>
-        <td class="n sep ${p.debt>0?'warn':p.debt<0?'bad':'mute'}">${p.debt?sgn(p.debt):'—'}</td><td class="n"><b>${shipOf(p)}</b></td>
-        <td class="n">${edF&&p.ag!=null?`<input class="num" type="number" min="0" step="1" value="${f}" title="${p.fact!=null?'Изменено; очистите поле, чтобы вернуть к согласованному':'Равно согласованному'}" onchange="setFact(${p.product_id},this.value)">${p.fact!=null?'<div class="mute" style="font-size:.75em">✎ факт</div>':''}`:(st==='closed'?(f??'—'):'<span class="mute">—</span>')}</td>
-        <td class="sep">${ed?`<input value="${esc(p.comment)}" onchange="setSup(${p.product_id},'comment',this.value)">`:esc(p.comment)}</td></tr>`;
-    }
-  });
-  document.getElementById('t2').innerHTML=h+'</tbody>';
-  const by={}; v.forEach(p=>{const s=supOf(p),b=buyOf(p),o=by[s]||(by[s]={k:0,u:0,d:0,sh:0});o.k+=b;o.u+=b*(p.box_qty||0);o.d+=p.debt;o.sh+=shipOf(p);});
-  SUP_LIST=Object.entries(by).sort((a,b)=>b[1].k-a[1].k);
-  document.getElementById('sup').innerHTML=SUP_LIST.map(([s,o],i)=>`<div class="card dl" title="Скачать Excel" onclick="exportSup(${i})"><div class="l">${esc(s)} · к закупке ⬇</div><div class="v">${nf.format(o.k)} кор.</div><div class="l">${nf.format(o.u)} шт${o.d?` · долг ${sgn(o.d)} кор. · привезти ${o.sh} кор.`:''}</div></div>`).join('');
-  if(!FACT_OK&&st==='closed') document.getElementById('err').textContent='Столбец «Факт» не сохраняется: в базе нет колонки purchase_supply.fact_boxes (SQL 2026-10-27).';
-}
-// Перенос в Google-таблицу «00.2 Еженедельные заявки» (27.10.2026, временно): столбцы F–AC листа — 24 кластера в этом порядке (Σ в AD лист считает сам)
-const GS_CLUSTERS=['Москва, МО и Дальние регионы','Санкт-Петербург и СЗО','Екатеринбург','Самара','Казань','Воронеж','Новосибирск','Краснодар','Махачкала','Невинномысск','Уфа','Дальний восток','Тюмень','Красноярск','Саратов','Калининград','Казахстан','Беларусь','Ярославль','Пермь','Оренбург','Тверь','Омск','Ростов'];
-const GS_ALIAS={'алматы':'казахстан','астана':'казахстан'};
-async function copyGs(){
-  const res=document.getElementById('gsRes'), arts=document.getElementById('gsArts').value.split(/\r?\n/).map(x=>x.split('\t')[0].trim());
-  while(arts.length&&!arts[arts.length-1]) arts.pop();
-  if(!arts.length){ res.innerHTML='<span class="bad">Вставьте артикулы из столбца A</span>'; return; }
-  const col={}; GS_CLUSTERS.forEach((c,i)=>col[c.toLowerCase()]=i);
-  const by=new Map(), outside={};
-  MODEL.forEach(p=>{ const v=Array(GS_CLUSTERS.length).fill(0); p.rows.forEach(r=>{ if(!r.req) return; const k=r.c.toLowerCase(), i=col[GS_ALIAS[k]||k]; if(i==null){ outside[r.c]=(outside[r.c]||0)+r.req; return; } v[i]+=r.req; }); by.set(p.offer_id,v); });
-  const seen=new Set(); let boxes=0;
-  const lines=arts.map(a=>{ if(!a) return ''; const v=by.get(a); seen.add(a); if(!v) return Array(GS_CLUSTERS.length).fill('').join('\t'); boxes+=v.reduce((x,y)=>x+y,0); return v.map(x=>x||'').join('\t'); });
-  const missed=MODEL.filter(p=>reqOf(p)>0&&!seen.has(p.offer_id));
-  try{ await navigator.clipboard.writeText(lines.join('\n')); }catch(e){ res.innerHTML='<span class="bad">Не удалось скопировать в буфер: '+esc(e.message)+'</span>'; return; }
-  const total=S(MODEL,reqOf);
-  res.innerHTML=`✅ Скопировано: ${arts.length} строк, ${nf.format(boxes)} кор. из ${nf.format(total)} заявленных — вставьте в F4.`
-    +(missed.length?` <span class="bad">Нет строк в листе (короба не перенесутся): ${missed.map(p=>esc(p.offer_id)+' — '+reqOf(p)+' кор.').join(', ')}</span>`:'')
-    +(Object.keys(outside).length?` <span class="warn">Кластеров нет в таблице: ${Object.entries(outside).map(([c,k])=>esc(c)+' — '+k+' кор.').join(', ')}</span>`:'');
-}
 // Excel по поставщику (как в потребности): что привезти по товарам
-function exportSup(i){
-  const [sup]=SUP_LIST[i]||[]; if(sup==null) return;
-  if(!window.XLSX){ document.getElementById('err').textContent='Не загрузилась библиотека Excel — обновите страницу'; return; }
-  const ps=vis().filter(p=>supOf(p)===sup&&(buyOf(p)>0||p.ag!=null||p.debt)).sort((a,b)=>a.offer_id.localeCompare(b.offer_id));
-  const rows=ps.map(p=>{const sh=shipOf(p);return [p.offer_id,p.name||'',p.box_qty||null,buyOf(p),p.ag,p.debt||0,sh,sh*(p.box_qty||0)];});
-  const ws=XLSX.utils.aoa_to_sheet([['Артикул','Наименование','В коробе, шт','К закупке, кор.','Согласовано, кор.','Долг поставщика, кор.','Привезти, кор.','Привезти, шт'],...rows]);
-  ws['!cols']=[{wch:24},{wch:48},{wch:12},{wch:14},{wch:16},{wch:18},{wch:14},{wch:13}];
-  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Заявка');
-  XLSX.writeFile(wb,`Заявка_${ENTITY}_${WEEK}_${sup.trim().replace(/[\\/:*?"<>|]+/g,'_')}.xlsx`);
-}
 function palStatus(x){
   if(x<=0) return ['—','mute'];
   if(x<0.8) return ['менее одной паллеты','warn'];
@@ -623,28 +555,13 @@ async function setReq(pid,c,v){
   // пустое поле — вернуть к расчёту
   r.req=String(v).trim()===''?(r.calc||0):toInt(v); r.manual=r.req!==(r.calc||0); r.keep=true;
   try{ await upsert('purchase_lines',[lineRow(p,r)],'week,product_id,cluster'); LINES.set(pid+'|'+c,{...LINES.get(pid+'|'+c),requested_boxes:r.req}); }catch(e){fail(e);}
-  renderCards(); renderNeeds(); renderT2(); renderPal(); renderT1();
+  renderCards(); renderNeeds(); renderPal(); renderT1();
 }
 async function setDist(pid,c,v){
   if(ST()!=='distribution') return;
   const p=MODEL.find(x=>x.product_id===pid), r=p.rows.find(x=>x.c===c); r.dist=toInt(v);
   try{ await upsert('purchase_lines',[{week:WEEK,product_id:pid,cluster:c,distributed_boxes:r.dist,updated_at:new Date().toISOString()}],'week,product_id,cluster'); }catch(e){fail(e);}
   renderT1(); renderPal();
-}
-async function setSup(pid,f,v){
-  if(ST()!=='at_buyer') return;
-  const p=MODEL.find(x=>x.product_id===pid);
-  if(f==='comment') p.comment=v; else if(f==='ff_boxes') p.ff=toInt(v); else p.ag=String(v).trim()===''?null:toInt(v);
-  try{ await upsert('purchase_supply',[{week:WEEK,product_id:pid,ff_boxes:p.ff,agreed_boxes:p.ag,comment:p.comment||null,updated_at:new Date().toISOString()}],'week,product_id'); }catch(e){fail(e);}
-  renderCards(); renderT2();
-}
-async function setFact(pid,v){
-  if(ST()!=='closed'||!FACT_OK) return;
-  const p=MODEL.find(x=>x.product_id===pid);
-  // пусто или равно согласованному — храним null (факт = согласовано)
-  const n=String(v).trim()===''?null:toInt(v); p.fact=n===p.ag?null:n;
-  try{ await upsert('purchase_supply',[{week:WEEK,product_id:pid,fact_boxes:p.fact,updated_at:new Date().toISOString()}],'week,product_id'); }catch(e){fail(e);}
-  renderT2();
 }
 async function setBlocked(c,v){
   if(!confirm(`${v?'Запретить':'Разрешить'} заказ в кластер «${c}»? Действует сразу: черновики заявок и потребность месяца пересчитаются.`)){ render(); return; }
