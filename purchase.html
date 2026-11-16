@@ -215,7 +215,7 @@
     <div class="cards" id="cards"></div>
 
     <details class="box" id="ltBox">
-      <summary>⏱ Сроки недели по кластерам <span class="lock" id="ltLock"></span></summary>
+      <summary>⚙️ Настройки расчёта <span class="lock" id="ltLock"></span></summary>
       <div class="inner" id="lt"></div>
     </details>
 
@@ -452,7 +452,8 @@ function renderLT(){
   let h=`<table class="lt"><tr><th>Кластер</th>${LT_H.map(x=>`<th class="n">${x}</th>`).join('')}<th class="n">Покрытие</th><th class="n">Запас</th><th class="n">Вычесть заявок</th>${blk?'<th class="n">Заказ запрещён</th>':''}</tr>`;
   for(const c of names){
     const r=WLT[c], inactive=SEED[c]&&!ACTIVE.has(c), bl=!!SEED[c]?.blocked;
-    if(!r){ h+=`<tr><td>${esc(c)}</td><td colspan="9" class="${bl?'mute':'bad'}">${bl?'заказ запрещён — сроки не нужны':`сроки не заданы — расчёт по кластеру не идёт ${ed?`<button class="btn2" onclick="addLT('${esc(c)}')">задать</button>`:''}`}</td>${blk?bcell(c):''}</tr>`; continue; }
+    // запрещённый кластер — всегда одной строкой «сроки не нужны», даже если сроки сохранены раньше (16.11.2026; в расчёте он и так не участвует)
+    if(!r||bl){ h+=`<tr><td>${esc(c)}${bl?' <span class="bad">🚫</span>':''}</td><td colspan="9" class="${bl?'mute':'bad'}">${bl?'заказ запрещён — сроки не нужны':`сроки не заданы — расчёт по кластеру не идёт ${ed?`<button class="btn2" onclick="addLT('${esc(c)}')">задать</button>`:''}`}</td>${blk?bcell(c):''}</tr>`; continue; }
     const inp=f=>ed?`<input class="num" type="number" min="0" step="1" value="${r[f]??0}" onchange="setLT('${esc(c)}','${f}',this.value)">`:(r[f]??0);
     h+=`<tr${bl?' class="mute"':''}><td>${esc(c)}${inactive?' <span class="mute">(нет у Ozon)</span>':''}${bl?' <span class="bad">🚫 запрещён</span>':''}</td>${LT_F.map(f=>`<td class="n">${inp(f)}</td>`).join('')}<td class="n"><b>${cov(r)}</b></td><td class="n">${inp('target_days')}</td><td class="n">${inp('prev_weeks')}</td>${blk?bcell(c):''}</tr>`;
   }
