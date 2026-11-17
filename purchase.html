@@ -607,7 +607,7 @@ function renderCards(){
 let LT_PAGE=0, BT_PAGE=0; const LT_PER=5;
 function btPage(i){ BT_PAGE=i; renderLT(); }
 function btMode(m){ if(BT_MODE===m) return; BT_MODE=m; BT_PAGE=0; renderLT(); }
-function btSearch(v){ BT_Q=v; BT_PAGE=0; renderLT(); const i=document.getElementById('btq'); if(i){ i.focus(); i.setSelectionRange(v.length,v.length); } }
+function btSearch(v){ BT_Q=v; BT_PAGE=0; if(String(v).trim()) BT_MODE='prod'; renderLT(); const i=document.getElementById('btq'); if(i){ i.focus(); i.setSelectionRange(v.length,v.length); } }
 // листание по 5 строк — общий вид для сроков кластеров и групп товаров
 function pagerHtml(pg,pages,total,fn){ const nums=Array.from({length:pages},(_,i)=>i).filter(i=>pages<=9||i===0||i===pages-1||Math.abs(i-pg)<=2); let prev=-1; return `<div class="pager"><button ${pg?'':'disabled'} onclick="${fn}(${pg-1})" title="Назад">‹</button>${nums.map(i=>{const gap=i-prev>1?'<span>…</span>':''; prev=i; return gap+`<button class="${i===pg?'on':''}" onclick="${fn}(${i})">${i+1}</button>`;}).join('')}<button ${pg<pages-1?'':'disabled'} onclick="${fn}(${pg+1})" title="Вперёд">›</button><span>${pg*LT_PER+1}–${Math.min(total,(pg+1)*LT_PER)} из ${total}</span></div>`; }
 function ltPage(i){ LT_PAGE=i; renderLT(); }
@@ -640,7 +640,7 @@ function renderLT(){
     const pages=Math.max(1,Math.ceil(items.length/LT_PER)); BT_PAGE=Math.min(Math.max(0,BT_PAGE),pages-1);
     const pg=items.slice(BT_PAGE*LT_PER,BT_PAGE*LT_PER+LT_PER);
     h+=`<div class="boost">${HAS_BOOST?'':'<div class="hint bad">Нужен SQL 2026-11-17_purchase_weeks_demand_boost.sql — до него ползунки не сохраняются</div>'}`
-      +`<div class="bmode"><button class="btn2 ${BT_MODE==='grp'?'on':''}" onclick="btMode('grp')">Группы</button><button class="btn2 ${BT_MODE==='prod'?'on':''}" onclick="btMode('prod')">Товары</button>${BT_MODE==='prod'?`<input id="btq" placeholder="Поиск по артикулу / названию" value="${esc(BT_Q)}" oninput="btSearch(this.value)">`:''}</div>`
+      +`<div class="bmode"><button class="btn2 ${BT_MODE==='grp'?'on':''}" onclick="btMode('grp')">Группы</button><button class="btn2 ${BT_MODE==='prod'?'on':''}" onclick="btMode('prod')">Товары</button><input id="btq" placeholder="Поиск по артикулу / названию" value="${esc(BT_Q)}" oninput="btSearch(this.value)"></div>`
       +`<table class="bt"><colgroup><col style="width:40%"><col style="width:45%"><col style="width:15%"></colgroup><tr><th>${BT_MODE==='grp'?'Группа товаров':'Товар'}</th><th>Повышение спроса</th><th>Коробов</th></tr>`
       +pg.map(it=>{ const k=it.key.replace(/'/g,'&#39;').replace(/"/g,'&quot;');
         return `<tr><td title="${it.title}">${it.name}</td><td><span class="bsl"><button type="button" ${bEd?'':'disabled'} onclick="setBoost('${k}',${it.v-5})">−</button><input type="range" min="0" max="100" step="5" value="${it.v}" ${bEd?'':'disabled'} oninput="this.parentNode.querySelector('b').textContent='+'+this.value+'%'" onchange="setBoost('${k}',this.value)"><button type="button" ${bEd?'':'disabled'} onclick="setBoost('${k}',${it.v+5})">+</button><b>+${it.v}%</b></span></td><td>${nf.format(it.box)}</td></tr>`; }).join('')
