@@ -203,6 +203,8 @@
  .xsearch{position:relative;margin-bottom:10px}.xsearch input{width:100%;box-sizing:border-box}
  .xres{position:absolute;left:0;right:0;top:100%;z-index:5;background:#fff;border-radius:10px;box-shadow:0 10px 24px rgba(28,13,46,.18);overflow:hidden}
  .xres .xi{padding:7px 12px;cursor:pointer;font-size:.9em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.xres .xi span{color:#94a3b8}.xres .xi:hover{background:#fdf2f7}.xres .xi.mute{cursor:default}
+ .boost{margin-top:12px}table.bt{border-collapse:collapse;width:100%;font-size:.9em}table.bt th{font-weight:normal;color:#544273;background:rgba(120,166,199,.1);padding:6px 8px;text-align:center;border-bottom:1px dashed #cbd5e1}table.bt th:first-child,table.bt td:first-child{text-align:left}table.bt td{padding:4px 8px;border-bottom:1px dashed rgba(84,66,115,.12);text-align:center}
+ .bsl{display:inline-flex;align-items:center;gap:6px}.bsl input[type=range]{width:220px;accent-color:#E33D78}.bsl button{width:22px;height:24px;padding:0;border-radius:6px;background:#fff;color:#544273;border:1px solid rgba(84,66,115,.3);cursor:pointer}.bsl button:disabled,.bsl input:disabled{opacity:.4;cursor:default}.bsl b{font-weight:normal;min-width:44px;text-align:right;color:#1C0D2E}
  .chips{display:flex;flex-wrap:wrap;gap:8px}
  .chip{border:1.5px solid rgba(227,61,120,.35);background:#fdf2f7;color:#9d174d;border-radius:999px;padding:4px 10px;font-size:.9em}
  .chip button{background:none;border:0;color:#E33D78;cursor:pointer;margin-left:4px;padding:0 2px;font-size:.95em}
@@ -405,6 +407,12 @@ let PROD=[],NOBOX=[],DEM=new Map(),DEM_AT='',SEED={},ACTIVE=new Set(),WEEKS={};
 // по кластерам — по долям ads_cluster (структура кластеров Ozon, уровень — лучшей недели); недели без остатка не исключаются.
 // Хранится в неделе (purchase_weeks.demand_mode), меняется в черновике; после отправки спрос — из снимка строк.
 let BEST={},BEST_W=[],HAS_MODE=false,MODE_NEW='ads28';
+// повышение спроса по группам (17.11.2026, решения владельца): ползунок 0…100% → спрос группы × (1 + %/100); хранится в неделе (purchase_weeks.demand_boost)
+let HAS_BOOST=false, BOOST_NEW={};
+const GRP_BY_OFFER=[[/^WIPE-/,'Салфетки хлопковые'],[/^GLV-NIT-/,'Перчатки нитриловые'],[/^GLV-VIN-/,'Перчатки виниловые'],[/^GLV-ELM-/,'Перчатки эластомерные'],[/^GLV-LAT-/,'Перчатки латексные']];
+const GRP_MERGE={'Маска косметическая':'Маски косметические и медицинские','Маска медицинская':'Маски косметические и медицинские'};
+function grpOf(p,CAT){ const r=GRP_BY_OFFER.find(([re])=>re.test(p.offer_id||'')); if(r) return r[1]; const c=p.type_id?(CAT[p.type_id]||'Категория '+p.type_id):'Без категории'; return GRP_MERGE[c]||c; }
+const BOOST=()=>WEEKS[WEEK]?(WEEKS[WEEK].demand_boost||{}):BOOST_NEW;
 // товары, которые не заказываем (17.11.2026, решение владельца): справочник purchase_excluded; в черновике товар пропадает из заявки
 let EXCL=new Set(),HAS_EXCL=false;
 // 'last1' (17.11.2026, решение владельца) — последняя закрытая неделя товара (заказы ÷ 7), по кластерам — в долях ads_cluster, как best5
@@ -427,7 +435,7 @@ async function init(){
 }
 async function loadBase(){
   const [pr,dm,lt,wk]=await Promise.all([
-    getAll('/rest/v1/products?select=product_id,offer_id,name,supplier,box_qty,boxes_per_pallet,archived&order=product_id'),
+    getAll('/rest/v1/products?select=product_id,offer_id,name,supplier,box_qty,boxes_per_pallet,archived,type_id:raw->>type_id,sku:raw->>sku&order=product_id'),
     getAll('/rest/v1/cluster_demand?select=product_id,cluster,ads_cluster,available,transit,days_without_sales,updated_at&order=product_id,cluster'),
     getAll('/rest/v1/cluster_lead_times?select=*&order=cluster'),
     getAll('/rest/v1/purchase_weeks?select=*&order=week')
@@ -442,7 +450,14 @@ async function loadBase(){
   DEM=new Map(); DEM_AT='';
   dm.forEach(d=>{ if(!DEM.has(d.product_id))DEM.set(d.product_id,new Map()); DEM.get(d.product_id).set(d.cluster,d); if(d.updated_at>DEM_AT)DEM_AT=d.updated_at; });
   SEED={}; ACTIVE=new Set(); lt.forEach(c=>{ SEED[c.cluster]=c; if(c.active)ACTIVE.add(c.cluster); });
-  WEEKS={}; wk.forEach(w=>WEEKS[w.week]=w); HAS_MODE=wk.some(w=>'demand_mode' in w);
+  WEEKS={}; wk.forEach(w=>WEEKS[w.week]=w); HAS_MODE=wk.some(w=>'demand_mode' in w); HAS_BOOST=wk.some(w=>'demand_boost' in w);
+  // группы товаров — как в «Сводном отчёте» главной: свои группы по артикулу, иначе категория Ozon (market_category_daily, затем market_report по SKU)
+  try{
+    const CAT={}; (await getAll('/rest/v1/market_category_daily?select=category_id,category&order=category_id,day')).forEach(x=>{ if(x.category) CAT[String(x.category_id)]=x.category; });
+    const need=PROD.filter(p=>p.type_id&&!CAT[p.type_id]&&p.sku).map(p=>p.sku);
+    if(need.length) (await getAll(`/rest/v1/market_report?select=sku,category&sku=in.(${[...new Set(need)].join(',')})&order=report_date,category,sku`)).forEach(x=>{ const p=PROD.find(q=>String(q.sku)===String(x.sku)); if(p&&!CAT[p.type_id]) CAT[p.type_id]=x.category; });
+    PROD.forEach(p=>p.grp=grpOf(p,CAT));
+  }catch(e){ PROD.forEach(p=>p.grp=grpOf(p,{})); }
   EXCL=new Set(); HAS_EXCL=false;
   try{ const r=await fetch(SUPABASE_URL+'/rest/v1/purchase_excluded?select=product_id&order=product_id&limit=1000',{headers:HD}); if(r.ok){ HAS_EXCL=true; (await r.json()).forEach(x=>EXCL.add(x.product_id)); } }catch(e){}
 }
@@ -508,7 +523,7 @@ function build(){
     const rows=[];
     // best5: k = (лучшая неделя ÷ 7) ÷ Σ ads_cluster товара; нет спроса Ozon по кластерам — делить не по чему, остаётся как есть
     const sumAds=[...dem.values()].reduce((a,d)=>a+(Number(d.ads_cluster)||0),0), bw=BEST[p.product_id];
-    const kDem=live&&MODE()!=='ads28'&&sumAds>0?(weekQ(bw,MODE())/7)/sumAds:1;
+    const kDem=(live&&MODE()!=='ads28'&&sumAds>0?(weekQ(bw,MODE())/7)/sumAds:1)*(live?1+(Number(BOOST()[p.grp])||0)/100:1);
     p.dem={sumAds,best:bw,k:kDem,mode:live?MODE():null};
     for(const c of names){
       const lt=WLT[c], line=LINES.get(p.product_id+'|'+c), d=dem.get(c);
@@ -605,7 +620,16 @@ function renderLT(){
   const MD={ads28:'Среднесуточные продажи кластера за 28 дней из API Ozon.',best5:'Лучшая неделя товара за период; распределение по кластерам — в долях спроса Ozon.',last1:'Последняя закрытая неделя товара; распределение по кластерам — в долях спроса Ozon.'};
   let h=`<div class="ssec"><h4>Методика расчёта</h4>${HAS_MODE?'':'<div class="hint bad">Нужен SQL 2026-11-17_purchase_weeks_demand_mode.sql — до него только «как сейчас».</div>'}<div class="modes">`
     +MODES.map(([k,t])=>`<div class="mcard${k===md?' on':''}${mEd?'':' dis'}" ${mEd&&k!==md?`onclick="setMode('${k}')"`:''}><div class="mt"><span class="mdot"></span>${t}</div><div class="md">${MD[k]}</div>${tot?`<div class="mv"><div><b>${nf.format(tot[k].box)}</b><span>коробов</span></div><div><b>${nf.format(Math.round(tot[k].pal*10)/10)}</b><span>паллет</span></div></div>`:''}</div>`).join('')
-    +`</div></div>`;
+    +`</div>`;
+  if(live){
+    const bo=BOOST(), byG={}; MODEL.forEach(p=>{ const g=p.grp||'Без категории'; (byG[g]=byG[g]||[]).push(p); });
+    const gs=Object.keys(byG).sort((a,b)=>S(byG[b],calcOf)-S(byG[a],calcOf)||a.localeCompare(b,'ru')), bEd=HAS_BOOST&&live;
+    h+=`<div class="boost">${HAS_BOOST?'':'<div class="hint bad">Нужен SQL 2026-11-17_purchase_weeks_demand_boost.sql — до него ползунки не сохраняются</div>'}<table class="bt"><tr><th>Группа товаров</th><th>Повышение спроса</th><th>Коробов</th></tr>`
+      +gs.map(g=>{ const v=Number(bo[g])||0, ge=esc(g).replace(/'/g,'&#39;');
+        return `<tr><td>${esc(g)}</td><td><span class="bsl"><button type="button" ${bEd?'':'disabled'} onclick="setBoost('${ge}',${v-5})">−</button><input type="range" min="0" max="100" step="5" value="${v}" ${bEd?'':'disabled'} oninput="this.parentNode.querySelector('b').textContent='+'+this.value+'%'" onchange="setBoost('${ge}',this.value)"><button type="button" ${bEd?'':'disabled'} onclick="setBoost('${ge}',${v+5})">+</button><b>+${v}%</b></span></td><td>${nf.format(S(byG[g],calcOf))}</td></tr>`; }).join('')
+      +`</table></div>`;
+  }
+  h+=`</div>`;
   const used=new Set(); MODEL.forEach(p=>p.rows.forEach(r=>used.add(r.c)));
   const names=[...new Set([...Object.keys(WLT),...used])].sort((a,b)=>a.localeCompare(b,'ru'));
   // «Заказ запрещён» — справочник кластеров (не неделя): действует сразу на черновики и потребность; меняется в любой момент
@@ -736,6 +760,8 @@ function demTip(p){
     ['Последняя закрытая неделя',lw!=null?nf.format(lw/7)+' шт/дн':'—',used==='last1'?'G':''],null,
     ['Лучшая неделя за 5 недель',b&&b.q?nf.format(b.q/7)+' шт/дн':'—',used==='best5'?'G':''],
     ...BEST_W.map(w=>['  неделя '+ddmm(w),b&&b.all[w]!=null?nf.format(b.all[w])+' шт':'—'])];
+  const bst=Number(BOOST()[p.grp])||0;
+  if(bst) rows.push(null,['Повышение спроса группы','+'+bst+'%','G'],['В расчёте',nf.format(S(p.rows,r=>r.ads))+' шт/дн','G']);
   return {h:'Спрос',rows,m:d.mode!=='ads28'&&!(d.sumAds>0)?'Методика по неделям не применена: спроса Ozon по кластерам нет — делить не по чему':''};
 }
 const tip=o=>` data-ti="${TIPS.push(o)-1}"`;
@@ -951,6 +977,13 @@ async function addLT(c){
   WLT[c]={cluster:c,force_majeure_days:0,approval_days:0,supplier_to_ff_days:0,ff_assembly_days:0,ff_to_ozon_days:0,acceptance_days:0,target_days:0,prev_weeks:2};
   await setLT(c,'prev_weeks',2);
 }
+async function setBoost(g,v){
+  v=Math.max(0,Math.min(100,Math.round((Number(v)||0)/5)*5));
+  const st=ST(); if(!HAS_BOOST||(st&&st!=='draft')) return;
+  const nb={...BOOST()}; if(v) nb[g]=v; else delete nb[g];
+  if(!st){ BOOST_NEW=nb; build(); render(); return; }
+  try{ await patchWeek({demand_boost:nb}); WEEKS[WEEK].demand_boost=nb; build(); render(); }catch(e){fail(e);}
+}
 async function setMode(v){
   if(!HAS_MODE) return;
   const st=ST();
@@ -961,7 +994,7 @@ async function setMode(v){
 async function createWeek(){
   if(!confirm(`Создать заявку на неделю ${ddmm(WEEK)}–${ddmm(addD(WEEK,6))}? Сроки скопируются ${LT_SRC.startsWith('copy')?'с недели '+ddmm(LT_SRC.slice(5)):'из значений по умолчанию'}.`)) return;
   try{
-    await upsert('purchase_weeks',[{week:WEEK,status:'draft',...(HAS_MODE?{demand_mode:MODE_NEW}:{})}],'week');
+    await upsert('purchase_weeks',[{week:WEEK,status:'draft',...(HAS_MODE?{demand_mode:MODE_NEW}:{}),...(HAS_BOOST?{demand_boost:BOOST_NEW}:{})}],'week');
     const now=new Date().toISOString();
     await upsert('purchase_week_lead_times',Object.values(WLT).map(c=>({week:WEEK,cluster:c.cluster,...Object.fromEntries([...LT_F,'target_days','prev_weeks'].map(f=>[f,Number(c[f])||0])),updated_at:now})),'week,cluster');
     await loadBase(); await loadWeek();
