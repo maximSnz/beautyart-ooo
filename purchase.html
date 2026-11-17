@@ -203,7 +203,7 @@
  .xsearch{position:relative;margin-bottom:10px}.xsearch input{width:100%;box-sizing:border-box}
  .xres{position:absolute;left:0;right:0;top:100%;z-index:5;background:#fff;border-radius:10px;box-shadow:0 10px 24px rgba(28,13,46,.18);overflow:hidden}
  .xres .xi{padding:7px 12px;cursor:pointer;font-size:.9em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.xres .xi span{color:#94a3b8}.xres .xi:hover{background:#fdf2f7}.xres .xi.mute{cursor:default}
- .boost{margin-top:12px}table.bt{border-collapse:collapse;width:100%;font-size:.9em;table-layout:fixed}table.bt tr:not(:first-child){height:44px}table.bt tr.pad td{border-bottom-color:transparent}table.bt td:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}table.bt th{font-weight:normal;color:#544273;background:rgba(120,166,199,.1);padding:6px 8px;text-align:center;border-bottom:1px dashed #cbd5e1}table.bt th:first-child,table.bt td:first-child{text-align:left}table.bt td{padding:4px 8px;border-bottom:1px dashed rgba(84,66,115,.12);text-align:center}
+ .boost{margin-top:12px}.bmode{display:flex;gap:6px;align-items:center;margin-bottom:8px}.bmode input{flex:1;min-width:200px}.bmode .btn2{transition:transform .2s,border-color .2s,box-shadow .2s,color .2s}.bmode .btn2:hover{transform:translateY(-2px);box-shadow:0 6px 14px rgba(227,61,120,.2)}table.bt{border-collapse:collapse;width:100%;font-size:.9em;table-layout:fixed}table.bt tr:not(:first-child){height:44px}table.bt tr.pad td{border-bottom-color:transparent}table.bt td:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}table.bt th{font-weight:normal;color:#544273;background:rgba(120,166,199,.1);padding:6px 8px;text-align:center;border-bottom:1px dashed #cbd5e1}table.bt th:first-child,table.bt td:first-child{text-align:left}table.bt td{padding:4px 8px;border-bottom:1px dashed rgba(84,66,115,.12);text-align:center}
  .bsl{display:inline-flex;align-items:center;gap:6px}.bsl input[type=range]{width:220px;accent-color:#E33D78}.bsl button{width:22px;height:24px;padding:0;border-radius:6px;background:#fff;color:#544273;border:1px solid rgba(84,66,115,.3);cursor:pointer}.bsl button:disabled,.bsl input:disabled{opacity:.4;cursor:default}.bsl b{font-weight:normal;min-width:44px;text-align:right;color:#1C0D2E}
  .chips{display:flex;flex-wrap:wrap;gap:8px}
  .chip{border:1.5px solid rgba(227,61,120,.35);background:#fdf2f7;color:#9d174d;border-radius:999px;padding:4px 10px;font-size:.9em}
@@ -413,6 +413,9 @@ const GRP_BY_OFFER=[[/^WIPE-/,'Салфетки хлопковые'],[/^GLV-NIT-
 const GRP_MERGE={'Маска косметическая':'Маски косметические и медицинские','Маска медицинская':'Маски косметические и медицинские'};
 function grpOf(p,CAT){ const r=GRP_BY_OFFER.find(([re])=>re.test(p.offer_id||'')); if(r) return r[1]; const c=p.type_id?(CAT[p.type_id]||'Категория '+p.type_id):'Без категории'; return GRP_MERGE[c]||c; }
 const BOOST=()=>WEEKS[WEEK]?(WEEKS[WEEK].demand_boost||{}):BOOST_NEW;
+// у товара своё повышение (ключ «p:<product_id>») важнее повышения группы; 0 у товара — как у группы
+const boostOf=p=>{const b=BOOST(), v=b['p:'+p.product_id]; return Number(v!=null?v:b[p.grp])||0;};
+let BT_MODE='grp', BT_Q='';
 // товары, которые не заказываем (17.11.2026, решение владельца): справочник purchase_excluded; в черновике товар пропадает из заявки
 let EXCL=new Set(),HAS_EXCL=false;
 // 'last1' (17.11.2026, решение владельца) — последняя закрытая неделя товара (заказы ÷ 7), по кластерам — в долях ads_cluster, как best5
@@ -523,7 +526,7 @@ function build(){
     const rows=[];
     // best5: k = (лучшая неделя ÷ 7) ÷ Σ ads_cluster товара; нет спроса Ozon по кластерам — делить не по чему, остаётся как есть
     const sumAds=[...dem.values()].reduce((a,d)=>a+(Number(d.ads_cluster)||0),0), bw=BEST[p.product_id];
-    const kDem=(live&&MODE()!=='ads28'&&sumAds>0?(weekQ(bw,MODE())/7)/sumAds:1)*(live?1+(Number(BOOST()[p.grp])||0)/100:1);
+    const kDem=(live&&MODE()!=='ads28'&&sumAds>0?(weekQ(bw,MODE())/7)/sumAds:1)*(live?1+boostOf(p)/100:1);
     p.dem={sumAds,best:bw,k:kDem,mode:live?MODE():null};
     for(const c of names){
       const lt=WLT[c], line=LINES.get(p.product_id+'|'+c), d=dem.get(c);
@@ -603,8 +606,10 @@ function renderCards(){
 // 2) сроки по кластерам (только разрешённые); 3) запрещённые кластеры — чипами; внизу — дата данных Ozon и служебное
 let LT_PAGE=0, BT_PAGE=0; const LT_PER=5;
 function btPage(i){ BT_PAGE=i; renderLT(); }
+function btMode(m){ if(BT_MODE===m) return; BT_MODE=m; BT_PAGE=0; renderLT(); }
+function btSearch(v){ BT_Q=v; BT_PAGE=0; renderLT(); const i=document.getElementById('btq'); if(i){ i.focus(); i.setSelectionRange(v.length,v.length); } }
 // листание по 5 строк — общий вид для сроков кластеров и групп товаров
-function pagerHtml(pg,pages,total,fn){ return `<div class="pager"><button ${pg?'':'disabled'} onclick="${fn}(${pg-1})" title="Назад">‹</button>${Array.from({length:pages},(_,i)=>`<button class="${i===pg?'on':''}" onclick="${fn}(${i})">${i+1}</button>`).join('')}<button ${pg<pages-1?'':'disabled'} onclick="${fn}(${pg+1})" title="Вперёд">›</button><span>${pg*LT_PER+1}–${Math.min(total,(pg+1)*LT_PER)} из ${total}</span></div>`; }
+function pagerHtml(pg,pages,total,fn){ const nums=Array.from({length:pages},(_,i)=>i).filter(i=>pages<=9||i===0||i===pages-1||Math.abs(i-pg)<=2); let prev=-1; return `<div class="pager"><button ${pg?'':'disabled'} onclick="${fn}(${pg-1})" title="Назад">‹</button>${nums.map(i=>{const gap=i-prev>1?'<span>…</span>':''; prev=i; return gap+`<button class="${i===pg?'on':''}" onclick="${fn}(${i})">${i+1}</button>`;}).join('')}<button ${pg<pages-1?'':'disabled'} onclick="${fn}(${pg+1})" title="Вперёд">›</button><span>${pg*LT_PER+1}–${Math.min(total,(pg+1)*LT_PER)} из ${total}</span></div>`; }
 function ltPage(i){ LT_PAGE=i; renderLT(); }
 function openSet(){ document.getElementById('setModal').classList.add('on'); renderLT(); }
 function closeSet(){ document.getElementById('setModal').classList.remove('on'); }
@@ -625,13 +630,23 @@ function renderLT(){
     +MODES.map(([k,t])=>`<div class="mcard${k===md?' on':''}${mEd?'':' dis'}" ${mEd&&k!==md?`onclick="setMode('${k}')"`:''}><div class="mt"><span class="mdot"></span>${t}</div><div class="md">${MD[k]}</div>${tot?`<div class="mv"><div><b>${nf.format(tot[k].box)}</b><span>коробов</span></div><div><b>${nf.format(Math.round(tot[k].pal*10)/10)}</b><span>паллет</span></div></div>`:''}</div>`).join('')
     +`</div>`;
   if(live){
-    const bo=BOOST(), byG={}; MODEL.forEach(p=>{ const g=p.grp||'Без категории'; (byG[g]=byG[g]||[]).push(p); });
-    const gs=Object.keys(byG).sort((a,b)=>S(byG[b],calcOf)-S(byG[a],calcOf)||a.localeCompare(b,'ru')), bEd=HAS_BOOST&&live;
-    h+=`<div class="boost">${HAS_BOOST?'':'<div class="hint bad">Нужен SQL 2026-11-17_purchase_weeks_demand_boost.sql — до него ползунки не сохраняются</div>'}<table class="bt"><colgroup><col style="width:40%"><col style="width:45%"><col style="width:15%"></colgroup><tr><th>Группа товаров</th><th>Повышение спроса</th><th>Коробов</th></tr>`
-      +(()=>{ BT_PAGE=Math.min(Math.max(0,BT_PAGE),Math.max(1,Math.ceil(gs.length/LT_PER))-1); return gs.slice(BT_PAGE*LT_PER,BT_PAGE*LT_PER+LT_PER); })().map(g=>{ const v=Number(bo[g])||0, ge=esc(g).replace(/'/g,'&#39;');
-        return `<tr><td>${esc(g)}</td><td><span class="bsl"><button type="button" ${bEd?'':'disabled'} onclick="setBoost('${ge}',${v-5})">−</button><input type="range" min="0" max="100" step="5" value="${v}" ${bEd?'':'disabled'} oninput="this.parentNode.querySelector('b').textContent='+'+this.value+'%'" onchange="setBoost('${ge}',this.value)"><button type="button" ${bEd?'':'disabled'} onclick="setBoost('${ge}',${v+5})">+</button><b>+${v}%</b></span></td><td>${nf.format(S(byG[g],calcOf))}</td></tr>`; }).join('')
-      +Array.from({length:Math.max(0,LT_PER-gs.slice(BT_PAGE*LT_PER,BT_PAGE*LT_PER+LT_PER).length)*(gs.length>LT_PER?1:0)},()=>'<tr class="pad"><td colspan="3"></td></tr>').join('')
-      +`</table>${gs.length>LT_PER?pagerHtml(BT_PAGE,Math.ceil(gs.length/LT_PER),gs.length,'btPage'):''}</div>`;
+    // повышение спроса: «Группы | Товары» (17.11.2026), по 5 строк на странице
+    const bo=BOOST(), bEd=HAS_BOOST&&live, byG={}; MODEL.forEach(p=>{ const g=p.grp||'Без категории'; (byG[g]=byG[g]||[]).push(p); });
+    let items;
+    if(BT_MODE==='grp') items=Object.keys(byG).sort((a,b)=>S(byG[b],calcOf)-S(byG[a],calcOf)||a.localeCompare(b,'ru')).map(g=>({key:g,name:esc(g),title:'',v:Number(bo[g])||0,box:S(byG[g],calcOf)}));
+    else{ const q=BT_Q.trim().toLowerCase();
+      items=MODEL.filter(p=>!q||(p.offer_id||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q)).sort((a,b)=>calcOf(b)-calcOf(a)||a.offer_id.localeCompare(b.offer_id))
+        .map(p=>{ const own=bo['p:'+p.product_id]; return {key:'p:'+p.product_id,name:esc(p.offer_id)+(own==null&&bo[p.grp]?` <span class="mute">· группа +${bo[p.grp]}%</span>`:''),title:esc(p.name),v:Number(own)||0,box:calcOf(p)}; }); }
+    const pages=Math.max(1,Math.ceil(items.length/LT_PER)); BT_PAGE=Math.min(Math.max(0,BT_PAGE),pages-1);
+    const pg=items.slice(BT_PAGE*LT_PER,BT_PAGE*LT_PER+LT_PER);
+    h+=`<div class="boost">${HAS_BOOST?'':'<div class="hint bad">Нужен SQL 2026-11-17_purchase_weeks_demand_boost.sql — до него ползунки не сохраняются</div>'}`
+      +`<div class="bmode"><button class="btn2 ${BT_MODE==='grp'?'on':''}" onclick="btMode('grp')">Группы</button><button class="btn2 ${BT_MODE==='prod'?'on':''}" onclick="btMode('prod')">Товары</button>${BT_MODE==='prod'?`<input id="btq" placeholder="Поиск по артикулу / названию" value="${esc(BT_Q)}" oninput="btSearch(this.value)">`:''}</div>`
+      +`<table class="bt"><colgroup><col style="width:40%"><col style="width:45%"><col style="width:15%"></colgroup><tr><th>${BT_MODE==='grp'?'Группа товаров':'Товар'}</th><th>Повышение спроса</th><th>Коробов</th></tr>`
+      +pg.map(it=>{ const k=it.key.replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+        return `<tr><td title="${it.title}">${it.name}</td><td><span class="bsl"><button type="button" ${bEd?'':'disabled'} onclick="setBoost('${k}',${it.v-5})">−</button><input type="range" min="0" max="100" step="5" value="${it.v}" ${bEd?'':'disabled'} oninput="this.parentNode.querySelector('b').textContent='+'+this.value+'%'" onchange="setBoost('${k}',this.value)"><button type="button" ${bEd?'':'disabled'} onclick="setBoost('${k}',${it.v+5})">+</button><b>+${it.v}%</b></span></td><td>${nf.format(it.box)}</td></tr>`; }).join('')
+      +(items.length>LT_PER?Array.from({length:LT_PER-pg.length},()=>'<tr class="pad"><td colspan="3"></td></tr>').join(''):'')
+      +(items.length?'':'<tr><td colspan="3" class="mute">Ничего не найдено</td></tr>')
+      +`</table>${items.length>LT_PER?pagerHtml(BT_PAGE,pages,items.length,'btPage'):''}</div>`;
   }
   h+=`</div>`;
   const used=new Set(); MODEL.forEach(p=>p.rows.forEach(r=>used.add(r.c)));
@@ -764,8 +779,8 @@ function demTip(p){
     ['Последняя закрытая неделя',lw!=null?nf.format(lw/7)+' шт/дн':'—',used==='last1'?'G':''],null,
     ['Лучшая неделя за 5 недель',b&&b.q?nf.format(b.q/7)+' шт/дн':'—',used==='best5'?'G':''],
     ...BEST_W.map(w=>['  неделя '+ddmm(w),b&&b.all[w]!=null?nf.format(b.all[w])+' шт':'—'])];
-  const bst=Number(BOOST()[p.grp])||0;
-  if(bst) rows.push(null,['Повышение спроса группы','+'+bst+'%','G'],['В расчёте',nf.format(S(p.rows,r=>r.ads))+' шт/дн','G']);
+  const bst=boostOf(p), own=BOOST()['p:'+p.product_id]!=null;
+  if(bst) rows.push(null,[own?'Повышение спроса товара':'Повышение спроса группы','+'+bst+'%','G'],['В расчёте',nf.format(S(p.rows,r=>r.ads))+' шт/дн','G']);
   return {h:'Спрос',rows,m:d.mode!=='ads28'&&!(d.sumAds>0)?'Методика по неделям не применена: спроса Ozon по кластерам нет — делить не по чему':''};
 }
 const tip=o=>` data-ti="${TIPS.push(o)-1}"`;
