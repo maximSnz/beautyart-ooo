@@ -109,11 +109,10 @@
  /* переход между стадиями — щелчком по стадии (17.11.2026, решение владельца; кнопок «Отправить…» / «Вернуть на шаг» нет):
     следующая — вперёд, любая пройденная — назад; подсказка у стадии, анимация смены стадии */
  .step{position:relative;transition:transform .2s,box-shadow .2s,border-color .2s,background-color .2s,color .2s}
- .step.go{cursor:pointer;color:#544273;border-style:dashed;border-color:rgba(227,61,120,.45)}
- .step.back{cursor:pointer}
- .step.go:hover,.step.back:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(84,66,115,.16);border-color:#E33D78}
- .step .act{display:block;font-size:.78em;margin-top:3px;color:#E33D78;opacity:.85}
- .step.back .act{color:#94a3b8;opacity:0;transition:opacity .2s}.step.back:hover .act{opacity:1}
+ /* кликабельная стадия — без пунктира и подписей (17.11.2026), анимация при наведении — как у кнопок .wbtn; действие — в подсказке */
+ .step.go,.step.back{cursor:pointer}
+ .step.go:hover,.step.back:hover{transform:translateY(-2px);border-color:#E33D78;box-shadow:0 6px 14px rgba(227,61,120,.2)}
+ .step.go:active,.step.back:active{transform:translateY(0);box-shadow:none}
  .step.busy{pointer-events:none;background:linear-gradient(90deg,#f8f9fb 0%,rgba(227,61,120,.18) 50%,#f8f9fb 100%);background-size:200% 100%;animation:stepBusy 1s linear infinite}
  .step.pop{animation:stepPop .7s cubic-bezier(.2,.8,.2,1)}
  .step.done.pop{animation:stepDone .6s ease-out}
@@ -285,13 +284,13 @@
 
 
     <div class="sec" id="h1">Заявка менеджера</div>
-    <div class="note">Расчёт = (спрос × (покрытие + запас) − остаток − в пути) ÷ штук в коробе, вверх до целого короба, − заявки прошлых недель. Выполнение к сегодня: потребность — заказано за месяц с этой неделей ÷ потребность месяца пропорционально неделе; план продаж — заказы с 1-го числа ÷ план пропорционально прошедшим дням. ±10% — зелёный, выше — жёлтый, ниже — розовый. Наведите на ячейку — подробности. Нажмите на товар, чтобы раскрыть кластеры.<span id="needNote"></span></div>
+    <div class="note" id="needNote"></div>
     <div class="scroll"><table id="t1" class="pt"></table></div>
 
 
 
     <div class="sec">Паллеты по кластерам</div>
-    <div class="note">Норма — средняя загрузка 0,8–1,15 на паллету. Считается по всем товарам юрлица.</div>
+    <div class="note">Норма — средняя загрузка 0,8–1,15 на паллету.</div>
     <div class="pal" id="pal"></div>
   </div>
 </div>
@@ -509,7 +508,7 @@ function render(){
     // вперёд: нет недели — создать; черновик — отправить закупщику; у закупщика — сводная заявка (согласование там); распределение — закрыть
     const act=!st?(i===0?'＋ Создать заявку':''):fwd?(st==='at_buyer'?'Согласование — в сводной заявке ↗':STAGE_BTN[st]?STAGE_BTN[st]+' →':''):back?'↩ Вернуть сюда':'';
     const cls=['step',i===stIdx?'on':i<stIdx?'done':'',act&&!back?'go':'',back?'back':'',moved&&(i===stIdx||(i<stIdx&&i>=was))?'pop':''].filter(Boolean).join(' ');
-    return `<div class="${cls}" data-i="${i}"${act?` onclick="stepClick(${i},this)" title="${esc(act)}"`:''}>${i<stIdx?'✓ ':''}${s[1]}${act?`<span class="act">${act}</span>`:''}</div>`;
+    return `<div class="${cls}" data-i="${i}"${act?` onclick="stepClick(${i},this)" title="${esc(act)}"`:''}>${i<stIdx?'✓ ':''}${s[1]}</div>`;
   }).join('');
   document.getElementById('actions').innerHTML='';
   const dAt=DEM_AT?new Date(DEM_AT):null, old=dAt&&(Date.now()-dAt)>36*3600e3;
