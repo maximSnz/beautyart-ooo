@@ -130,7 +130,14 @@
  .card .l{color:#94a3b8;font-size:.82em}
  .card .v{font-size:1.5em;color:#1C0D2E}
  .sec{margin:18px 0 6px;color:#544273;font-size:1.15em}
- .sechead{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:18px 0 6px}.sechead .sec{margin:0}.sechead .toolbar{flex:1;margin:0}
+ .sechead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0 6px}.sechead .sec{margin:0 6px 0 0}.sechead #q{flex:1;min-width:200px}
+ /* ⚙️ у «Заявки менеджера» (17.11.2026): менеджер и «Только отклонения» — во всплывающей панели; точка — фильтр включён */
+ .fwrap{position:relative}.wbtn.act{position:relative}.wbtn.act::after{content:'';position:absolute;top:-4px;right:-4px;width:10px;height:10px;border-radius:50%;background:#E33D78;border:2px solid #fff}
+ .wbtn:disabled{opacity:.4;cursor:default}.wbtn:disabled:hover{transform:none;box-shadow:none;border-color:rgba(84,66,115,.2);color:#544273}
+ .fpop{position:absolute;top:44px;left:0;z-index:50;background:#fff;border-radius:12px;box-shadow:0 12px 32px rgba(28,13,46,.22);padding:12px 14px;min-width:240px;opacity:0;transform:translateY(-6px);pointer-events:none;transition:opacity .16s,transform .16s}
+ .fpop.on{opacity:1;transform:none;pointer-events:auto}.fpop .fl{font-size:.82em;color:#94a3b8;margin:2px 0 6px}.fpop .fl+*{margin-bottom:10px}.fseg{display:flex;gap:6px}
+ .fpop .btn2{transition:transform .2s,border-color .2s,box-shadow .2s,color .2s}.fpop .btn2:hover{transform:translateY(-2px);box-shadow:0 6px 14px rgba(227,61,120,.2)}
+ @media (prefers-reduced-motion:reduce){.fpop,.fpop .btn2{transition:none}}
  .btn2:disabled{opacity:.4;cursor:default}.btn2:disabled:hover{transform:none;box-shadow:none;border-color:rgba(84,66,115,.2);color:#544273}
  td.n,th.n{text-align:right;white-space:nowrap}
  .num{width:62px;text-align:right;padding:4px 6px}
@@ -156,6 +163,9 @@
  details.box summary{cursor:pointer;padding:10px 14px;color:#544273;user-select:none}
  details.box .inner{padding:6px 14px 12px;overflow-x:auto}
  .scroll{overflow-x:auto}
+ /* шапка таблицы заявки закреплена при прокрутке страницы (17.11.2026): обёртка без горизонтальной прокрутки (иначе sticky не работает), шапка — непрозрачная */
+ .t1wrap{overflow:visible}
+ #t1 thead{position:sticky;top:0;z-index:6;background:#fff;box-shadow:0 2px 0 rgba(84,66,115,.12)}
  .note{font-size:.82em;color:#94a3b8;margin:4px 0}
  .lock{font-size:.85em;color:#94a3b8;margin-left:6px}
  /* окно «Настройки расчёта» (17.11.2026): вместо блока на странице — кнопка ⚙️ у даты недели */
@@ -301,17 +311,20 @@
 
     <div class="sechead">
       <div class="sec" id="h1">Заявка менеджера</div>
-      <div class="toolbar">
-        <button class="btn2" data-f="all" onclick="setF('all')">Все</button>
-        <button class="btn2" data-f="m1" onclick="setF('m1')">Илья</button>
-        <button class="btn2" data-f="m2" onclick="setF('m2')">Ольга</button>
-        <input id="q" placeholder="Поиск по артикулу / названию" oninput="render()">
-        <button class="btn2" id="devBtn" onclick="toggleDev()" title="Только товары, где согласовано (с ФФ) ≠ заявлено">Только отклонения</button>
-        <button class="btn2" id="autoBtn" onclick="autoDist()" title="Распределить согласованное по кластерам: по спросу и запасу в днях, с подгонкой паллет к норме 0,8–1,15">⚡ Автораспределение</button>
+      <div class="fwrap">
+        <button class="wbtn" id="fBtn" onclick="toggleFlt(event)" title="Менеджер и отображение">⚙️</button>
+        <div class="fpop" id="fPop" onclick="event.stopPropagation()">
+          <div class="fl">Менеджер</div>
+          <div class="fseg"><button class="btn2" data-f="all" onclick="setF('all')">Все</button><button class="btn2" data-f="m1" onclick="setF('m1')">Илья</button><button class="btn2" data-f="m2" onclick="setF('m2')">Ольга</button></div>
+          <div class="fl">Отображение</div>
+          <button class="btn2" id="devBtn" onclick="toggleDev()" title="Только товары, где согласовано (с ФФ) ≠ заявлено">Только отклонения</button>
+        </div>
       </div>
+      <button class="wbtn" id="autoBtn" onclick="autoDist()" title="Автораспределение: согласованное — по спросу и запасу в днях, с подгонкой паллет к норме 0,8–1,15 (шаг «Распределение»)">⚡</button>
+      <input id="q" placeholder="Поиск по артикулу / названию" oninput="render()">
     </div>
     <div class="note" id="needNote"></div>
-    <div class="scroll"><table id="t1" class="pt"></table></div>
+    <div class="t1wrap"><table id="t1" class="pt"></table></div>
 
 
 
@@ -520,7 +533,7 @@ const calcOf=p=>S(p.rows,r=>r.calc);
 const buyOf=p=>Math.max(reqOf(p)-p.ff,0);
 let DEV_ONLY=false;
 const isDev=p=>p.ag!=null&&(p.ff||0)+p.ag!==reqOf(p);
-const vis=()=>{const q=document.getElementById('q').value.toLowerCase();return MODEL.filter(p=>(F==='all'||p.m===F)&&(!DEV_ONLY||isDev(p))&&((p.offer_id||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q))).sort((a,b)=>reqOf(b)-reqOf(a)||calcOf(b)-calcOf(a)||a.offer_id.localeCompare(b.offer_id));};
+const vis=(noDev)=>{const q=document.getElementById('q').value.toLowerCase();return MODEL.filter(p=>(F==='all'||p.m===F)&&(noDev||!DEV_ONLY||isDev(p))&&((p.offer_id||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q))).sort((a,b)=>reqOf(b)-reqOf(a)||calcOf(b)-calcOf(a)||a.offer_id.localeCompare(b.offer_id));};
 
 // ===== отрисовка =====
 function setF(f){F=f;render();}
@@ -531,7 +544,11 @@ function renderTools(){
   if(!hasAg&&DEV_ONLY) DEV_ONLY=false;
   d.disabled=!hasAg; d.classList.toggle('on',DEV_ONLY); d.textContent=DEV_ONLY?`Только отклонения (${MODEL.filter(isDev).length})`:'Только отклонения';
   a.disabled=st!=='distribution';
+  document.getElementById('fBtn').classList.toggle('act',F!=='all'||DEV_ONLY);
 }
+function toggleFlt(e){ e.stopPropagation(); document.getElementById('fPop').classList.toggle('on'); }
+document.addEventListener('click',()=>document.getElementById('fPop')?.classList.remove('on'));
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') document.getElementById('fPop')?.classList.remove('on'); });
 function render(){
   const st=ST();
   document.querySelectorAll('[data-f]').forEach(b=>b.classList.toggle('on',b.dataset.f===F));
@@ -553,7 +570,8 @@ function render(){
   renderLT(); renderTools(); renderCards(); renderT1(); renderPal();
 }
 function renderCards(){
-  const v=vis(), q=S(v,reqOf), b=S(v,buyOf), ag=S(v,p=>p.ag), has=v.some(p=>p.ag!=null);
+  const v=vis(true), // «Только отклонения» — только для обработки таблицы, на итоги не влияет
+    q=S(v,reqOf), b=S(v,buyOf), ag=S(v,p=>p.ag), has=v.some(p=>p.ag!=null);
   document.getElementById('cards').innerHTML=[['Заявлено, кор.',nf.format(q)],['Согласовано, кор.',has?nf.format(ag):'—',has&&b?Math.round(ag/b*100)+'% к закупке ('+nf.format(b)+' кор.)':'вносит закупщик в сводной заявке'],...(()=>{const x=pctSum(v);return [['Потребность к сегодня',x.nT>0?pctTxt(x.nF,x.nT):'—',x.nT>0?'заказано '+nf.format(x.nF)+' из '+nf.format(Math.round(x.nT))+' кор.':''],['План продаж к сегодня',x.pT>0?pctTxt(x.pF,x.pT):'—',x.pT>0?'заказы '+nf.format(x.pF)+' из '+nf.format(Math.round(x.pT))+' шт':'']];})()]
     .map(([l,x,sub])=>`<div class="card"><div class="l">${l}</div><div class="v">${x}</div>${sub?`<div class="l">${sub}</div>`:''}</div>`).join('');
 }
@@ -608,9 +626,9 @@ function toggleG(t,i){ const set=[,OPEN1,OPEN2,OPEN3][t], k=[,K1,K2,K3][t][i]; s
 // «Согласовано» в таблице менеджера (16.11.2026, решение владельца): обеспечено (ФФ + согласовано) больше заявленного — зелёный, меньше — красный;
 // подсветка остаётся и после распределения. Вносит закупщик в сводной заявке поставщику.
 function agCell(p,req){
-  if(p.ag==null) return '<td class="n sep mute" title="Ещё не согласовано">—</td>';
+  if(p.ag==null) return `<td class="n sep mute"${tip({h:'Согласовано, кор.',rows:[['Ещё не согласовано','—']]})}>—</td>`;
   const sec=(p.ff||0)+p.ag, d=sec-req, bg=d>0?'background:rgba(34,197,94,.22);':d<0?'background:rgba(227,61,120,.22);':'';
-  return `<td class="n sep" style="${bg}" title="Заявка ${d>0?'+':''}${d}"><b>${p.ag}</b>${p.ff?`<div class="mute" style="font-size:.75em">+ФФ ${p.ff}</div>`:''}</td>`;
+  return `<td class="n sep" style="${bg}" ${tip({h:'Согласовано, кор.',rows:[['Заявка',(d>0?'+':d<0?'−':'')+nf.format(Math.abs(d))]]})}><b>${p.ag}</b>${p.ff?`<div class="mute" style="font-size:.75em">+ФФ ${p.ff}</div>`:''}</td>`;
 }
 // упаковка (17.11.2026): колонок «В коробе» / «На паллете» нет — товар без них помечен у артикула
 const pkMiss=p=>{const m=[p.box_qty>0?'':'«в коробе»',p.boxes_per_pallet>0?'':'«на паллете»'].filter(Boolean);return m.length?` <span class="miss" style="font-size:.75em;padding:1px 5px;border-radius:4px" title="Не заполнено ${m.join(' и ')} — заполните в «Базе товаров»">нет ${m.join(', ')}</span>`:'';};
