@@ -130,6 +130,8 @@
  .card .l{color:#94a3b8;font-size:.82em}
  .card .v{font-size:1.5em;color:#1C0D2E}
  .sec{margin:18px 0 6px;color:#544273;font-size:1.15em}
+ .sechead{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:18px 0 6px}.sechead .sec{margin:0}.sechead .toolbar{flex:1;margin:0}
+ .btn2:disabled{opacity:.4;cursor:default}.btn2:disabled:hover{transform:none;box-shadow:none;border-color:rgba(84,66,115,.2);color:#544273}
  td.n,th.n{text-align:right;white-space:nowrap}
  .num{width:62px;text-align:right;padding:4px 6px}
  tr.prow{cursor:pointer}
@@ -286,12 +288,7 @@
     </div>
     <div class="steps" id="steps"></div>
 
-    <div class="toolbar">
-      <button class="btn2" data-f="all" onclick="setF('all')">Все</button>
-      <button class="btn2" data-f="m1" onclick="setF('m1')">Илья</button>
-      <button class="btn2" data-f="m2" onclick="setF('m2')">Ольга</button>
-      <input id="q" placeholder="Поиск по артикулу / названию" oninput="render()">
-    </div>
+
     <div class="cards" id="cards"></div>
 
     <div class="smodal" id="setModal" onclick="if(event.target===this)closeSet()">
@@ -302,7 +299,17 @@
     </div>
 
 
-    <div class="sec" id="h1">Заявка менеджера</div>
+    <div class="sechead">
+      <div class="sec" id="h1">Заявка менеджера</div>
+      <div class="toolbar">
+        <button class="btn2" data-f="all" onclick="setF('all')">Все</button>
+        <button class="btn2" data-f="m1" onclick="setF('m1')">Илья</button>
+        <button class="btn2" data-f="m2" onclick="setF('m2')">Ольга</button>
+        <input id="q" placeholder="Поиск по артикулу / названию" oninput="render()">
+        <button class="btn2" id="devBtn" onclick="toggleDev()" title="Только товары, где согласовано (с ФФ) ≠ заявлено">Только отклонения</button>
+        <button class="btn2" id="autoBtn" onclick="autoDist()" title="Распределить согласованное по кластерам: по спросу и запасу в днях, с подгонкой паллет к норме 0,8–1,15">⚡ Автораспределение</button>
+      </div>
+    </div>
     <div class="note" id="needNote"></div>
     <div class="scroll"><table id="t1" class="pt"></table></div>
 
@@ -511,10 +518,20 @@ const S=(a,f)=>a.reduce((x,r)=>x+(f(r)||0),0);
 const reqOf=p=>S(p.rows,r=>r.req);
 const calcOf=p=>S(p.rows,r=>r.calc);
 const buyOf=p=>Math.max(reqOf(p)-p.ff,0);
-const vis=()=>{const q=document.getElementById('q').value.toLowerCase();return MODEL.filter(p=>(F==='all'||p.m===F)&&((p.offer_id||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q))).sort((a,b)=>reqOf(b)-reqOf(a)||calcOf(b)-calcOf(a)||a.offer_id.localeCompare(b.offer_id));};
+let DEV_ONLY=false;
+const isDev=p=>p.ag!=null&&(p.ff||0)+p.ag!==reqOf(p);
+const vis=()=>{const q=document.getElementById('q').value.toLowerCase();return MODEL.filter(p=>(F==='all'||p.m===F)&&(!DEV_ONLY||isDev(p))&&((p.offer_id||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q))).sort((a,b)=>reqOf(b)-reqOf(a)||calcOf(b)-calcOf(a)||a.offer_id.localeCompare(b.offer_id));};
 
 // ===== отрисовка =====
 function setF(f){F=f;render();}
+function toggleDev(){ DEV_ONLY=!DEV_ONLY; render(); }
+// кнопки строки заголовка: «Только отклонения» — когда есть согласованное; «Автораспределение» — только на шаге «Распределение»
+function renderTools(){
+  const st=ST(), hasAg=MODEL.some(p=>p.ag!=null), d=document.getElementById('devBtn'), a=document.getElementById('autoBtn');
+  if(!hasAg&&DEV_ONLY) DEV_ONLY=false;
+  d.disabled=!hasAg; d.classList.toggle('on',DEV_ONLY); d.textContent=DEV_ONLY?`Только отклонения (${MODEL.filter(isDev).length})`:'Только отклонения';
+  a.disabled=st!=='distribution';
+}
 function render(){
   const st=ST();
   document.querySelectorAll('[data-f]').forEach(b=>b.classList.toggle('on',b.dataset.f===F));
@@ -533,7 +550,7 @@ function render(){
   const dAt=DEM_AT?new Date(DEM_AT):null, old=dAt&&(Date.now()-dAt)>36*3600e3;
   // строка-пояснение над заявкой убрана 17.11.2026 (решение владельца): дата данных Ozon и товары без «в коробе» — в окне настроек; здесь — только тревога
   document.getElementById('meta').innerHTML=old?'<span class="bad">⚠️ Спрос и остатки Ozon старше 36 ч — ночная синхронизация не прошла</span>':'';
-  renderLT(); renderCards(); renderT1(); renderPal();
+  renderLT(); renderTools(); renderCards(); renderT1(); renderPal();
 }
 function renderCards(){
   const v=vis(), q=S(v,reqOf), b=S(v,buyOf), ag=S(v,p=>p.ag), has=v.some(p=>p.ag!=null);
@@ -601,8 +618,8 @@ function renderT1(){
   TIPS=[]; ptipBind();
   const st=ST(), v=vis(), ed=st==='draft', dist=st==='distribution'||st==='closed', edD=st==='distribution', q=document.getElementById('q').value.trim();
   const dash='<span class="mute">—</span>';
-  const showAg=!!st&&st!=='draft', NC=6+(showAg?1:0)+(dist?1:0), ym=monthOfWeek(WEEK), mlbl=ym.slice(5)+'.'+ym.slice(0,4);
-  let h=`<colgroup><col style="width:26%"><col span="${NC-1}"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="2" class="mhead sep">Ozon сейчас</th><th class="mhead sep">Заявка</th><th colspan="2" class="mhead sep" title="Выполнение к сегодня, ${mlbl}">Выполнение к сегодня</th>${showAg?'<th rowspan="2" class="sub sep n" title="ФФ + согласовано против заявленного: больше — зелёный, меньше — красный">Согласо&shy;вано, кор.</th>':''}${dist?'<th rowspan="2" class="sub sep n">Распре&shy;делено, кор.</th>':''}</tr>
+  const showAg=true, NC=8, ym=monthOfWeek(WEEK), mlbl=ym.slice(5)+'.'+ym.slice(0,4);
+  let h=`<colgroup><col style="width:26%"><col span="${NC-1}"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="2" class="mhead sep">Ozon сейчас</th><th class="mhead sep">Заявка</th><th colspan="2" class="mhead sep" title="Выполнение к сегодня, ${mlbl}">Выполнение к сегодня</th><th rowspan="2" class="sub sep n">Согласо&shy;вано, кор.</th><th rowspan="2" class="sub sep n">Распре&shy;делено, кор.</th></tr>
     <tr><th class="sub sep n">Спрос, шт/дн</th><th class="sub n">Остаток + в пути, шт</th><th class="sub sep n">Заявлено, кор.</th><th class="sub sep n" title="Закупка: заказано за месяц с этой неделей ÷ потребность месяца × (номер недели ÷ недель в месяце)">Потреб&shy;ность, %</th><th class="sub n" title="Продажи: заказы товара с 1-го числа по вчера ÷ план месяца × (прошедшие эфф. дни ÷ эфф. дни месяца; выходной × 0,7)">План продаж, %</th></tr></thead><tbody>`;
   if(!v.length) h+=`<tr><td colspan="${NC}" class="mute">Нет товаров</td></tr>`;
   const G=groupsOf(v,reqOf); K1=G.map(g=>g[0]);
@@ -613,7 +630,7 @@ function renderT1(){
     for(const p of g){
       const qv=reqOf(p), ns=p.rows.length&&p.rows.filter(r=>r.keep).every(r=>r.noSnap), bq=p.box_qty||0;
       h+=`<tr class="prow" onclick="toggle(${p.product_id})"><td>${OPEN===p.product_id?'▾':'▸'} <b>${esc(p.offer_id)}</b>${pkMiss(p)}<div class="pname">${esc(p.name)}</div></td>
-        <td class="n sep"${tip(demTip(p))}>${ns?dash:nf.format(S(p.rows,r=>r.ads))}</td><td class="n">${ns?dash:nf.format(S(p.rows,r=>r.av+r.tr))}</td><td class="n sep"${tip({h:'Заявлено',rows:[['Текущая заявка',nf.format(qv)+' кор. / '+nf.format(qv*bq)+' шт'],['Прошлые заявки',nf.format(S(p.rows,r=>r.prev))+' кор. / '+nf.format(S(p.rows,r=>r.prev)*bq)+' шт'],null,['В коробе',bq?bq+' шт':'не заполнено',bq?'':'r'],['На паллете',p.boxes_per_pallet>0?p.boxes_per_pallet+' кор.':'не заполнено',p.boxes_per_pallet>0?'':'r']]})}><b>${qv}</b></td>${needCells(p)}${showAg?agCell(p,qv):''}${dist?`<td class="n sep">${S(p.rows,r=>r.dist)}</td>`:''}</tr>`;
+        <td class="n sep"${tip(demTip(p))}>${ns?dash:nf.format(S(p.rows,r=>r.ads))}</td><td class="n">${ns?dash:nf.format(S(p.rows,r=>r.av+r.tr))}</td><td class="n sep"${tip({h:'Заявлено',rows:[['Текущая заявка',nf.format(qv)+' кор. / '+nf.format(qv*bq)+' шт'],['Прошлые заявки',nf.format(S(p.rows,r=>r.prev))+' кор. / '+nf.format(S(p.rows,r=>r.prev)*bq)+' шт'],null,['В коробе',bq?bq+' шт':'не заполнено',bq?'':'r'],['На паллете',p.boxes_per_pallet>0?p.boxes_per_pallet+' кор.':'не заполнено',p.boxes_per_pallet>0?'':'r']]})}><b>${qv}</b></td>${needCells(p)}${showAg?agCell(p,qv):''}<td class="n sep">${dist?S(p.rows,r=>r.dist):dash}</td></tr>`;
       if(OPEN!==p.product_id) continue;
       h+=`<tr class="sub"><td colspan="${NC}"><table class="ct"><tr><th>Кластер</th><th class="n">Спрос, шт/дн</th><th class="n">Остаток, шт</th><th class="n">В пути, шт</th><th class="n">Прошлые заявки, кор.</th><th class="n">Расчёт, кор.</th><th class="n">Заявлено, кор.</th>${dist?'<th class="n">Распределено, кор.</th>':''}</tr>`;
       for(const r of p.rows){
@@ -804,6 +821,61 @@ async function setReq(pid,c,v){
   r.req=String(v).trim()===''?(r.calc||0):toInt(v); r.manual=r.req!==(r.calc||0); r.keep=true;
   try{ await upsert('purchase_lines',[lineRow(p,r)],'week,product_id,cluster'); LINES.set(pid+'|'+c,{...LINES.get(pid+'|'+c),requested_boxes:r.req}); }catch(e){fail(e);}
   renderCards(); renderPal(); renderT1();
+}
+// ===== автораспределение (17.11.2026, решения владельца) =====
+// Шаг 1 — по спросу и запасу: обеспеченное товара (ФФ + согласовано) раздаём по коробу в кластер, где запас в днях после поставки
+//   ((остаток + в пути + (прошлые заявки + распределено) × в коробе) ÷ спрос) самый маленький; нет спроса ни в одном кластере — пропорционально заявленному.
+// Шаг 2 — паллеты (по всем товарам юрлица): кластер вне нормы 0,8–1,15 на паллету (меньше 0,8 — догружаем до 0,8) выравниваем перекладкой коробов
+//   одного товара между кластерами: донор — кластер с наибольшим запасом в днях, получатель — с наименьшим; итог товара не меняется;
+//   донор не уходит ниже целевого запаса (покрытие + запас) или ниже запаса получателя; кластер в норме не выводим из нормы.
+function adDays(p,r,dist){ return r.ads>0?((r.av||0)+(r.tr||0)+((r.prev||0)+dist)*(p.box_qty||0))/r.ads:Infinity; }
+function adElig(r){ return !r.blocked&&!r.inactive; }
+function adStep1(p){
+  const tot=(p.ff||0)+(p.ag||0), rows=p.rows.filter(adElig);
+  p.rows.forEach(r=>r.dist=0); if(!tot||!rows.length) return;
+  const dem=rows.filter(r=>r.ads>0);
+  if(!dem.length||!(p.box_qty>0)){ distribute(p); return; }
+  for(let k=0;k<tot;k++){ let best=null,bd=Infinity; for(const r of dem){ const d=adDays(p,r,r.dist); if(d<bd||(d===bd&&r.ads>best.ads)){bd=d;best=r;} } best.dist++; }
+}
+function adPal(){ const P={}; MODEL.forEach(p=>{ if(!(p.boxes_per_pallet>0)) return; p.rows.forEach(r=>{ if(r.dist) P[r.c]=(P[r.c]||0)+r.dist/p.boxes_per_pallet; }); }); return P; }
+// сколько не хватает до нормы: >0 — добавить паллет, <0 — убрать, 0 — в норме (или кластер пуст)
+function adNeed(x){ if(!(x>1e-9)) return 0; if(x<0.8) return 0.8-x; const lo=Math.ceil(x/1.15-1e-9), hi=Math.floor(x/0.8+1e-9); if(lo<=hi) return 0;
+  const n=Math.floor(x), m=Math.ceil(x), rem=x-1.15*n, add=0.8*m-x; return add<=rem?add:-rem; }
+function adStep2(){
+  const tgt=c=>WLT[c]?cov(WLT[c])+(Number(WLT[c].target_days)||0):0;
+  for(let it=0;it<4000;it++){
+    const P=adPal(), bad=Object.keys(P).map(c=>({c,n:adNeed(P[c])})).filter(x=>Math.abs(x.n)>1e-9).sort((a,b)=>Math.abs(a.n)-Math.abs(b.n));
+    let moved=false;
+    for(const {c,n} of bad){
+      // ищем лучший перенос одного короба: в c (n>0) или из c (n<0)
+      let best=null;
+      for(const p of MODEL){ const bpp=p.boxes_per_pallet; if(!(bpp>0)||!(p.box_qty>0)) continue;
+        const rc=p.rows.find(r=>r.c===c&&adElig(r)); if(!rc) continue;
+        for(const ro of p.rows){ if(ro===rc||!adElig(ro)) continue;
+          const [from,to]=n>0?[ro,rc]:[rc,ro]; if(!(from.dist>0)||!(to.ads>0)) continue;
+          const fAfter=adDays(p,from,from.dist-1), tAfter=adDays(p,to,to.dist+1);
+          if(!(fAfter>=tgt(from.c)||fAfter>=tAfter)) continue;           // не оголяем донора
+          const other=n>0?from.c:to.c, po=P[other]||0, dpo=(n>0?-1:1)/bpp;
+          if(adNeed(po)===0&&po>1e-9&&adNeed(po+dpo)!==0&&!(po+dpo<1e-9)) continue; // соседа в норме не ломаем
+          const score=fAfter-tAfter; if(!best||score>best.score) best={from,to,score};
+        }
+      }
+      if(best){ best.from.dist--; best.to.dist++; moved=true; break; }
+    }
+    if(!moved) break;
+  }
+}
+async function autoDist(){
+  if(ST()!=='distribution') return;
+  const prods=MODEL.filter(p=>p.ag!=null||(p.ff||0)>0);
+  if(!confirm(`Автораспределение перезапишет «Распределено» у ${prods.length} товаров (все менеджеры): по спросу и запасу в днях, с подгонкой паллет к норме. Продолжить?`)) return;
+  const before=new Map(); MODEL.forEach(p=>p.rows.forEach(r=>before.set(p.product_id+'|'+r.c,r.dist||0)));
+  prods.forEach(adStep1); adStep2();
+  const now=new Date().toISOString(), rows=[];
+  MODEL.forEach(p=>p.rows.forEach(r=>{ const b=before.get(p.product_id+'|'+r.c)||0; if((r.dist||0)!==b||r.dist>0) rows.push(LINES.has(p.product_id+'|'+r.c)?{week:WEEK,product_id:p.product_id,cluster:r.c,distributed_boxes:r.dist||0,updated_at:now}:lineRow(p,r,{distributed_boxes:r.dist||0,updated_at:now})); }));
+  const short=rows.filter(x=>!('requested_boxes' in x)), full=rows.filter(x=>'requested_boxes' in x);
+  try{ if(short.length) await upsert('purchase_lines',short,'week,product_id,cluster'); if(full.length) await upsert('purchase_lines',full,'week,product_id,cluster'); }catch(e){ fail(e); }
+  render();
 }
 async function setDist(pid,c,v){
   if(ST()!=='distribution') return;
