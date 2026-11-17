@@ -126,6 +126,37 @@
  .scroll{overflow-x:auto}
  .note{font-size:.82em;color:#94a3b8;margin:4px 0}
  .lock{font-size:.85em;color:#94a3b8;margin-left:6px}
+ /* окно «Настройки расчёта» (17.11.2026): вместо блока на странице — кнопка ⚙️ у даты недели */
+ .gear{background:#fff;border:2px solid rgba(84,66,115,.2);border-radius:50%;width:38px;height:38px;padding:0;font-size:1.15em;line-height:1;cursor:pointer;transition:transform .35s,border-color .2s,box-shadow .2s}
+ .gear:hover{border-color:#E33D78;transform:rotate(60deg);box-shadow:0 4px 14px rgba(227,61,120,.25)}
+ .smodal{position:fixed;inset:0;z-index:1000;background:rgba(28,13,46,.42);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .2s}
+ .smodal.on{opacity:1;pointer-events:auto}
+ .spanel{background:#fff;border-radius:18px;box-shadow:0 24px 60px rgba(28,13,46,.35);width:min(1280px,100%);max-height:90vh;display:flex;flex-direction:column;transform:translateY(14px) scale(.98);transition:transform .22s}
+ .smodal.on .spanel{transform:none}
+ .shead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 22px 12px;border-bottom:1px solid rgba(84,66,115,.12)}
+ .stitle{font-size:1.35em;color:#1C0D2E}.ssub{font-size:.88em;color:#94a3b8;margin-top:3px}
+ .sx{background:none;border:0;font-size:1.3em;color:#94a3b8;cursor:pointer;padding:2px 6px;border-radius:8px}.sx:hover{color:#E33D78;background:#fdf2f7}
+ .sbody{padding:14px 22px 20px;overflow:auto}
+ .ssec{margin:6px 0 18px}.ssec h4{margin:0 0 8px;font-weight:normal;font-size:1.08em;color:#544273}.ssec .hint{font-size:.85em;color:#94a3b8;margin:-4px 0 10px}
+ .modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+ .mcard{border:2px solid rgba(84,66,115,.15);border-radius:14px;padding:12px 14px;cursor:pointer;transition:border-color .2s,box-shadow .2s,transform .2s;background:#fff}
+ .mcard:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(84,66,115,.12)}
+ .mcard.on{border-color:#E33D78;background:#fdf2f7;box-shadow:0 0 0 3px rgba(227,61,120,.12)}
+ .mcard.dis{cursor:default;opacity:.65}.mcard.dis:hover{transform:none;box-shadow:none}
+ .mcard .mt{color:#1C0D2E;font-size:1.05em}.mcard .md{font-size:.85em;color:#64748b;margin:4px 0 8px;line-height:1.35}
+ .mcard .mv{display:flex;gap:16px}.mcard .mv b{font-size:1.25em;color:#1C0D2E;font-weight:normal}.mcard .mv span{font-size:.8em;color:#94a3b8;display:block}
+ .mdot{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid #cbd5e1;vertical-align:-2px;margin-right:6px}.mcard.on .mdot{border:4px solid #E33D78}
+ table.lt2{border-collapse:collapse;width:100%}table.lt2 th{font-weight:normal;font-size:.8em;color:#94a3b8;padding:4px 6px;text-align:center;border-bottom:1px solid rgba(84,66,115,.12)}
+ table.lt2 td{padding:5px 6px;border-bottom:1px dashed rgba(84,66,115,.1);text-align:center}table.lt2 td:first-child,table.lt2 th:first-child{text-align:left}
+ table.lt2 tr:hover td{background:#faf7fc}table.lt2 th.grp{color:#544273;font-size:.85em;border-bottom:0}
+ table.lt2 .cov{display:inline-block;min-width:34px;padding:2px 8px;border-radius:999px;background:#ede9fe;color:#544273}
+ table.lt2 .stp .num{width:34px;min-width:30px;padding:3px 2px}table.lt2 .stp button{padding:2px 6px}table.lt2 td{padding:5px 3px}
+ .chips{display:flex;flex-wrap:wrap;gap:8px}
+ .chip{border:1.5px solid rgba(227,61,120,.35);background:#fdf2f7;color:#9d174d;border-radius:999px;padding:4px 10px;font-size:.9em}
+ .chip button{background:none;border:0;color:#E33D78;cursor:pointer;margin-left:4px;padding:0 2px;font-size:.95em}
+ .ban{background:none;border:1.5px solid rgba(84,66,115,.2);border-radius:8px;cursor:pointer;padding:2px 7px;color:#94a3b8;font-size:.85em}.ban:hover{border-color:#E33D78;color:#E33D78}
+ .sfoot{font-size:.82em;color:#94a3b8;border-top:1px solid rgba(84,66,115,.12);padding-top:10px;line-height:1.5}
+ @media (prefers-reduced-motion:reduce){.gear,.smodal,.spanel,.mcard{transition:none}}
  .wrap{max-width:min(1700px,100%);box-sizing:border-box}
  table.pt{font-size:.8em;table-layout:fixed;width:100%}
  /* шапки всех таблиц заявки — один стиль, текст по центру (27.10.2026) */
@@ -210,7 +241,7 @@
       <button class="btn2" onclick="shiftWeek(-7)" title="Предыдущая неделя">◀</button>
       <div class="wlbl" id="wlbl"></div>
       <button class="btn2" onclick="shiftWeek(7)" title="Следующая неделя">▶</button>
-      <span class="mute" id="wnote"></span>
+      <button class="gear" onclick="openSet()" title="Настройки расчёта">⚙️</button>
       <span style="flex:1"></span>
       <span id="actions"></span>
     </div>
@@ -224,10 +255,12 @@
     </div>
     <div class="cards" id="cards"></div>
 
-    <details class="box" id="ltBox">
-      <summary>⚙️ Настройки расчёта <span class="lock" id="ltLock"></span></summary>
-      <div class="inner" id="lt"></div>
-    </details>
+    <div class="smodal" id="setModal" onclick="if(event.target===this)closeSet()">
+      <div class="spanel" role="dialog" aria-label="Настройки расчёта">
+        <div class="shead"><div><div class="stitle">⚙️ Настройки расчёта</div><div class="ssub" id="setSub"></div></div><button class="sx" onclick="closeSet()" title="Закрыть (Esc)">✕</button></div>
+        <div class="sbody" id="lt"></div>
+      </div>
+    </div>
 
 
     <div class="sec" id="h1">Заявка менеджера</div>
@@ -311,7 +344,8 @@ let PROD=[],NOBOX=[],DEM=new Map(),DEM_AT='',SEED={},ACTIVE=new Set(),WEEKS={};
 // Хранится в неделе (purchase_weeks.demand_mode), меняется в черновике; после отправки спрос — из снимка строк.
 let BEST={},BEST_W=[],HAS_MODE=false,MODE_NEW='ads28';
 const MODES=[['ads28','Как сейчас — продажи за 28 дней (Ozon)'],['best5','Лучшая неделя товара за 5 последних недель']];
-const MODE=()=>WEEKS[WEEK]?(WEEKS[WEEK].demand_mode||'ads28'):MODE_NEW;
+let MODE_FORCE=null;
+const MODE=()=>MODE_FORCE||(WEEKS[WEEK]?(WEEKS[WEEK].demand_mode||'ads28'):MODE_NEW);
 let WEEK=addD(keyOfMonday(new Date()),7),F='all',OPEN=null,OPEN1=new Set(),OPEN2=new Set(),OPEN3=new Set(),K1=[],K2=[],K3=[],NEED_ST=null;
 let WLT={},LT_SRC='',LINES=new Map(),PREV=new Map(),SUP={},NEEDS={},MONTH_REQ={},MODEL=[],DEBT={},FACT_OK=true;
 
@@ -446,17 +480,14 @@ function render(){
   const st=ST();
   document.querySelectorAll('[data-f]').forEach(b=>b.classList.toggle('on',b.dataset.f===F));
   document.getElementById('wlbl').textContent=`${ddmm(WEEK)}–${ddmm(addD(WEEK,6))}`;
-  const thisMon=keyOfMonday(new Date());
-  document.getElementById('wnote').textContent=WEEK===addD(thisMon,7)?'заявка этой недели':WEEK===thisMon?'на согласовании':'';
   const stIdx=st?STAGES.findIndex(s=>s[0]===st):-1;
   document.getElementById('steps').innerHTML=STAGES.map((s,i)=>`<div class="step ${i===stIdx?'on':i<stIdx?'done':''}">${i<stIdx?'✓ ':''}${s[1]}</div>`).join('');
   const a=document.getElementById('actions');
   if(!st) a.innerHTML=`<button onclick="createWeek()">Создать заявку на ${ddmm(WEEK)}</button>`;
   else a.innerHTML=(STAGE_BTN[st]?`<button onclick="nextStage()">${STAGE_BTN[st]}</button> `:st==='at_buyer'?`<a href="${SUPPLY_URL}" target="_blank">Согласование — в сводной заявке поставщику ↗</a> `:'<span class="ok">Неделя закрыта</span> ')+(stIdx>0?`<button class="btn2" onclick="prevStage()">↩ Вернуть на шаг</button>`:'');
   const dAt=DEM_AT?new Date(DEM_AT):null, old=dAt&&(Date.now()-dAt)>36*3600e3;
-  document.getElementById('meta').innerHTML=`Спрос: <b>${(MODES.find(m=>m[0]===MODE())||MODES[0])[1]}</b> • Спрос и остатки Ozon (API): ${dAt?dAt.toLocaleString('ru-RU'):'нет данных'}${old?' <span class="bad">— данные старше 36 ч</span>':''}`
-    +(st&&st!=='draft'?(MODEL.some(p=>p.rows.some(r=>r.noSnap))?' • <span class="warn">неделя перенесена из Google-таблицы: спроса и остатков на ту дату нет</span>':' • показан снимок на момент отправки'):'')
-    +` • товаров в расчёте: ${PROD.length-NOBOX.length}`+(NOBOX.length?` • <span class="warn">без «в коробе»: ${NOBOX.length}</span> (в таблице — красная ячейка; заполните в «Базе товаров»)`:'');
+  // строка-пояснение над заявкой убрана 17.11.2026 (решение владельца): дата данных Ozon и товары без «в коробе» — в окне настроек; здесь — только тревога
+  document.getElementById('meta').innerHTML=old?'<span class="bad">⚠️ Спрос и остатки Ozon старше 36 ч — ночная синхронизация не прошла</span>':'';
   renderLT(); renderCards(); renderT1(); renderPal();
 }
 function renderCards(){
@@ -464,26 +495,44 @@ function renderCards(){
   document.getElementById('cards').innerHTML=[['Расчёт, кор.',v.length&&v.every(p=>p.rows.every(r=>r.noSnap))?'—':nf.format(S(v,calcOf))],['Заявлено, кор.',nf.format(q)],['На ФФ, кор.',nf.format(S(v,p=>p.ff))],['Согласовано, кор.',has?nf.format(ag):'—',has&&b?Math.round(ag/b*100)+'% к закупке ('+nf.format(b)+' кор.)':'вносит закупщик в сводной заявке'],...(()=>{const x=pctSum(v);return [['Потребность к сегодня',x.nT>0?pctTxt(x.nF,x.nT):'—',x.nT>0?'заказано '+nf.format(x.nF)+' из '+nf.format(Math.round(x.nT))+' кор.':''],['План продаж к сегодня',x.pT>0?pctTxt(x.pF,x.pT):'—',x.pT>0?'заказы '+nf.format(x.pF)+' из '+nf.format(Math.round(x.pT))+' шт':'']];})()]
     .map(([l,x,sub])=>`<div class="card"><div class="l">${l}</div><div class="v">${x}</div>${sub?`<div class="l">${sub}</div>`:''}</div>`).join('');
 }
+// окно «Настройки расчёта» (17.11.2026, решение владельца): 1) вариант спроса — карточки с расчётом недели по каждому варианту;
+// 2) сроки по кластерам (только разрешённые); 3) запрещённые кластеры — чипами; внизу — дата данных Ozon и служебное
+function openSet(){ document.getElementById('setModal').classList.add('on'); renderLT(); }
+function closeSet(){ document.getElementById('setModal').classList.remove('on'); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSet(); });
+function modeTotals(){
+  const out={};
+  for(const [k] of MODES){ MODE_FORCE=k; build(); let box=0,pal=0; MODEL.forEach(p=>p.rows.forEach(r=>{ const b=r.calc||0; box+=b; if(p.boxes_per_pallet>0) pal+=b/p.boxes_per_pallet; })); out[k]={box,pal}; }
+  MODE_FORCE=null; build(); return out;
+}
 function renderLT(){
-  const st=ST(), ed=st==='draft';
-  document.getElementById('ltLock').textContent=ed?'— можно менять, пока заявка в черновике':!st?'— заявка не создана: при создании скопируются сроки '+(LT_SRC.startsWith('copy')?'недели '+ddmm(LT_SRC.slice(5)):'по умолчанию'):'— только просмотр';
+  const st=ST(), ed=st==='draft', live=!st||st==='draft';
+  document.getElementById('setSub').innerHTML=`Неделя ${ddmm(WEEK)}–${ddmm(addD(WEEK,6))} · `+(ed?'✏️ можно менять, пока заявка в черновике':!st?'заявка не создана — выбор применится при создании; сроки скопируются '+(LT_SRC.startsWith('copy')?'с недели '+ddmm(LT_SRC.slice(5)):'по умолчанию'):'🔒 только просмотр — заявка отправлена');
+  if(!document.getElementById('setModal').classList.contains('on')) return;
+  const md=MODE(), mEd=HAS_MODE&&live, tot=live?modeTotals():null;
+  const MD={ads28:'Среднесуточные продажи кластера за 28 дней из API Ozon.',best5:`Лучшая неделя товара за ${ddmm(BEST_W[0])}–${ddmm(addD(BEST_W[4],6))} (заказы ÷ 7); по кластерам — в долях спроса Ozon.`};
+  let h=`<div class="ssec"><h4>Спрос в расчёте</h4>${HAS_MODE?'':'<div class="hint bad">Нужен SQL 2026-11-17_purchase_weeks_demand_mode.sql — до него только «как сейчас».</div>'}<div class="modes">`
+    +MODES.map(([k,t])=>`<div class="mcard${k===md?' on':''}${mEd?'':' dis'}" ${mEd&&k!==md?`onclick="setMode('${k}')"`:''}><div class="mt"><span class="mdot"></span>${t}</div><div class="md">${MD[k]}</div>${tot?`<div class="mv"><div><b>${nf.format(tot[k].box)}</b><span>кор. расчёт</span></div><div><b>${nf.format(Math.round(tot[k].pal*10)/10)}</b><span>паллет</span></div></div>`:''}</div>`).join('')
+    +`</div></div>`;
   const used=new Set(); MODEL.forEach(p=>p.rows.forEach(r=>used.add(r.c)));
   const names=[...new Set([...Object.keys(WLT),...used])].sort((a,b)=>a.localeCompare(b,'ru'));
   // «Заказ запрещён» — справочник кластеров (не неделя): действует сразу на черновики и потребность; меняется в любой момент
-  const blk=Object.values(SEED).some(x=>'blocked' in x);
-  const bcell=c=>blk&&SEED[c]?`<td class="n"><input type="checkbox" ${SEED[c].blocked?'checked':''} title="Заказ в кластер запрещён: расчёт и заявлено = 0, в потребности не учитывается" onchange="setBlocked('${esc(c)}',this.checked)"></td>`:'<td class="n mute">—</td>';
-  const md=MODE(), mEd=HAS_MODE&&(ed||!st);
-  let h=`<div style="margin:4px 0 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b>Вариант расчёта спроса:</b> <select id="demMode" ${mEd?'':'disabled'} onchange="setMode(this.value)">${MODES.map(([k,t])=>`<option value="${k}" ${k===md?'selected':''}>${t}</option>`).join('')}</select>
-    <span class="mute" style="font-size:.85em">${!HAS_MODE?'<span class="bad">нужен SQL 2026-11-17_purchase_weeks_demand_mode.sql — до него только «как сейчас»</span>':md==='best5'?`недели ${ddmm(BEST_W[0])}–${ddmm(addD(BEST_W[4],6))}: заказы лучшей недели товара ÷ 7, по кластерам — в долях спроса Ozon`:'среднесуточные продажи кластера за 28 дней из API Ozon'}${HAS_MODE&&!mEd?' — только просмотр':''}</span></div>`;
-  h+=`<table class="lt"><tr><th>Кластер</th>${LT_H.map(x=>`<th class="n">${x}</th>`).join('')}<th class="n">Покрытие</th><th class="n">Запас</th><th class="n">Вычесть заявок</th>${blk?'<th class="n">Заказ запрещён</th>':''}</tr>`;
-  for(const c of names){
-    const r=WLT[c], inactive=SEED[c]&&!ACTIVE.has(c), bl=!!SEED[c]?.blocked;
-    // запрещённый кластер — всегда одной строкой «сроки не нужны», даже если сроки сохранены раньше (16.11.2026; в расчёте он и так не участвует)
-    if(!r||bl){ h+=`<tr><td>${esc(c)}${bl?' <span class="bad">🚫</span>':''}</td><td colspan="9" class="${bl?'mute':'bad'}">${bl?'заказ запрещён — сроки не нужны':`сроки не заданы — расчёт по кластеру не идёт ${ed?`<button class="btn2" onclick="addLT('${esc(c)}')">задать</button>`:''}`}</td>${blk?bcell(c):''}</tr>`; continue; }
+  const blk=Object.values(SEED).some(x=>'blocked' in x), banned=names.filter(c=>SEED[c]?.blocked), open=names.filter(c=>!SEED[c]?.blocked);
+  h+=`<div class="ssec"><h4>Сроки по кластерам, дней</h4><div class="hint">Покрытие = сумма этапов; запас — сверх покрытия; «вычесть заявок» — сколько прошлых недельных заявок вычитается из расчёта.</div><div style="overflow-x:auto"><table class="lt2">
+    <tr><th></th><th class="grp" colspan="6">Этапы поставки</th><th class="grp" colspan="3">Расчёт</th>${blk?'<th></th>':''}</tr>
+    <tr><th>Кластер</th>${LT_H.map(x=>`<th>${x}</th>`).join('')}<th>Покрытие</th><th>Запас</th><th>Вычесть заявок</th>${blk?'<th></th>':''}</tr>`;
+  for(const c of open){
+    const r=WLT[c], inactive=SEED[c]&&!ACTIVE.has(c), ban=blk&&SEED[c]?`<td><button class="ban" title="Запретить заказ в кластер: расчёт и заявлено = 0, в потребности не учитывается" onclick="setBlocked('${esc(c)}',true)">🚫</button></td>`:(blk?'<td></td>':'');
+    if(!r){ h+=`<tr><td>${esc(c)}</td><td colspan="9" class="bad">сроки не заданы — расчёт по кластеру не идёт ${ed?`<button class="btn2" onclick="addLT('${esc(c)}')">задать</button>`:''}</td>${ban}</tr>`; continue; }
     const inp=f=>ed?`<input class="num" type="number" min="0" step="1" value="${r[f]??0}" onchange="setLT('${esc(c)}','${f}',this.value)">`:(r[f]??0);
-    h+=`<tr${bl?' class="mute"':''}><td>${esc(c)}${inactive?' <span class="mute">(нет у Ozon)</span>':''}${bl?' <span class="bad">🚫 запрещён</span>':''}</td>${LT_F.map(f=>`<td class="n">${inp(f)}</td>`).join('')}<td class="n"><b>${cov(r)}</b></td><td class="n">${inp('target_days')}</td><td class="n">${inp('prev_weeks')}</td>${blk?bcell(c):''}</tr>`;
+    h+=`<tr><td>${esc(c)}${inactive?' <span class="mute">(нет у Ozon)</span>':''}</td>${LT_F.map(f=>`<td>${inp(f)}</td>`).join('')}<td><span class="cov">${cov(r)}</span></td><td>${inp('target_days')}</td><td>${inp('prev_weeks')}</td>${ban}</tr>`;
   }
-  document.getElementById('lt').innerHTML=h+'</table>';
+  h+=`</table></div></div>`;
+  if(banned.length) h+=`<div class="ssec"><h4>🚫 Заказ запрещён</h4><div class="hint">Справочник кластеров, действует сразу на черновики и потребность: остатки распродаём, в заявку не заказываем.</div><div class="chips">${banned.map(c=>`<span class="chip">${esc(c)}<button title="Разрешить заказ" onclick="setBlocked('${esc(c)}',false)">✕</button></span>`).join('')}</div></div>`;
+  const dAt=DEM_AT?new Date(DEM_AT):null, old=dAt&&(Date.now()-dAt)>36*3600e3;
+  h+=`<div class="sfoot">Спрос и остатки Ozon (API): ${dAt?dAt.toLocaleString('ru-RU'):'нет данных'}${old?' <span class="bad">— старше 36 ч</span>':''} · товаров в расчёте: ${PROD.length-NOBOX.length}${NOBOX.length?` · <span class="warn">без «в коробе»: ${NOBOX.length}</span> — заполните в «Базе товаров»`:''}`
+    +(st&&st!=='draft'?(MODEL.some(p=>p.rows.some(r=>r.noSnap))?' · <span class="warn">неделя перенесена из Google-таблицы: спроса и остатков на ту дату нет</span>':' · показан снимок на момент отправки'):'')+`</div>`;
+  document.getElementById('lt').innerHTML=h;
 }
 function palOf(p,boxes){return p.boxes_per_pallet>0?boxes/p.boxes_per_pallet:null;}
 const supOf=p=>p.supplier||'—';
@@ -663,7 +712,6 @@ async function setLT(c,f,v){
 async function addLT(c){
   WLT[c]={cluster:c,force_majeure_days:0,approval_days:0,supplier_to_ff_days:0,ff_assembly_days:0,ff_to_ozon_days:0,acceptance_days:0,target_days:0,prev_weeks:2};
   await setLT(c,'prev_weeks',2);
-  document.getElementById('ltBox').open=true;
 }
 async function setMode(v){
   if(!HAS_MODE) return;
