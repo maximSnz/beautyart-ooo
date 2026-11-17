@@ -167,16 +167,16 @@
  .mcard .mt{color:#1C0D2E;font-size:1.05em}.mcard .md{font-size:.85em;color:#64748b;margin:4px 0 8px;line-height:1.35}
  .mcard .mv{display:flex;gap:16px}.mcard .mv b{font-size:1.25em;color:#1C0D2E;font-weight:normal}.mcard .mv span{font-size:.8em;color:#94a3b8;display:block}
  .mdot{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid #cbd5e1;vertical-align:-2px;margin-right:6px}.mcard.on .mdot{border:4px solid #E33D78}
- table.lt2{border-collapse:separate;border-spacing:0;width:100%;table-layout:fixed;min-width:1100px}table.lt2 th{font-weight:normal;font-size:.82em;color:#544273;padding:7px 6px;text-align:center;background:#f3eef8;border:0}
- table.lt2 td{padding:5px 6px;border-bottom:1px dashed rgba(84,66,115,.12);text-align:center}table.lt2 td:first-child,table.lt2 th:first-child{text-align:left}
- table.lt2 tr:hover td{background:#faf7fc}table.lt2 thead tr:first-child th{padding-top:9px;padding-bottom:2px}table.lt2 thead tr:last-child th{padding-bottom:9px;border-bottom:2px solid rgba(84,66,115,.22)}table.lt2 thead tr:first-child th:first-child{border-top-left-radius:10px}table.lt2 thead tr:first-child th:last-child{border-top-right-radius:10px}table.lt2 th.grp{color:#1C0D2E;font-size:.95em;letter-spacing:.02em}
+ table.lt2{border-collapse:separate;border-spacing:0;width:100%;table-layout:fixed;min-width:1100px}table.lt2 th{font-weight:normal;font-size:.82em;color:#544273;padding:6px 8px;text-align:center;vertical-align:middle;line-height:1.15;background:rgba(120,166,199,.1);border-bottom:1px dashed #cbd5e1}
+ table.lt2 td{padding:5px 6px;border-bottom:1px dashed rgba(84,66,115,.12);text-align:center}table.lt2 td:first-child{text-align:left}
+ table.lt2 tr:hover td{background:#faf7fc}table.lt2 th.grp{background:linear-gradient(90deg,rgba(120,166,199,.18),transparent);font-size:.95em}
  table.lt2 .cov{display:inline-block;min-width:34px;padding:2px 8px;border-radius:999px;background:#ede9fe;color:#544273;text-align:center}
  table.lt2 .stp .num{width:34px;min-width:30px;padding:3px 2px;text-align:center}table.lt2 .stp button{padding:2px 6px}table.lt2 td{padding:5px 3px}
  .pager{display:flex;align-items:center;gap:6px;margin-top:10px}.pager button{min-width:32px;height:32px;padding:0 8px;border-radius:8px;background:#fff;color:#544273;border:2px solid rgba(84,66,115,.18);cursor:pointer;transition:border-color .2s,background-color .2s}
  .pager button:hover:not(:disabled){border-color:#E33D78;color:#E33D78}.pager button.on{background:#E33D78;border-color:#E33D78;color:#fff}.pager button:disabled{opacity:.35;cursor:default}.pager span{margin-left:8px;font-size:.85em;color:#94a3b8}
  table.lt2 tbody tr{height:38px}table.lt2 tr.pad td{border-bottom-color:transparent}table.lt2 tr.pad:hover td{background:none}
  table.lt2 th .u{display:block;font-size:.85em;color:#94a3b8;margin-top:1px}
- table.lt2 .vs{border-left:2px solid rgba(84,66,115,.18)}
+ table.lt2 .vs{border-left:1px dashed rgba(84,66,115,.3)}
  .chips{display:flex;flex-wrap:wrap;gap:8px}
  .chip{border:1.5px solid rgba(227,61,120,.35);background:#fdf2f7;color:#9d174d;border-radius:999px;padding:4px 10px;font-size:.9em}
  .chip button{background:none;border:0;color:#E33D78;cursor:pointer;margin-left:4px;padding:0 2px;font-size:.95em}
@@ -553,8 +553,8 @@ function renderLT(){
   // «Заказ запрещён» — справочник кластеров (не неделя): действует сразу на черновики и потребность; меняется в любой момент
   const blk=Object.values(SEED).some(x=>'blocked' in x), banned=names.filter(c=>SEED[c]?.blocked), open=names.filter(c=>!SEED[c]?.blocked);
   h+=`<div class="ssec"><h4>Сроки реализации заявки</h4><div style="overflow-x:auto"><table class="lt2"><colgroup><col style="width:17%">${LT_F.map(()=>'<col style="width:9%">').join('')}<col style="width:7%"><col style="width:9%"><col style="width:9%">${blk?'<col style="width:4%">':''}</colgroup>
-    <thead><tr><th></th><th class="grp vs" colspan="6">Этапы поставки</th><th class="grp vs" colspan="3">Расчёт</th>${blk?'<th class="vs"></th>':''}</tr>
-    <tr><th>Кластер</th>${LT_H.map((x,i)=>`<th${i?'':' class="vs"'}>${x}<span class="u">дн</span></th>`).join('')}<th class="vs">Покрытие<span class="u">дн</span></th><th>Запас<span class="u">дн</span></th><th>Вычесть заявок<span class="u">нед.</span></th>${blk?'<th class="vs"></th>':''}</tr></thead><tbody>`;
+    <thead><tr><th rowspan="2">Кластер</th><th class="grp vs" colspan="6">Этапы поставки</th><th class="grp vs" colspan="3">Расчёт</th>${blk?'<th class="vs" rowspan="2"></th>':''}</tr>
+    <tr>${LT_H.map((x,i)=>`<th${i?'':' class="vs"'}>${x}<span class="u">дн</span></th>`).join('')}<th class="vs">Покрытие<span class="u">дн</span></th><th>Запас<span class="u">дн</span></th><th>Вычесть заявок<span class="u">нед.</span></th></tr></thead><tbody>`;
   // по 5 кластеров на странице (17.11.2026, решение владельца); страница помнится, пока открыта страница заявки
   const pages=Math.max(1,Math.ceil(open.length/LT_PER)); LT_PAGE=Math.min(Math.max(0,LT_PAGE),pages-1);
   for(const c of open.slice(LT_PAGE*LT_PER,LT_PAGE*LT_PER+LT_PER)){
