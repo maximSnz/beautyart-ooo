@@ -598,7 +598,6 @@ const pkMiss=p=>{const m=[p.box_qty>0?'':'«в коробе»',p.boxes_per_palle
 function renderT1(){
   TIPS=[]; ptipBind();
   const st=ST(), v=vis(), ed=st==='draft', dist=st==='distribution'||st==='closed', edD=st==='distribution', q=document.getElementById('q').value.trim();
-  document.getElementById('h1').textContent=dist?'Распределение обеспеченного по кластерам':'Заявка менеджера';
   const dash='<span class="mute">—</span>';
   const showAg=!!st&&st!=='draft', NC=6+(showAg?1:0)+(dist?1:0), ym=monthOfWeek(WEEK), mlbl=ym.slice(5)+'.'+ym.slice(0,4);
   let h=`<colgroup><col style="width:26%"><col span="${NC-1}"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="2" class="mhead sep">Ozon сейчас</th><th class="mhead sep">Заявка</th><th colspan="2" class="mhead sep" title="Выполнение к сегодня, ${mlbl}">Выполнение к сегодня</th>${showAg?'<th rowspan="2" class="sub sep n" title="ФФ + согласовано против заявленного: больше — зелёный, меньше — красный">Согласо&shy;вано, кор.</th>':''}${dist?'<th rowspan="2" class="sub sep n">Распре&shy;делено, кор.</th>':''}</tr>
