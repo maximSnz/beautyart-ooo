@@ -166,6 +166,8 @@
  table.lt2 tr:hover td{background:#faf7fc}table.lt2 thead tr:first-child th{padding-top:9px;padding-bottom:2px}table.lt2 thead tr:last-child th{padding-bottom:9px;border-bottom:2px solid rgba(84,66,115,.22)}table.lt2 thead tr:first-child th:first-child{border-top-left-radius:10px}table.lt2 thead tr:first-child th:last-child{border-top-right-radius:10px}table.lt2 th.grp{color:#1C0D2E;font-size:.95em;letter-spacing:.02em}
  table.lt2 .cov{display:inline-block;min-width:34px;padding:2px 8px;border-radius:999px;background:#ede9fe;color:#544273;text-align:center}
  table.lt2 .stp .num{width:34px;min-width:30px;padding:3px 2px;text-align:center}table.lt2 .stp button{padding:2px 6px}table.lt2 td{padding:5px 3px}
+ .pager{display:flex;align-items:center;gap:6px;margin-top:10px}.pager button{min-width:32px;height:32px;padding:0 8px;border-radius:8px;background:#fff;color:#544273;border:2px solid rgba(84,66,115,.18);cursor:pointer;transition:border-color .2s,background-color .2s}
+ .pager button:hover:not(:disabled){border-color:#E33D78;color:#E33D78}.pager button.on{background:#E33D78;border-color:#E33D78;color:#fff}.pager button:disabled{opacity:.35;cursor:default}.pager span{margin-left:8px;font-size:.85em;color:#94a3b8}
  table.lt2 th .u{display:block;font-size:.85em;color:#94a3b8;margin-top:1px}
  table.lt2 .vs{border-left:2px solid rgba(84,66,115,.18)}
  .chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -519,6 +521,8 @@ function renderCards(){
 }
 // окно «Настройки расчёта» (17.11.2026, решение владельца): 1) вариант спроса — карточки с расчётом недели по каждому варианту;
 // 2) сроки по кластерам (только разрешённые); 3) запрещённые кластеры — чипами; внизу — дата данных Ozon и служебное
+let LT_PAGE=0; const LT_PER=5;
+function ltPage(i){ LT_PAGE=i; renderLT(); }
 function openSet(){ document.getElementById('setModal').classList.add('on'); renderLT(); }
 function closeSet(){ document.getElementById('setModal').classList.remove('on'); }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSet(); });
@@ -544,13 +548,17 @@ function renderLT(){
   h+=`<div class="ssec"><h4>Сроки реализации заявки</h4><div style="overflow-x:auto"><table class="lt2">
     <thead><tr><th></th><th class="grp vs" colspan="6">Этапы поставки</th><th class="grp vs" colspan="3">Расчёт</th>${blk?'<th class="vs"></th>':''}</tr>
     <tr><th>Кластер</th>${LT_H.map((x,i)=>`<th${i?'':' class="vs"'}>${x}<span class="u">дн</span></th>`).join('')}<th class="vs">Покрытие<span class="u">дн</span></th><th>Запас<span class="u">дн</span></th><th>Вычесть заявок<span class="u">нед.</span></th>${blk?'<th class="vs"></th>':''}</tr></thead><tbody>`;
-  for(const c of open){
+  // по 5 кластеров на странице (17.11.2026, решение владельца); страница помнится, пока открыта страница заявки
+  const pages=Math.max(1,Math.ceil(open.length/LT_PER)); LT_PAGE=Math.min(Math.max(0,LT_PAGE),pages-1);
+  for(const c of open.slice(LT_PAGE*LT_PER,LT_PAGE*LT_PER+LT_PER)){
     const r=WLT[c], inactive=SEED[c]&&!ACTIVE.has(c), ban=blk&&SEED[c]?`<td><button class="ban" title="Запретить заказ в кластер: расчёт и заявлено = 0, в потребности не учитывается" onclick="setBlocked('${esc(c)}',true)">🚫</button></td>`.replace('<td>','<td class="vs">'):(blk?'<td class="vs"></td>':'');
     if(!r){ h+=`<tr><td>${esc(c)}</td><td colspan="9" class="bad vs">сроки не заданы — расчёт по кластеру не идёт ${ed?`<button class="btn2" onclick="addLT('${esc(c)}')">задать</button>`:''}</td>${ban}</tr>`; continue; }
     const inp=f=>ed?`<input class="num" type="number" min="0" step="1" value="${r[f]??0}" onchange="setLT('${esc(c)}','${f}',this.value)">`:(r[f]??0);
     h+=`<tr><td>${esc(c)}${inactive?' <span class="mute">(нет у Ozon)</span>':''}</td>${LT_F.map((f,i)=>`<td${i?'':' class="vs"'}>${inp(f)}</td>`).join('')}<td class="vs"><span class="cov">${cov(r)}</span></td><td>${inp('target_days')}</td><td>${inp('prev_weeks')}</td>${ban}</tr>`;
   }
-  h+=`</tbody></table></div></div>`;
+  h+=`</tbody></table></div>`;
+  if(pages>1) h+=`<div class="pager"><button ${LT_PAGE?'':'disabled'} onclick="ltPage(${LT_PAGE-1})" title="Назад">‹</button>${Array.from({length:pages},(_,i)=>`<button class="${i===LT_PAGE?'on':''}" onclick="ltPage(${i})">${i+1}</button>`).join('')}<button ${LT_PAGE<pages-1?'':'disabled'} onclick="ltPage(${LT_PAGE+1})" title="Вперёд">›</button><span>${LT_PAGE*LT_PER+1}–${Math.min(open.length,(LT_PAGE+1)*LT_PER)} из ${open.length}</span></div>`;
+  h+=`</div>`;
   if(banned.length) h+=`<div class="ssec"><h4>🚫 Заказ запрещён</h4><div class="chips">${banned.map(c=>`<span class="chip">${esc(c)}<button title="Разрешить заказ" onclick="setBlocked('${esc(c)}',false)">✕</button></span>`).join('')}</div></div>`;
   document.getElementById('lt').innerHTML=h;
 }
