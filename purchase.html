@@ -142,8 +142,10 @@
  .note{font-size:.82em;color:#94a3b8;margin:4px 0}
  .lock{font-size:.85em;color:#94a3b8;margin-left:6px}
  /* окно «Настройки расчёта» (17.11.2026): вместо блока на странице — кнопка ⚙️ у даты недели */
- .gear{background:#fff;border:2px solid rgba(84,66,115,.2);border-radius:8px;width:36px;height:36px;padding:0;font-size:1.1em;line-height:1;cursor:pointer;transition:transform .35s,border-color .2s,box-shadow .2s}
- .gear:hover{border-color:#E33D78;transform:rotate(60deg);box-shadow:0 4px 14px rgba(227,61,120,.25)}
+ /* кнопки у даты недели (17.11.2026): ◀ ▶ ⚙️ — одинаковые квадраты 36×36, одна анимация (приподнимается, розовая рамка); стрелки — SVG, симметричные */
+ .wbtn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;box-sizing:border-box;background:#fff;color:#544273;border:2px solid rgba(84,66,115,.2);border-radius:8px;font-size:1.05em;line-height:1;cursor:pointer;transition:transform .2s,border-color .2s,box-shadow .2s,color .2s}
+ .wbtn:hover{border-color:#E33D78;color:#E33D78;transform:translateY(-2px);box-shadow:0 6px 14px rgba(227,61,120,.2)}
+ .wbtn:active{transform:translateY(0);box-shadow:none}
  .smodal{position:fixed;inset:0;z-index:1000;background:rgba(28,13,46,.42);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .2s}
  .smodal.on{opacity:1;pointer-events:auto}
  .spanel{background:#fff;border-radius:18px;box-shadow:0 24px 60px rgba(28,13,46,.35);width:min(1280px,100%);max-height:90vh;display:flex;flex-direction:column;transform:translateY(14px) scale(.98);transition:transform .22s}
@@ -175,7 +177,7 @@
  .chip{border:1.5px solid rgba(227,61,120,.35);background:#fdf2f7;color:#9d174d;border-radius:999px;padding:4px 10px;font-size:.9em}
  .chip button{background:none;border:0;color:#E33D78;cursor:pointer;margin-left:4px;padding:0 2px;font-size:.95em}
  .ban{background:none;border:1.5px solid rgba(84,66,115,.2);border-radius:8px;cursor:pointer;padding:2px 7px;color:#94a3b8;font-size:.85em}.ban:hover{border-color:#E33D78;color:#E33D78}
- @media (prefers-reduced-motion:reduce){.gear,.smodal,.spanel,.mcard{transition:none}}
+ @media (prefers-reduced-motion:reduce){.wbtn,.smodal,.spanel,.mcard{transition:none}}
  .wrap{max-width:min(1700px,100%);box-sizing:border-box}
  table.pt{font-size:.8em;table-layout:fixed;width:100%}
  /* шапки всех таблиц заявки — один стиль, текст по центру (27.10.2026) */
@@ -257,10 +259,10 @@
     <div class="err" id="err"></div>
 
     <div class="wbar">
-      <button class="btn2" onclick="shiftWeek(-7)" title="Предыдущая неделя">◀</button>
+      <button class="wbtn" onclick="shiftWeek(-7)" title="Предыдущая неделя"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M8.5 1.5 3 6l5.5 4.5z" fill="currentColor"/></svg></button>
       <div class="wlbl" id="wlbl"></div>
-      <button class="btn2" onclick="shiftWeek(7)" title="Следующая неделя">▶</button>
-      <button class="gear" onclick="openSet()" title="Настройки расчёта">⚙️</button>
+      <button class="wbtn" onclick="shiftWeek(7)" title="Следующая неделя"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 1.5 9 6l-5.5 4.5z" fill="currentColor"/></svg></button>
+      <button class="wbtn" onclick="openSet()" title="Настройки расчёта">⚙️</button>
       <span style="flex:1"></span>
       <span id="actions"></span>
     </div>
