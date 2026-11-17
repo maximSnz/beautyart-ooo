@@ -102,6 +102,11 @@
  .btn2{background:#fff;color:#544273;border:2px solid rgba(84,66,115,.2)}
  .btn2:hover{border-color:#E33D78;color:#E33D78}
  .btn2.on{border-color:#E33D78;color:#E33D78}
+ /* фильтр «Все / Илья / Ольга» (17.11.2026): анимация как у кнопок .wbtn у даты недели */
+ .toolbar .btn2{transition:transform .2s,border-color .2s,box-shadow .2s,color .2s}
+ .toolbar .btn2:hover{transform:translateY(-2px);box-shadow:0 6px 14px rgba(227,61,120,.2)}
+ .toolbar .btn2:active{transform:translateY(0);box-shadow:none}
+ @media (prefers-reduced-motion:reduce){.toolbar .btn2{transition:none}.toolbar .btn2:hover{transform:none}}
  .steps{display:flex;gap:6px;margin:4px 0 10px;flex-wrap:wrap}
  .step{flex:1;min-width:150px;padding:8px 10px;border-radius:10px;background:#f8f9fb;border:2px solid rgba(84,66,115,.1);color:#94a3b8;font-size:.9em}
  .step.on{border-color:#E33D78;color:#1C0D2E;background:linear-gradient(90deg,rgba(120,166,199,.15),rgba(227,61,120,.12))}
@@ -704,7 +709,7 @@ function renderPal(){
     if(p.boxes_per_pallet>0) by[r.c]=(by[r.c]||0)+k/p.boxes_per_pallet; else miss[r.c]=(miss[r.c]||0)+1;
   }));
   const cs=[...new Set([...Object.keys(by),...Object.keys(miss)])].sort((a,b)=>(by[b]||0)-(by[a]||0));
-  document.getElementById('pal').innerHTML=cs.map(c=>{const x=by[c]||0,[t,cl]=palStatus(x);return `<div class="card"><div class="l">${esc(c)}</div><div class="v">${x.toFixed(2)} пал.</div><div class="${cl}" style="font-size:.85em">${t}</div>${miss[c]?`<div class="warn" style="font-size:.8em">без «на паллете»: ${miss[c]} тов.</div>`:''}</div>`;}).join('')||'<div class="mute">Нет заявленных коробов</div>';
+  document.getElementById('pal').innerHTML=cs.map(c=>{const x=by[c]||0,[t,cl]=palStatus(x);return `<div class="card"><div class="l">${esc(c)}</div><div class="v">${x.toFixed(2)} пал.</div><div class="${cl}" style="font-size:.85em">${t}</div></div>`;}).join('')||'<div class="mute">Нет заявленных коробов</div>';
 }
 
 // ===== действия =====
