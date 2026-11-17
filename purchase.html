@@ -139,10 +139,9 @@
  .pal{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
  .pal .card .v{font-size:1.15em}
  /* карта паллет (17.11.2026, решение владельца): кружки кластеров на карте России, число — паллеты, цвет — норма загрузки, подсказка — подробности */
- .palmap{background:#fff;border:2px solid rgba(84,66,115,.1);border-radius:14px;padding:8px;max-width:1150px}
+ .palmap{max-width:860px;margin:0 auto}
  .rumap{width:100%;height:auto;display:block}
  .rumap .ru{fill:#e9dff3;stroke:rgba(84,66,115,.55);stroke-width:.8;stroke-linejoin:round}
- .rumap .oth{fill:#f8f8fa;stroke:rgba(84,66,115,.12);stroke-width:.5}
  .rumap .pl{stroke:rgba(84,66,115,.45);stroke-width:1}.rumap .pd{fill:#544273}
  .rumap .pm{cursor:pointer;transition:transform .2s;transform-box:fill-box;transform-origin:center}
  .rumap .pm:hover{transform:scale(1.18)}
@@ -731,7 +730,7 @@ function loadRuMap(){
     const topo=await (await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json')).json();
     const all=topojson.feature(topo,topo.objects.countries).features, ru=all.find(f=>f.id==='643');
     const W=1000,H=520, pr=d3.geoConicEqualArea().rotate([-100,0]).parallels([50,68]).fitExtent([[12,8],[W-12,H-28]],ru), path=d3.geoPath(pr);
-    RU_MAP={W,H,pr,ru:path(ru),oth:path({type:'FeatureCollection',features:all.filter(f=>f!==ru)})};
+    RU_MAP={W,H,pr,ru:path(ru)}; // соседние страны не рисуем: без рамки их край смотрелся обрезанным прямоугольником
   })().catch(e=>{ RU_MAP=false; });
 }
 function renderPal(){
@@ -769,7 +768,7 @@ function renderPal(){
   }
   const fmt=x=>!(x>0)?'—':x<0.05?'<0,1':nf.format(Math.round(x*10)/10); // 0 паллет при коробах — у товаров нет «на паллете», считать не из чего
   el.className='palmap';
-  el.innerHTML=`<svg class="rumap" viewBox="0 0 ${W} ${H}" role="img" aria-label="Паллеты по кластерам на карте"><path class="oth" d="${RU_MAP.oth}"/><path class="ru" d="${RU_MAP.ru}"/>`
+  el.innerHTML=`<svg class="rumap" viewBox="0 0 ${W} ${H}" role="img" aria-label="Паллеты по кластерам на карте"><path class="ru" d="${RU_MAP.ru}"/>`
     +pts.map(p=>(Math.hypot(p.px-p.ax,p.py-p.ay)>p.r?`<line class="pl" x1="${p.ax.toFixed(1)}" y1="${p.ay.toFixed(1)}" x2="${p.px.toFixed(1)}" y2="${p.py.toFixed(1)}"/>`:'')+`<circle class="pd" cx="${p.ax.toFixed(1)}" cy="${p.ay.toFixed(1)}" r="2"/>`).join('')
     +pts.map(p=>`<g class="pm" data-ti="${p.ti}"><circle cx="${p.px.toFixed(1)}" cy="${p.py.toFixed(1)}" r="${p.r.toFixed(1)}" fill="${COL[p.cl]||COL.mute}"/><text x="${p.px.toFixed(1)}" y="${p.py.toFixed(1)}">${fmt(p.x)}</text></g>`).join('')
     +`</svg>`+(off.length?`<div class="off">${off.map(p=>`<span class="pm" data-ti="${p.ti}" style="cursor:pointer;color:${COL[p.cl]||COL.mute}">${esc(p.c)}: ${fmt(p.x)} пал.</span>`).join(' · ')}</div>`:'');
