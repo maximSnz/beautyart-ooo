@@ -200,6 +200,9 @@
  table.lt2 tbody tr{height:38px}table.lt2 tr.pad td{border-bottom-color:transparent}table.lt2 tr.pad:hover td{background:none}
  table.lt2 th .u{display:block;font-size:.85em;color:#94a3b8;margin-top:1px}
  table.lt2 .vs{border-left:1px dashed rgba(84,66,115,.3)}
+ .xsearch{position:relative;max-width:520px;margin-bottom:10px}.xsearch input{width:100%;box-sizing:border-box}
+ .xres{position:absolute;left:0;right:0;top:100%;z-index:5;background:#fff;border-radius:10px;box-shadow:0 10px 24px rgba(28,13,46,.18);overflow:hidden}
+ .xres .xi{padding:7px 12px;cursor:pointer;font-size:.9em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.xres .xi span{color:#94a3b8}.xres .xi:hover{background:#fdf2f7}.xres .xi.mute{cursor:default}
  .chips{display:flex;flex-wrap:wrap;gap:8px}
  .chip{border:1.5px solid rgba(227,61,120,.35);background:#fdf2f7;color:#9d174d;border-radius:999px;padding:4px 10px;font-size:.9em}
  .chip button{background:none;border:0;color:#E33D78;cursor:pointer;margin-left:4px;padding:0 2px;font-size:.95em}
@@ -402,7 +405,11 @@ let PROD=[],NOBOX=[],DEM=new Map(),DEM_AT='',SEED={},ACTIVE=new Set(),WEEKS={};
 // по кластерам — по долям ads_cluster (структура кластеров Ozon, уровень — лучшей недели); недели без остатка не исключаются.
 // Хранится в неделе (purchase_weeks.demand_mode), меняется в черновике; после отправки спрос — из снимка строк.
 let BEST={},BEST_W=[],HAS_MODE=false,MODE_NEW='ads28';
-const MODES=[['ads28','Продажи за 28 дней'],['best5','Лучшая неделя товара за 5 последних недель']];
+// товары, которые не заказываем (17.11.2026, решение владельца): справочник purchase_excluded; в черновике товар пропадает из заявки
+let EXCL=new Set(),HAS_EXCL=false;
+// 'last1' (17.11.2026, решение владельца) — последняя закрытая неделя товара (заказы ÷ 7), по кластерам — в долях ads_cluster, как best5
+const MODES=[['ads28','Продажи за 28 дней'],['best5','Лучшая неделя товара за 5 последних недель'],['last1','Последняя закрытая неделя']];
+const weekQ=(bw,m)=>m==='best5'?(bw?.q||0):m==='last1'?(bw?.all?.[BEST_W[4]]||0):0;
 let MODE_FORCE=null, STEP_SEEN={};
 const MODE=()=>MODE_FORCE||(WEEKS[WEEK]?(WEEKS[WEEK].demand_mode||'ads28'):MODE_NEW);
 let WEEK=addD(keyOfMonday(new Date()),7),F='all',OPEN=null,OPEN1=new Set(),OPEN2=new Set(),OPEN3=new Set(),K1=[],K2=[],K3=[],NEED_ST=null;
@@ -436,6 +443,8 @@ async function loadBase(){
   dm.forEach(d=>{ if(!DEM.has(d.product_id))DEM.set(d.product_id,new Map()); DEM.get(d.product_id).set(d.cluster,d); if(d.updated_at>DEM_AT)DEM_AT=d.updated_at; });
   SEED={}; ACTIVE=new Set(); lt.forEach(c=>{ SEED[c.cluster]=c; if(c.active)ACTIVE.add(c.cluster); });
   WEEKS={}; wk.forEach(w=>WEEKS[w.week]=w); HAS_MODE=wk.some(w=>'demand_mode' in w);
+  EXCL=new Set(); HAS_EXCL=false;
+  try{ const r=await fetch(SUPABASE_URL+'/rest/v1/purchase_excluded?select=product_id&order=product_id&limit=1000',{headers:HD}); if(r.ok){ HAS_EXCL=true; (await r.json()).forEach(x=>EXCL.add(x.product_id)); } }catch(e){}
 }
 const ST=()=>WEEKS[WEEK]?.status||null;
 async function loadWeek(){
@@ -490,7 +499,7 @@ function build(){
   const st=ST(), live=!st||st==='draft';
   // неделя перенесена из Google Sheets (строки без снимка): недостающие кластеры не дополняем расчётом
   const imported=[...LINES.values()].some(l=>l.ads==null);
-  MODEL=PROD.map(p=>{
+  MODEL=PROD.filter(p=>!(live&&EXCL.has(p.product_id))).map(p=>{
     const dem=DEM.get(p.product_id)||new Map();
     const names=new Set([...dem.keys()]);
     LINES.forEach((l,k)=>{ if(l.product_id===p.product_id) names.add(l.cluster); });
@@ -499,7 +508,7 @@ function build(){
     const rows=[];
     // best5: k = (лучшая неделя ÷ 7) ÷ Σ ads_cluster товара; нет спроса Ozon по кластерам — делить не по чему, остаётся как есть
     const sumAds=[...dem.values()].reduce((a,d)=>a+(Number(d.ads_cluster)||0),0), bw=BEST[p.product_id];
-    const kDem=live&&MODE()==='best5'&&sumAds>0?((bw?.q||0)/7)/sumAds:1;
+    const kDem=live&&MODE()!=='ads28'&&sumAds>0?(weekQ(bw,MODE())/7)/sumAds:1;
     p.dem={sumAds,best:bw,k:kDem,mode:live?MODE():null};
     for(const c of names){
       const lt=WLT[c], line=LINES.get(p.product_id+'|'+c), d=dem.get(c);
@@ -593,7 +602,7 @@ function renderLT(){
   document.getElementById('setSub').innerHTML=live?'':'🔒 только просмотр — заявка отправлена';
   if(!document.getElementById('setModal').classList.contains('on')) return;
   const md=MODE(), mEd=HAS_MODE&&live, tot=live?modeTotals():null;
-  const MD={ads28:'Среднесуточные продажи кластера за 28 дней из API Ozon.',best5:'Лучшая неделя товара за период; распределение по кластерам — в долях спроса Ozon.'};
+  const MD={ads28:'Среднесуточные продажи кластера за 28 дней из API Ozon.',best5:'Лучшая неделя товара за период; распределение по кластерам — в долях спроса Ozon.',last1:'Последняя закрытая неделя товара; распределение по кластерам — в долях спроса Ozon.'};
   let h=`<div class="ssec"><h4>Методика расчёта</h4>${HAS_MODE?'':'<div class="hint bad">Нужен SQL 2026-11-17_purchase_weeks_demand_mode.sql — до него только «как сейчас».</div>'}<div class="modes">`
     +MODES.map(([k,t])=>`<div class="mcard${k===md?' on':''}${mEd?'':' dis'}" ${mEd&&k!==md?`onclick="setMode('${k}')"`:''}><div class="mt"><span class="mdot"></span>${t}</div><div class="md">${MD[k]}</div>${tot?`<div class="mv"><div><b>${nf.format(tot[k].box)}</b><span>коробов</span></div><div><b>${nf.format(Math.round(tot[k].pal*10)/10)}</b><span>паллет</span></div></div>`:''}</div>`).join('')
     +`</div></div>`;
@@ -617,7 +626,28 @@ function renderLT(){
   if(pages>1) h+=`<div class="pager"><button ${LT_PAGE?'':'disabled'} onclick="ltPage(${LT_PAGE-1})" title="Назад">‹</button>${Array.from({length:pages},(_,i)=>`<button class="${i===LT_PAGE?'on':''}" onclick="ltPage(${i})">${i+1}</button>`).join('')}<button ${LT_PAGE<pages-1?'':'disabled'} onclick="ltPage(${LT_PAGE+1})" title="Вперёд">›</button><span>${LT_PAGE*LT_PER+1}–${Math.min(open.length,(LT_PAGE+1)*LT_PER)} из ${open.length}</span></div>`;
   h+=`</div>`;
   if(banned.length) h+=`<div class="ssec"><h4>🚫 Заказ запрещён</h4><div class="chips">${banned.map(c=>`<span class="chip">${esc(c)}<button title="Разрешить заказ" onclick="setBlocked('${esc(c)}',false)">✕</button></span>`).join('')}</div></div>`;
+  // товары, которые не заказываем: поиск → выбор → чип; ✕ — вернуть в расчёт
+  {
+    const xs=PROD.filter(p=>EXCL.has(p.product_id)).sort((a,b)=>a.offer_id.localeCompare(b.offer_id));
+    h+=`<div class="ssec"><h4>🚫 Товары не заказываем</h4>${HAS_EXCL?`<div class="xsearch"><input id="xq" placeholder="Найти товар: артикул или название" autocomplete="off" oninput="xSearch(this.value)"><div class="xres" id="xres"></div></div>`:'<div class="hint bad">Нужен SQL 2026-11-17_purchase_excluded.sql</div>'}${xs.length?`<div class="chips">${xs.map(p=>`<span class="chip" title="${esc(p.name)}">${esc(p.offer_id)}<button title="Вернуть в расчёт" onclick="setExcl(${p.product_id},false)">✕</button></span>`).join('')}</div>`:''}</div>`;
+  }
   document.getElementById('lt').innerHTML=h;
+}
+function xSearch(q){
+  const el=document.getElementById('xres'); q=String(q||'').trim().toLowerCase();
+  if(q.length<2){ el.innerHTML=''; return; }
+  const hits=PROD.filter(p=>!EXCL.has(p.product_id)&&((p.offer_id||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q))).slice(0,8);
+  el.innerHTML=hits.length?hits.map(p=>`<div class="xi" onclick="setExcl(${p.product_id},true)"><b>${esc(p.offer_id)}</b> <span>${esc(p.name)}</span></div>`).join(''):'<div class="xi mute">Ничего не найдено</div>';
+}
+async function setExcl(pid,v){
+  if(!HAS_EXCL) return;
+  const p=PROD.find(x=>x.product_id===pid); if(!p) return;
+  if(!confirm(`${v?'Не заказывать':'Вернуть в расчёт'} «${p.offer_id}»? Действует сразу: черновики заявок пересчитаются.`)) return;
+  try{
+    if(v) await upsert('purchase_excluded',[{product_id:pid,user_email:BA_AUTH.email()||null,created_at:new Date().toISOString()}],'product_id');
+    else{ const r=await fetch(`${SUPABASE_URL}/rest/v1/purchase_excluded?product_id=eq.${pid}`,{method:'DELETE',headers:HD}); if(!r.ok) throw new Error('purchase_excluded HTTP '+r.status); }
+    v?EXCL.add(pid):EXCL.delete(pid); build(); render();
+  }catch(e){ fail(e); }
 }
 function palOf(p,boxes){return p.boxes_per_pallet>0?boxes/p.boxes_per_pallet:null;}
 const supOf=p=>p.supplier||'—';
@@ -652,6 +682,7 @@ function renderT1(){
       if(OPEN!==p.product_id) continue;
       h+=`<tr class="sub"><td colspan="${NC}"><table class="ct"><tr><th>Кластер</th><th class="n">Спрос, шт/дн</th><th class="n">Остаток, шт</th><th class="n">В пути, шт</th><th class="n">Прошлые заявки, кор.</th><th class="n">Расчёт, кор.</th><th class="n">Заявлено, кор.</th>${dist?'<th class="n">Распределено, кор.</th>':''}</tr>`;
       for(const r of p.rows){
+        if(r.blocked) continue; // запрещённый кластер — не показываем (17.11.2026)
         const calcTxt=r.blocked?'<span class="bad" title="Заказ в кластер запрещён (справочник кластеров)">запрещён</span>':r.inactive?'<span class="mute">нет у Ozon</span>':r.noLt?'<span class="bad">нет сроков</span>':p.nobox?dash:nf.format(r.calc);
         const edR=ed&&!p.nobox&&!r.blocked;
         h+=`<tr${r.keep?'':' class="mute"'}><td>${esc(r.c)}</td><td class="n">${r.noSnap?dash:nf.format(r.ads)}</td><td class="n">${r.noSnap?dash:r.av}</td><td class="n">${r.noSnap?dash:r.tr}</td><td class="n">${r.noSnap&&!r.prev?dash:r.prev}</td><td class="n">${r.calc==null&&r.noSnap?dash:calcTxt}</td>
@@ -700,11 +731,12 @@ let TIPS=[];
 function demTip(p){
   const d=p.dem||{}, b=d.best;
   if(d.mode==null) return {h:'Спрос, шт/дн',m:'Снимок на момент отправки заявки'};
-  const used=d.mode==='best5'&&d.sumAds>0?'best5':'ads28';
+  const used=d.mode!=='ads28'&&d.sumAds>0?d.mode:'ads28', lw=b&&b.all[BEST_W[4]]!=null?b.all[BEST_W[4]]:null;
   const rows=[['Продажи за 28 дней',nf.format(d.sumAds)+' шт/дн',used==='ads28'?'G':''],null,
+    ['Последняя закрытая неделя',lw!=null?nf.format(lw/7)+' шт/дн':'—',used==='last1'?'G':''],null,
     ['Лучшая неделя за 5 недель',b&&b.q?nf.format(b.q/7)+' шт/дн':'—',used==='best5'?'G':''],
     ...BEST_W.map(w=>['  неделя '+ddmm(w),b&&b.all[w]!=null?nf.format(b.all[w])+' шт':'—'])];
-  return {h:'Спрос',rows,m:d.mode==='best5'&&!(d.sumAds>0)?'Лучшая неделя не применена: спроса Ozon по кластерам нет — делить не по чему':''};
+  return {h:'Спрос',rows,m:d.mode!=='ads28'&&!(d.sumAds>0)?'Методика по неделям не применена: спроса Ozon по кластерам нет — делить не по чему':''};
 }
 const tip=o=>` data-ti="${TIPS.push(o)-1}"`;
 function needCells(p){
