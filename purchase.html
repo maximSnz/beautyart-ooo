@@ -150,6 +150,16 @@
  .stp button:hover{border-color:#E33D78;color:#E33D78}
  table.pt .stp .num,.stp .num{width:46px;min-width:38px;max-width:52px}
  td.miss,span.miss{background:rgba(227,61,120,.35)}
+ /* ячейки заявки (17.11.2026): подсветка при наведении и карточка-подсказка */
+ #t1 td.n{transition:background-color .18s,box-shadow .18s,transform .18s}
+ #t1 td.n.hl{background-color:rgba(227,61,120,.10);box-shadow:inset 0 0 0 1.5px rgba(227,61,120,.55),0 4px 14px rgba(125,54,115,.18);transform:scale(1.07);position:relative;z-index:2}
+ .ptip{position:fixed;z-index:9999;min-width:220px;max-width:360px;background:rgba(28,13,46,.95);color:#fff;border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.4;box-shadow:0 12px 32px rgba(28,13,46,.35);pointer-events:none;opacity:0;transform:translateY(6px);transition:opacity .16s,transform .16s;backdrop-filter:blur(6px)}
+ .ptip.on{opacity:1;transform:none}
+ .ptip .h{font-size:1.05em;margin-bottom:6px;color:#fde047}
+ .ptip table{border-collapse:collapse;width:100%}.ptip td{padding:2px 0;border:0;background:none;color:#e2e8f0}.ptip td.v{text-align:right;padding-left:16px;white-space:nowrap;color:#fff}
+ .ptip .g{color:#4ade80!important}.ptip .r{color:#f87171!important}.ptip .y{color:#fde047!important}.ptip .m{color:#94a3b8;margin-top:6px;font-size:.9em}
+ .ptip tr.big td{padding-top:5px;border-top:1px solid rgba(255,255,255,.18);font-size:1.08em}
+ @media (prefers-reduced-motion:reduce){#t1 td.n,.ptip{transition:none}#t1 td.n.hl{transform:none}}
  #tn tr.mgroup td{background:rgba(125,54,115,.1)}
  .card.dl{cursor:pointer} .card.dl:hover{border-color:#E33D78}
  @media (max-width:900px){ table.pt{min-width:860px} }
@@ -221,7 +231,7 @@
 
 
     <div class="sec" id="h1">Заявка менеджера</div>
-    <div class="note">Расчёт = (спрос × (покрытие + запас) − остаток − в пути) ÷ штук в коробе, вверх до целого короба, − заявки прошлых недель. Потребность месяца: отклонение = заказано за месяц с этой неделей − потребность (минус — ещё не добрали), выполнение = заказано ÷ потребность. Нажмите на товар, чтобы раскрыть кластеры.<span id="needNote"></span></div>
+    <div class="note">Расчёт = (спрос × (покрытие + запас) − остаток − в пути) ÷ штук в коробе, вверх до целого короба, − заявки прошлых недель. Выполнение к сегодня: потребность — заказано за месяц с этой неделей ÷ потребность месяца пропорционально неделе; план продаж — заказы с 1-го числа ÷ план пропорционально прошедшим дням. ±10% — зелёный, выше — жёлтый, ниже — розовый. Наведите на ячейку — подробности. Нажмите на товар, чтобы раскрыть кластеры.<span id="needNote"></span></div>
     <div class="scroll"><table id="t1" class="pt"></table></div>
 
 
@@ -367,6 +377,7 @@ async function loadWeek(){
     needBuild({prod:PROD.filter(p=>!p.nobox),dem,demAt:DEM_AT,plan:pl,needs:ndb,turn:needTurnover(mdb,month).turn,req,cost:{},month,live:true}).forEach(p=>NEEDS[p.product_id]=p.ag??p.need);
   }else nd.forEach(n=>NEEDS[n.product_id]=n.agreed_boxes??n.need_boxes);
   MONTH_REQ={}; mr.forEach(l=>{ MONTH_REQ[l.product_id]=(MONTH_REQ[l.product_id]||0)+(l.requested_boxes||0); });
+  await loadSales(month);
   OPEN=null; build(); render();
 }
 
@@ -436,7 +447,7 @@ function render(){
 }
 function renderCards(){
   const v=vis(), q=S(v,reqOf), b=S(v,buyOf), ag=S(v,p=>p.ag), has=v.some(p=>p.ag!=null);
-  document.getElementById('cards').innerHTML=[['Расчёт, кор.',v.length&&v.every(p=>p.rows.every(r=>r.noSnap))?'—':nf.format(S(v,calcOf))],['Заявлено, кор.',nf.format(q)],['На ФФ, кор.',nf.format(S(v,p=>p.ff))],['Согласовано, кор.',has?nf.format(ag):'—',has&&b?Math.round(ag/b*100)+'% к закупке ('+nf.format(b)+' кор.)':'вносит закупщик в сводной заявке'],...(v.some(hasNeed)?[['Потребность месяца, кор.',nf.format(S(v,mNeedOf)),'выполнено '+pctTxt(S(v.filter(hasNeed),mNowOf),S(v,mNeedOf))+' (заказано '+nf.format(S(v.filter(hasNeed),mNowOf))+' кор.)']]:[])]
+  document.getElementById('cards').innerHTML=[['Расчёт, кор.',v.length&&v.every(p=>p.rows.every(r=>r.noSnap))?'—':nf.format(S(v,calcOf))],['Заявлено, кор.',nf.format(q)],['На ФФ, кор.',nf.format(S(v,p=>p.ff))],['Согласовано, кор.',has?nf.format(ag):'—',has&&b?Math.round(ag/b*100)+'% к закупке ('+nf.format(b)+' кор.)':'вносит закупщик в сводной заявке'],...(()=>{const x=pctSum(v);return [['Потребность к сегодня',x.nT>0?pctTxt(x.nF,x.nT):'—',x.nT>0?'заказано '+nf.format(x.nF)+' из '+nf.format(Math.round(x.nT))+' кор.':''],['План продаж к сегодня',x.pT>0?pctTxt(x.pF,x.pT):'—',x.pT>0?'заказы '+nf.format(x.pF)+' из '+nf.format(Math.round(x.pT))+' шт':'']];})()]
     .map(([l,x,sub])=>`<div class="card"><div class="l">${l}</div><div class="v">${x}</div>${sub?`<div class="l">${sub}</div>`:''}</div>`).join('');
 }
 function renderLT(){
@@ -471,22 +482,23 @@ function agCell(p,req){
 // упаковка (17.11.2026): колонок «В коробе» / «На паллете» нет — товар без них помечен у артикула
 const pkMiss=p=>{const m=[p.box_qty>0?'':'«в коробе»',p.boxes_per_pallet>0?'':'«на паллете»'].filter(Boolean);return m.length?` <span class="miss" style="font-size:.75em;padding:1px 5px;border-radius:4px" title="Не заполнено ${m.join(' и ')} — заполните в «Базе товаров»">нет ${m.join(', ')}</span>`:'';};
 function renderT1(){
+  TIPS=[]; ptipBind();
   const st=ST(), v=vis(), ed=st==='draft', dist=st==='distribution'||st==='closed', edD=st==='distribution', q=document.getElementById('q').value.trim();
   document.getElementById('h1').textContent=dist?'Распределение обеспеченного по кластерам':'Заявка менеджера';
   const dash='<span class="mute">—</span>';
-  const showAg=!!st&&st!=='draft', NC=8+(showAg?1:0)+(dist?1:0), ym=monthOfWeek(WEEK), mlbl=ym.slice(5)+'.'+ym.slice(0,4);
-  let h=`<colgroup><col style="width:26%"><col span="${NC-1}"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="2" class="mhead sep">Ozon сейчас</th><th colspan="2" class="mhead sep">Заявка</th><th colspan="3" class="mhead sep">Потребность ${mlbl}</th>${showAg?'<th rowspan="2" class="sub sep n" title="ФФ + согласовано против заявленного: больше — зелёный, меньше — красный">Согласо&shy;вано, кор.</th>':''}${dist?'<th rowspan="2" class="sub sep n">Распре&shy;делено, кор.</th>':''}</tr>
-    <tr><th class="sub sep n">Спрос, шт/дн</th><th class="sub n">Остаток + в пути, шт</th><th class="sub sep n" title="Прошлые заявки (вычитаются из расчёта) — в подсказке ячейки">Расчёт, кор.</th><th class="sub n" title="В штуках — в подсказке ячейки">Заявлено, кор.</th><th class="sub sep n" title="Согласованная потребность месяца, пока её нет — заказ менеджеров или расчёт на сегодня">Потреб&shy;ность, кор.</th><th class="sub n" title="Заказано за месяц с этой неделей − потребность; минус — ещё не добрали">Откл., кор.</th><th class="sub n" title="Заказано за месяц с этой неделей ÷ потребность">Выпол&shy;нение</th></tr></thead><tbody>`;
+  const showAg=!!st&&st!=='draft', NC=7+(showAg?1:0)+(dist?1:0), ym=monthOfWeek(WEEK), mlbl=ym.slice(5)+'.'+ym.slice(0,4);
+  let h=`<colgroup><col style="width:26%"><col span="${NC-1}"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="2" class="mhead sep">Ozon сейчас</th><th colspan="2" class="mhead sep">Заявка</th><th colspan="2" class="mhead sep" title="Выполнение к сегодня, ${mlbl}">Выполнение к сегодня</th>${showAg?'<th rowspan="2" class="sub sep n" title="ФФ + согласовано против заявленного: больше — зелёный, меньше — красный">Согласо&shy;вано, кор.</th>':''}${dist?'<th rowspan="2" class="sub sep n">Распре&shy;делено, кор.</th>':''}</tr>
+    <tr><th class="sub sep n">Спрос, шт/дн</th><th class="sub n">Остаток + в пути, шт</th><th class="sub sep n" title="Прошлые заявки (вычитаются из расчёта) — в подсказке ячейки">Расчёт, кор.</th><th class="sub n" title="В штуках — в подсказке ячейки">Заявлено, кор.</th><th class="sub sep n" title="Закупка: заказано за месяц с этой неделей ÷ потребность месяца × (номер недели ÷ недель в месяце)">Потреб&shy;ность, %</th><th class="sub n" title="Продажи: заказы товара с 1-го числа по вчера ÷ план месяца × (прошедшие эфф. дни ÷ эфф. дни месяца; выходной × 0,7)">План продаж, %</th></tr></thead><tbody>`;
   if(!v.length) h+=`<tr><td colspan="${NC}" class="mute">Нет товаров</td></tr>`;
   const G=groupsOf(v,reqOf); K1=G.map(g=>g[0]);
   G.forEach(([sup,g],gi)=>{
     const open=OPEN1.has(sup)||!!q, gq=S(g,reqOf);
-    h+=`<tr class="mgroup" onclick="toggleG(1,${gi})"><td colspan="${NC}"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,calcOf))} кор. · заявлено ${nf.format(gq)} кор. · ${nf.format(S(g,p=>reqOf(p)*(p.box_qty||0)))} шт${showAg&&g.some(p=>p.ag!=null)?` · согласовано ${nf.format(S(g,p=>p.ag))} кор.`:''}${dist?` · распределено ${nf.format(S(g,p=>S(p.rows,r=>r.dist)))} кор.`:''}${g.some(hasNeed)?` · потребность ${nf.format(S(g,mNeedOf))} кор., выполнено ${pctTxt(S(g.filter(hasNeed),mNowOf),S(g,mNeedOf))}`:''}</td></tr>`;
+    h+=`<tr class="mgroup" onclick="toggleG(1,${gi})"><td colspan="${NC}"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,calcOf))} кор. · заявлено ${nf.format(gq)} кор. · ${nf.format(S(g,p=>reqOf(p)*(p.box_qty||0)))} шт${showAg&&g.some(p=>p.ag!=null)?` · согласовано ${nf.format(S(g,p=>p.ag))} кор.`:''}${dist?` · распределено ${nf.format(S(g,p=>S(p.rows,r=>r.dist)))} кор.`:''}${grpPct(g)}</td></tr>`;
     if(!open) return;
     for(const p of g){
       const qv=reqOf(p), ns=p.rows.length&&p.rows.filter(r=>r.keep).every(r=>r.noSnap), bq=p.box_qty||0;
       h+=`<tr class="prow" onclick="toggle(${p.product_id})"><td>${OPEN===p.product_id?'▾':'▸'} <b>${esc(p.offer_id)}</b>${pkMiss(p)}<div class="pname">${esc(p.name)}</div></td>
-        <td class="n sep">${ns?dash:nf.format(S(p.rows,r=>r.ads))}</td><td class="n">${ns?dash:nf.format(S(p.rows,r=>r.av+r.tr))}</td><td class="n sep" title="Прошлые заявки: ${nf.format(S(p.rows,r=>r.prev))} кор. = ${nf.format(S(p.rows,r=>r.prev)*bq)} шт (вычтены из расчёта)">${ns?dash:p.nobox?'<span class="bad" title="Нет «в коробе» — расчёт не идёт">—</span>':nf.format(calcOf(p))}</td><td class="n" title="${nf.format(qv*bq)} шт (${bq} шт в коробе${p.boxes_per_pallet>0?`, ${p.boxes_per_pallet} кор. на паллете`:''})"><b>${qv}</b></td>${needCells(p)}${showAg?agCell(p,qv):''}${dist?`<td class="n sep">${S(p.rows,r=>r.dist)}</td>`:''}</tr>`;
+        <td class="n sep">${ns?dash:nf.format(S(p.rows,r=>r.ads))}</td><td class="n">${ns?dash:nf.format(S(p.rows,r=>r.av+r.tr))}</td><td class="n sep"${tip({h:'Расчёт, кор.',rows:[['Расчёт',nf.format(calcOf(p))+' кор.'],['Прошлые заявки',nf.format(S(p.rows,r=>r.prev))+' кор. = '+nf.format(S(p.rows,r=>r.prev)*bq)+' шт']],m:'Прошлые заявки вычтены из расчёта'})}>${ns?dash:p.nobox?'<span class="bad" title="Нет «в коробе» — расчёт не идёт">—</span>':nf.format(calcOf(p))}</td><td class="n"${tip({h:'Заявлено',rows:[['Короба',nf.format(qv)+' кор.'],['Штуки',nf.format(qv*bq)+' шт'],['В коробе',bq?bq+' шт':'не заполнено',bq?'':'r'],['На паллете',p.boxes_per_pallet>0?p.boxes_per_pallet+' кор.':'не заполнено',p.boxes_per_pallet>0?'':'r']]})}><b>${qv}</b></td>${needCells(p)}${showAg?agCell(p,qv):''}${dist?`<td class="n sep">${S(p.rows,r=>r.dist)}</td>`:''}</tr>`;
       if(OPEN!==p.product_id) continue;
       h+=`<tr class="sub"><td colspan="${NC}"><table class="ct"><tr><th>Кластер</th><th class="n">Спрос, шт/дн</th><th class="n">Остаток, шт</th><th class="n">В пути, шт</th><th class="n">Прошлые заявки, кор.</th><th class="n">Расчёт, кор.</th><th class="n">Заявлено, кор.</th>${dist?'<th class="n">Распределено, кор.</th>':''}</tr>`;
       for(const r of p.rows){
@@ -503,16 +515,70 @@ function renderT1(){
   document.getElementById('needNote').innerHTML=!NEED_ST||NEED_ST==='draft'?` <span class="warn">Потребность за ${mlbl} ${NEED_ST?'в черновике':'ещё не создана'} — показан расчёт на сегодня, как в «Потребности на месяц».</span>`:'';
 }
 function toggle(pid){OPEN=OPEN===pid?null:pid;renderT1();}
-// потребность месяца в строке заявки (17.11.2026, решение владельца; отдельный блок «Потребность месяца» убран):
-// заказано = заявки недель месяца до этой + эта неделя; отклонение = заказано − потребность, кор.; выполнение = заказано ÷ потребность
+// выполнение к сегодня в строке заявки (17.11.2026, решения владельца; отдельного блока потребности нет) — два столбца рядом:
+// потребность, % — закупка: заказано за месяц (заявки недель месяца до этой + эта неделя) ÷ (потребность месяца × неделя ÷ недель в месяце);
+// план продаж, % — продажи: заказы товара с 1-го по вчера (product_sales, шт) ÷ (план месяца, шт × прошедшие эфф. дни ÷ эфф. дни месяца).
+// Рядом видно, успевает ли закупка за продажами: продажи выше плана, а закупка по потребности — товар кончится, и наоборот.
 const mWasOf=p=>MONTH_REQ[p.product_id]||0, mNowOf=p=>mWasOf(p)+reqOf(p), hasNeed=p=>NEEDS[p.product_id]!=null, mNeedOf=p=>NEEDS[p.product_id]??0;
-const pctTxt=(now,need)=>need>0?Math.round(now/need*100)+'%':'—';
-const pctCls=(now,need)=>!(need>0)?'mute':now/need>1.1?'warn':now/need>=0.9?'ok':'';
+let SALES={},SPLAN={},SHARE=null,SALES_M='';
+const effOf=(a,b)=>{let e=0;for(let d=a;d<=b;d=addD(d,1)){const w=parseISO(d).getDay();e+=w===0||w===6?0.7:1;}return e;};
+async function loadSales(month){
+  if(SALES_M===month) return;
+  const first=month+'-01', last=localISO(new Date(+month.slice(0,4),+month.slice(5),0)), yest=addD(localISO(new Date()),-1), end=yest<last?yest:last;
+  SALES={}; SPLAN={}; SHARE=null;
+  const byOffer={}; PROD.forEach(p=>byOffer[p.offer_id]=p.product_id);
+  (await getAll(`/rest/v1/sales_plan?select=product_id,plan_qty&month=eq.${month}&order=product_id`)).forEach(x=>{ if(x.plan_qty>0) SPLAN[x.product_id]=Number(x.plan_qty); });
+  if(end>=first){
+    // product_sales — по складам: суммируем; постранично с сортировкой по полному ключу
+    (await getAll(`/rest/v1/product_sales?select=offer_id,qty&sale_date=gte.${first}&sale_date=lte.${end}&order=sale_date,offer_id,warehouse_name`)).forEach(r=>{ const pid=byOffer[r.offer_id]; if(pid!=null) SALES[pid]=(SALES[pid]||0)+(Number(r.qty)||0); });
+    SHARE={done:effOf(first,end),all:effOf(first,last),end};
+  }
+  SALES_M=month;
+}
+const nShare=()=>{const w=isoWeeksOfMonth(monthOfWeek(WEEK));return {i:w.indexOf(WEEK)+1,n:w.length};};
+const needTo=p=>{const {i,n}=nShare();return mNeedOf(p)*i/n;};
+const planTo=p=>SHARE&&SPLAN[p.product_id]?SPLAN[p.product_id]*SHARE.done/SHARE.all:0;
+const factS=p=>SALES[p.product_id]||0;
+const pctTxt=(f,t)=>t>0?Math.round(f/t*100)+'%':'—';
+// цвет: ±10% к цели — зелёный, выше — жёлтый, ниже — розовый
+const pctCls=(f,t)=>!(t>0)?'mute':f/t>1.1?'warn':f/t>=0.9?'ok':'bad';
+const tipCls=(f,t)=>!(t>0)?'':f/t>1.1?'y':f/t>=0.9?'g':'r';
+const sgn=x=>(x>0?'+':'')+nf.format(Math.round(x));
+let TIPS=[];
+const tip=o=>` data-ti="${TIPS.push(o)-1}"`;
 function needCells(p){
-  const now=mNowOf(p);
-  if(!hasNeed(p)) return now>0?`<td class="n sep mute">—</td><td class="n warn" colspan="2" title="Товара нет в потребности месяца (нет плана): заказано ${now} кор. — сверх потребности">нет в потребности</td>`:'<td class="n sep mute">—</td><td class="n mute">—</td><td class="n mute">—</td>';
-  const need=mNeedOf(p), d=now-need, tip=`Заказано за месяц ${now} кор. (до этой недели ${mWasOf(p)} + эта неделя ${reqOf(p)}) против потребности ${need} кор.`;
-  return `<td class="n sep">${need}</td><td class="n ${d<0?'':d>0?'warn':'ok'}" title="${tip}">${d>0?'+':''}${nf.format(d)}</td><td class="n ${pctCls(now,need)}" title="${tip}">${pctTxt(now,need)}</td>`;
+  const now=mNowOf(p), {i,n}=nShare();
+  let a;
+  if(!hasNeed(p)) a=now>0?`<td class="n sep warn"${tip({h:'Нет в потребности месяца',rows:[['Заказано за месяц',now+' кор.','y']],m:'Товара нет в потребности (нет плана) — заказ сверх потребности'})}>нет в потр.</td>`:'<td class="n sep mute">—</td>';
+  else{
+    const need=mNeedOf(p), to=needTo(p);
+    a=`<td class="n sep ${pctCls(now,to)}"${tip({h:'Выполнение потребности к неделе '+ddmm(WEEK),rows:[['Потребность месяца',nf.format(need)+' кор.'],[`План к этой неделе (${i}/${n})`,nf.format(Math.round(to))+' кор.'],['Заказано за месяц',nf.format(now)+' кор.'],['  до этой недели',nf.format(mWasOf(p))+' кор.'],['  эта неделя',nf.format(reqOf(p))+' кор.'],['Отклонение к плану недели',sgn(now-to)+' кор.',tipCls(now,to)],['Отклонение к месяцу',sgn(now-need)+' кор.',now<need?'':'y'],['Выполнение к сегодня',pctTxt(now,to),tipCls(now,to),1],['Выполнение месяца',pctTxt(now,need)]]})}>${pctTxt(now,to)}</td>`;
+  }
+  const pl=SPLAN[p.product_id], f=factS(p), to=planTo(p);
+  const b=!pl?`<td class="n mute"${tip({h:'План продаж',rows:[['Заказы с 1-го',nf.format(f)+' шт']],m:'Плана продаж на месяц нет'})}>—</td>`
+    :!SHARE?`<td class="n mute"${tip({h:'План продаж',rows:[['План месяца',nf.format(pl)+' шт']],m:'Месяц ещё не начался'})}>—</td>`
+    :`<td class="n ${pctCls(f,to)}"${tip({h:'Выполнение плана продаж к '+ddmm(SHARE.end),rows:[['План месяца',nf.format(pl)+' шт'],[`План к ${ddmm(SHARE.end)} (${nf.format(SHARE.done)} из ${nf.format(SHARE.all)} эфф. дн.)`,nf.format(Math.round(to))+' шт'],['Заказы с 1-го числа',nf.format(f)+' шт'],['Отклонение',sgn(f-to)+' шт',tipCls(f,to)],['Выполнение к сегодня',pctTxt(f,to),tipCls(f,to),1],['Выполнение месяца',pctTxt(f,pl)]],m:'Заказы — отчёт «Заказы» (PNL), выходной × 0,7'})}>${pctTxt(f,to)}</td>`;
+  return a+b;
+}
+// итог группы / всех товаров: Σ факт ÷ Σ цели к сегодня (только товары с потребностью / с планом)
+function pctSum(v){const hn=v.filter(hasNeed), hp=v.filter(p=>SPLAN[p.product_id]);return {nF:S(hn,mNowOf),nT:S(hn,needTo),pF:S(hp,factS),pT:S(hp,planTo)};}
+function grpPct(g){const x=pctSum(g);return (x.nT>0?` · потребность ${pctTxt(x.nF,x.nT)}`:'')+(x.pT>0?` · план продаж ${pctTxt(x.pF,x.pT)}`:'');}
+// карточка-подсказка ячеек таблицы заявки; ячейка без своей подсказки показывает title
+function ptipHtml(o){return `<div class="h">${esc(o.h)}</div>${o.rows?`<table>${o.rows.map(([l,v,c,big])=>`<tr${big?' class="big"':''}><td>${esc(l).replace(/^ {2}/,'&nbsp;&nbsp;&nbsp;')}</td><td class="v ${c||''}">${esc(String(v))}</td></tr>`).join('')}</table>`:''}${o.m?`<div class="m">${esc(o.m)}</div>`:''}`;}
+function ptipBind(){
+  const box=document.getElementById('t1'); if(box._tip) return; box._tip=1;
+  const tp=document.createElement('div'); tp.className='ptip'; document.body.appendChild(tp);
+  let cur=null; const off=()=>{if(cur)cur.classList.remove('hl');cur=null;tp.classList.remove('on');};
+  box.addEventListener('mouseover',e=>{
+    const td=e.target.closest('td.n'); if(td===cur) return; off(); if(!td||!box.contains(td)) return;
+    if(td.title){td.dataset.tt=td.title;td.removeAttribute('title');}
+    cur=td; td.classList.add('hl');
+    const o=td.dataset.ti!=null?TIPS[+td.dataset.ti]:td.dataset.tt?{h:td.dataset.tt}:null; if(!o) return;
+    tp.innerHTML=ptipHtml(o);
+    const r=td.getBoundingClientRect(), w=tp.offsetWidth, h=tp.offsetHeight; let x=r.left+r.width/2-w/2, y=r.top-h-10; if(y<8) y=r.bottom+10;
+    tp.style.left=Math.max(8,Math.min(innerWidth-w-8,x))+'px'; tp.style.top=y+'px'; requestAnimationFrame(()=>tp.classList.add('on'));
+  });
+  box.addEventListener('mouseleave',off); window.addEventListener('scroll',off,true);
 }
 // факт поставки (27.10.2026): по умолчанию = согласовано, правится на шаге «Закрыта»; хранится, только если отличается
 // привезти = согласовано (пока нет — к закупке) + долг прошлых недель; долг на расчёты не влияет (учёт оплаченного)
