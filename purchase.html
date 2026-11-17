@@ -138,6 +138,18 @@
  .ok{color:#22c55e}.bad{color:#E33D78}.warn{color:#d97706}.mute{color:#94a3b8}
  .pal{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
  .pal .card .v{font-size:1.15em}
+ /* карта паллет (17.11.2026, решение владельца): кружки кластеров на карте России, число — паллеты, цвет — норма загрузки, подсказка — подробности */
+ .palmap{background:#fff;border:2px solid rgba(84,66,115,.1);border-radius:14px;padding:8px;max-width:1150px}
+ .rumap{width:100%;height:auto;display:block}
+ .rumap .ru{fill:#e9dff3;stroke:rgba(84,66,115,.55);stroke-width:.8;stroke-linejoin:round}
+ .rumap .oth{fill:#f8f8fa;stroke:rgba(84,66,115,.12);stroke-width:.5}
+ .rumap .pl{stroke:rgba(84,66,115,.45);stroke-width:1}.rumap .pd{fill:#544273}
+ .rumap .pm{cursor:pointer;transition:transform .2s;transform-box:fill-box;transform-origin:center}
+ .rumap .pm:hover{transform:scale(1.18)}
+ .rumap .pm circle{stroke:#fff;stroke-width:2;filter:drop-shadow(0 2px 4px rgba(28,13,46,.25))}
+ .rumap .pm text{fill:#fff;font-size:12.5px;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+ .palmap .off{display:flex;flex-wrap:wrap;gap:6px;margin:6px 4px 2px;font-size:.85em;color:#94a3b8}
+ @media (prefers-reduced-motion:reduce){.rumap .pm{transition:none}.rumap .pm:hover{transform:none}}
  .lt input{width:46px;text-align:right;padding:3px 5px}
  details.box{border:2px solid rgba(84,66,115,.15);border-radius:10px;background:#f8f9fb;margin:10px 0}
  details.box summary{cursor:pointer;padding:10px 14px;color:#544273;user-select:none}
@@ -702,14 +714,79 @@ function palStatus(x){
   const n=Math.floor(x), m=Math.ceil(x);
   return [`убрать ${(x-1.15*n).toFixed(2)} пал. или добавить ${(0.8*m-x).toFixed(2)} пал.`,'bad'];
 }
+// координаты кластеров (город-центр; «Дальний Восток» — Хабаровск); нет координат — плашкой под картой
+const CL_GEO={'Москва, МО и Дальние регионы':[37.62,55.75],'Санкт-Петербург и СЗО':[30.32,59.94],'Ростов':[39.72,47.23],'Воронеж':[39.2,51.67],'Казань':[49.11,55.79],
+  'Екатеринбург':[60.6,56.84],'Краснодар':[38.98,45.04],'Дальний Восток':[135.07,48.48],'Ярославль':[39.89,57.63],'Уфа':[55.97,54.73],'Новосибирск':[82.92,55.03],
+  'Невинномысск':[41.94,44.63],'Тюмень':[65.53,57.15],'Саратов':[46.03,51.53],'Красноярск':[92.87,56.01],'Оренбург':[55.1,51.77],'Тверь':[35.9,56.86],'Пермь':[56.25,58.01],
+  'Калининград':[20.51,54.71],'Самара':[50.15,53.2],'Омск':[73.37,54.99],'Махачкала':[47.5,42.98],'Алматы':[76.89,43.24],'Астана':[71.43,51.13],'Беларусь':[27.56,53.9],
+  'Армения':[44.51,40.18],'Узбекистан':[69.24,41.3]};
+// контур России — world-atlas (Natural Earth 1:50m), проекция d3; не загрузилось — карточки, как раньше
+let RU_MAP=null, RU_MAP_LOAD=null;
+const loadJs=src=>new Promise((ok,no)=>{const e=document.createElement('script');e.src=src;e.onload=ok;e.onerror=()=>no(new Error(src));document.head.appendChild(e);});
+function loadRuMap(){
+  if(RU_MAP_LOAD) return RU_MAP_LOAD;
+  return RU_MAP_LOAD=(async()=>{
+    if(!window.d3) await loadJs('https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js');
+    if(!window.topojson) await loadJs('https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js');
+    const topo=await (await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json')).json();
+    const all=topojson.feature(topo,topo.objects.countries).features, ru=all.find(f=>f.id==='643');
+    const W=1000,H=520, pr=d3.geoConicEqualArea().rotate([-100,0]).parallels([50,68]).fitExtent([[12,8],[W-12,H-28]],ru), path=d3.geoPath(pr);
+    RU_MAP={W,H,pr,ru:path(ru),oth:path({type:'FeatureCollection',features:all.filter(f=>f!==ru)})};
+  })().catch(e=>{ RU_MAP=false; });
+}
 function renderPal(){
-  const st=ST(), useDist=st==='distribution'||st==='closed', by={}, miss={};
+  const st=ST(), useDist=st==='distribution'||st==='closed', by={}, miss={}, box={}, nprod={};
   MODEL.forEach(p=>p.rows.forEach(r=>{
     const k=useDist?(r.dist||0):r.req; if(!k) return;
+    box[r.c]=(box[r.c]||0)+k; nprod[r.c]=(nprod[r.c]||0)+1;
     if(p.boxes_per_pallet>0) by[r.c]=(by[r.c]||0)+k/p.boxes_per_pallet; else miss[r.c]=(miss[r.c]||0)+1;
   }));
   const cs=[...new Set([...Object.keys(by),...Object.keys(miss)])].sort((a,b)=>(by[b]||0)-(by[a]||0));
-  document.getElementById('pal').innerHTML=cs.map(c=>{const x=by[c]||0,[t,cl]=palStatus(x);return `<div class="card"><div class="l">${esc(c)}</div><div class="v">${x.toFixed(2)} пал.</div><div class="${cl}" style="font-size:.85em">${t}</div></div>`;}).join('')||'<div class="mute">Нет заявленных коробов</div>';
+  const el=document.getElementById('pal');
+  if(!cs.length){ el.className='pal'; el.innerHTML='<div class="mute">Нет заявленных коробов</div>'; return; }
+  if(RU_MAP==null){ loadRuMap().then(renderPal); }
+  if(!RU_MAP){ // карта не загрузилась (или ещё грузится) — карточки
+    el.className='pal';
+    el.innerHTML=cs.map(c=>{const x=by[c]||0,[t,cl]=palStatus(x);return `<div class="card"><div class="l">${esc(c)}</div><div class="v">${x.toFixed(2)} пал.</div><div class="${cl}" style="font-size:.85em">${t}</div></div>`;}).join('');
+    return;
+  }
+  const {W,H,pr}=RU_MAP, COL={ok:'#22c55e',warn:'#d97706',bad:'#E33D78',mute:'#94a3b8'};
+  PAL_TIPS=[];
+  const pts=[], off=[];
+  cs.forEach(c=>{
+    const x=by[c]||0,[t,cl]=palStatus(x), g=CL_GEO[c], xy=g&&pr(g);
+    const tip={h:c,rows:[['Паллет',x>0?nf.format(Math.round(x*100)/100):'— (нет «на паллете»)'],['Загрузка',t,{ok:'g',warn:'y',bad:'r'}[cl]||''],['Коробов',nf.format(box[c]||0)],['Товаров',nf.format(nprod[c]||0)]]};
+    const it={c,x,cl,ti:PAL_TIPS.push(tip)-1};
+    if(xy&&xy[0]>=0&&xy[0]<=W&&xy[1]>=0&&xy[1]<=H){ it.ax=xy[0]; it.ay=xy[1]; it.px=xy[0]; it.py=xy[1]; it.r=Math.min(26,13+Math.sqrt(x)*3); pts.push(it); } else off.push(it);
+  });
+  // раздвигаем пересекающиеся кружки (европейская часть плотная); от точки города к кружку — тонкая линия
+  for(let k=0;k<120;k++){ let moved=false;
+    for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
+      const a=pts[i],b=pts[j]; let dx=b.px-a.px, dy=b.py-a.py, d=Math.hypot(dx,dy)||0.01, need=a.r+b.r+3;
+      if(d<need){ const m=(need-d)/2; dx/=d; dy/=d; a.px-=dx*m; a.py-=dy*m; b.px+=dx*m; b.py+=dy*m; moved=true; }
+    }
+    if(!moved) break;
+  }
+  const fmt=x=>!(x>0)?'—':x<0.05?'<0,1':nf.format(Math.round(x*10)/10); // 0 паллет при коробах — у товаров нет «на паллете», считать не из чего
+  el.className='palmap';
+  el.innerHTML=`<svg class="rumap" viewBox="0 0 ${W} ${H}" role="img" aria-label="Паллеты по кластерам на карте"><path class="oth" d="${RU_MAP.oth}"/><path class="ru" d="${RU_MAP.ru}"/>`
+    +pts.map(p=>(Math.hypot(p.px-p.ax,p.py-p.ay)>p.r?`<line class="pl" x1="${p.ax.toFixed(1)}" y1="${p.ay.toFixed(1)}" x2="${p.px.toFixed(1)}" y2="${p.py.toFixed(1)}"/>`:'')+`<circle class="pd" cx="${p.ax.toFixed(1)}" cy="${p.ay.toFixed(1)}" r="2"/>`).join('')
+    +pts.map(p=>`<g class="pm" data-ti="${p.ti}"><circle cx="${p.px.toFixed(1)}" cy="${p.py.toFixed(1)}" r="${p.r.toFixed(1)}" fill="${COL[p.cl]||COL.mute}"/><text x="${p.px.toFixed(1)}" y="${p.py.toFixed(1)}">${fmt(p.x)}</text></g>`).join('')
+    +`</svg>`+(off.length?`<div class="off">${off.map(p=>`<span class="pm" data-ti="${p.ti}" style="cursor:pointer;color:${COL[p.cl]||COL.mute}">${esc(p.c)}: ${fmt(p.x)} пал.</span>`).join(' · ')}</div>`:'');
+  palTipBind();
+}
+let PAL_TIPS=[];
+function palTipBind(){
+  const box=document.getElementById('pal'); if(box._tip) return; box._tip=1;
+  const tp=document.createElement('div'); tp.className='ptip'; document.body.appendChild(tp);
+  let cur=null; const off=()=>{cur=null;tp.classList.remove('on');};
+  box.addEventListener('mouseover',e=>{
+    const g=e.target.closest('.pm'); if(g===cur) return; off(); if(!g||!box.contains(g)) return;
+    const o=PAL_TIPS[+g.dataset.ti]; if(!o) return; cur=g; tp.innerHTML=ptipHtml(o);
+    const r=g.getBoundingClientRect(), w=tp.offsetWidth, h=tp.offsetHeight; let x=r.left+r.width/2-w/2, y=r.top-h-10; if(y<8) y=r.bottom+10;
+    tp.style.left=Math.max(8,Math.min(innerWidth-w-8,x))+'px'; tp.style.top=y+'px'; requestAnimationFrame(()=>tp.classList.add('on'));
+  });
+  box.addEventListener('mouseleave',off); window.addEventListener('scroll',off,true);
 }
 
 // ===== действия =====
