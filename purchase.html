@@ -146,7 +146,7 @@
  .rumap .pm{cursor:pointer;transition:transform .2s;transform-box:fill-box;transform-origin:center}
  .rumap .pm:hover{transform:scale(1.18)}
  .rumap .pm circle{stroke:#fff;stroke-width:2;filter:drop-shadow(0 2px 4px rgba(28,13,46,.25))}
- .rumap .pm text{fill:#fff;font-size:12.5px;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+ .rumap .pm text{fill:#fff;font-size:15px;text-anchor:middle;dominant-baseline:central;pointer-events:none}
  .palmap .off{display:flex;flex-wrap:wrap;gap:6px;margin:6px 4px 2px;font-size:.85em;color:#94a3b8}
  @media (prefers-reduced-motion:reduce){.rumap .pm{transition:none}.rumap .pm:hover{transform:none}}
  .lt input{width:46px;text-align:right;padding:3px 5px}
@@ -534,7 +534,7 @@ function render(){
 }
 function renderCards(){
   const v=vis(), q=S(v,reqOf), b=S(v,buyOf), ag=S(v,p=>p.ag), has=v.some(p=>p.ag!=null);
-  document.getElementById('cards').innerHTML=[['Расчёт, кор.',v.length&&v.every(p=>p.rows.every(r=>r.noSnap))?'—':nf.format(S(v,calcOf))],['Заявлено, кор.',nf.format(q)],['Согласовано, кор.',has?nf.format(ag):'—',has&&b?Math.round(ag/b*100)+'% к закупке ('+nf.format(b)+' кор.)':'вносит закупщик в сводной заявке'],...(()=>{const x=pctSum(v);return [['Потребность к сегодня',x.nT>0?pctTxt(x.nF,x.nT):'—',x.nT>0?'заказано '+nf.format(x.nF)+' из '+nf.format(Math.round(x.nT))+' кор.':''],['План продаж к сегодня',x.pT>0?pctTxt(x.pF,x.pT):'—',x.pT>0?'заказы '+nf.format(x.pF)+' из '+nf.format(Math.round(x.pT))+' шт':'']];})()]
+  document.getElementById('cards').innerHTML=[['Заявлено, кор.',nf.format(q)],['Согласовано, кор.',has?nf.format(ag):'—',has&&b?Math.round(ag/b*100)+'% к закупке ('+nf.format(b)+' кор.)':'вносит закупщик в сводной заявке'],...(()=>{const x=pctSum(v);return [['Потребность к сегодня',x.nT>0?pctTxt(x.nF,x.nT):'—',x.nT>0?'заказано '+nf.format(x.nF)+' из '+nf.format(Math.round(x.nT))+' кор.':''],['План продаж к сегодня',x.pT>0?pctTxt(x.pF,x.pT):'—',x.pT>0?'заказы '+nf.format(x.pF)+' из '+nf.format(Math.round(x.pT))+' шт':'']];})()]
     .map(([l,x,sub])=>`<div class="card"><div class="l">${l}</div><div class="v">${x}</div>${sub?`<div class="l">${sub}</div>`:''}</div>`).join('');
 }
 // окно «Настройки расчёта» (17.11.2026, решение владельца): 1) вариант спроса — карточки с расчётом недели по каждому варианту;
@@ -756,7 +756,7 @@ function renderPal(){
     const x=by[c]||0,[t,cl]=palStatus(x), g=CL_GEO[c], xy=g&&pr(g);
     const tip={h:c,rows:[['Паллет',x>0?nf.format(Math.round(x*100)/100):'— (нет «на паллете»)'],['Загрузка',t,{ok:'g',warn:'y',bad:'r'}[cl]||''],['Коробов',nf.format(box[c]||0)],['Товаров',nf.format(nprod[c]||0)]]};
     const it={c,x,cl,ti:PAL_TIPS.push(tip)-1};
-    if(xy&&xy[0]>=0&&xy[0]<=W&&xy[1]>=0&&xy[1]<=H){ it.ax=xy[0]; it.ay=xy[1]; it.px=xy[0]; it.py=xy[1]; it.r=Math.min(26,13+Math.sqrt(x)*3); pts.push(it); } else off.push(it);
+    if(xy&&xy[0]>=0&&xy[0]<=W&&xy[1]>=0&&xy[1]<=H){ it.ax=xy[0]; it.ay=xy[1]; it.px=xy[0]; it.py=xy[1]; it.r=Math.min(28,15+Math.sqrt(x)*3); pts.push(it); } else off.push(it);
   });
   // раздвигаем пересекающиеся кружки (европейская часть плотная); от точки города к кружку — тонкая линия
   for(let k=0;k<120;k++){ let moved=false;
