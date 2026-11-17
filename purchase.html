@@ -218,15 +218,16 @@
  table.pt .stp .num,.stp .num{width:46px;min-width:38px;max-width:52px}
  td.miss,span.miss{background:rgba(227,61,120,.35)}
  /* ячейки заявки (17.11.2026): подсветка при наведении и карточка-подсказка */
- #t1 td.n{transition:background-color .18s,box-shadow .18s,transform .18s}
- #t1 td.n.hl{background-color:rgba(227,61,120,.10);box-shadow:inset 0 0 0 1.5px rgba(227,61,120,.55),0 4px 14px rgba(125,54,115,.18);transform:scale(1.07);position:relative;z-index:2}
+ #t1 td.n{transition:background-color .18s,color .18s}
+ #t1 td.n.hl{background-color:rgba(227,61,120,.06);color:#E33D78}
  .ptip{position:fixed;z-index:9999;min-width:220px;max-width:360px;background:rgba(28,13,46,.95);color:#fff;border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.4;box-shadow:0 12px 32px rgba(28,13,46,.35);pointer-events:none;opacity:0;transform:translateY(6px);transition:opacity .16s,transform .16s;backdrop-filter:blur(6px)}
  .ptip.on{opacity:1;transform:none}
  .ptip .h{font-size:1.05em;margin-bottom:6px;color:#fde047}
  .ptip table{border-collapse:collapse;width:100%}.ptip td{padding:2px 0;border:0;background:none;color:#e2e8f0}.ptip td.v{text-align:right;padding-left:16px;white-space:nowrap;color:#fff}
  .ptip .g{color:#4ade80!important}.ptip .r{color:#f87171!important}.ptip .y{color:#fde047!important}.ptip .m{color:#94a3b8;margin-top:6px;font-size:.9em}
+ .ptip tr.rg td{color:#4ade80!important}.ptip tr.gap td{height:10px;padding:0}
  .ptip tr.big td{padding-top:5px;border-top:1px solid rgba(255,255,255,.18);font-size:1.08em}
- @media (prefers-reduced-motion:reduce){#t1 td.n,.ptip{transition:none}#t1 td.n.hl{transform:none}}
+ @media (prefers-reduced-motion:reduce){#t1 td.n,.ptip{transition:none}}
  #tn tr.mgroup td{background:rgba(125,54,115,.1)}
  .card.dl{cursor:pointer} .card.dl:hover{border-color:#E33D78}
  @media (max-width:900px){ table.pt{min-width:860px} }
@@ -599,19 +600,19 @@ function renderT1(){
   const st=ST(), v=vis(), ed=st==='draft', dist=st==='distribution'||st==='closed', edD=st==='distribution', q=document.getElementById('q').value.trim();
   document.getElementById('h1').textContent=dist?'Распределение обеспеченного по кластерам':'Заявка менеджера';
   const dash='<span class="mute">—</span>';
-  const showAg=!!st&&st!=='draft', NC=7+(showAg?1:0)+(dist?1:0), ym=monthOfWeek(WEEK), mlbl=ym.slice(5)+'.'+ym.slice(0,4);
-  let h=`<colgroup><col style="width:26%"><col span="${NC-1}"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="2" class="mhead sep">Ozon сейчас</th><th colspan="2" class="mhead sep">Заявка</th><th colspan="2" class="mhead sep" title="Выполнение к сегодня, ${mlbl}">Выполнение к сегодня</th>${showAg?'<th rowspan="2" class="sub sep n" title="ФФ + согласовано против заявленного: больше — зелёный, меньше — красный">Согласо&shy;вано, кор.</th>':''}${dist?'<th rowspan="2" class="sub sep n">Распре&shy;делено, кор.</th>':''}</tr>
-    <tr><th class="sub sep n">Спрос, шт/дн</th><th class="sub n">Остаток + в пути, шт</th><th class="sub sep n" title="Прошлые заявки (вычитаются из расчёта) — в подсказке ячейки">Расчёт, кор.</th><th class="sub n" title="В штуках — в подсказке ячейки">Заявлено, кор.</th><th class="sub sep n" title="Закупка: заказано за месяц с этой неделей ÷ потребность месяца × (номер недели ÷ недель в месяце)">Потреб&shy;ность, %</th><th class="sub n" title="Продажи: заказы товара с 1-го числа по вчера ÷ план месяца × (прошедшие эфф. дни ÷ эфф. дни месяца; выходной × 0,7)">План продаж, %</th></tr></thead><tbody>`;
+  const showAg=!!st&&st!=='draft', NC=6+(showAg?1:0)+(dist?1:0), ym=monthOfWeek(WEEK), mlbl=ym.slice(5)+'.'+ym.slice(0,4);
+  let h=`<colgroup><col style="width:26%"><col span="${NC-1}"></colgroup><thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="2" class="mhead sep">Ozon сейчас</th><th class="mhead sep">Заявка</th><th colspan="2" class="mhead sep" title="Выполнение к сегодня, ${mlbl}">Выполнение к сегодня</th>${showAg?'<th rowspan="2" class="sub sep n" title="ФФ + согласовано против заявленного: больше — зелёный, меньше — красный">Согласо&shy;вано, кор.</th>':''}${dist?'<th rowspan="2" class="sub sep n">Распре&shy;делено, кор.</th>':''}</tr>
+    <tr><th class="sub sep n">Спрос, шт/дн</th><th class="sub n">Остаток + в пути, шт</th><th class="sub sep n">Заявлено, кор.</th><th class="sub sep n" title="Закупка: заказано за месяц с этой неделей ÷ потребность месяца × (номер недели ÷ недель в месяце)">Потреб&shy;ность, %</th><th class="sub n" title="Продажи: заказы товара с 1-го числа по вчера ÷ план месяца × (прошедшие эфф. дни ÷ эфф. дни месяца; выходной × 0,7)">План продаж, %</th></tr></thead><tbody>`;
   if(!v.length) h+=`<tr><td colspan="${NC}" class="mute">Нет товаров</td></tr>`;
   const G=groupsOf(v,reqOf); K1=G.map(g=>g[0]);
   G.forEach(([sup,g],gi)=>{
     const open=OPEN1.has(sup)||!!q, gq=S(g,reqOf);
-    h+=`<tr class="mgroup" onclick="toggleG(1,${gi})"><td colspan="${NC}"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,calcOf))} кор. · заявлено ${nf.format(gq)} кор. · ${nf.format(S(g,p=>reqOf(p)*(p.box_qty||0)))} шт${showAg&&g.some(p=>p.ag!=null)?` · согласовано ${nf.format(S(g,p=>p.ag))} кор.`:''}${dist?` · распределено ${nf.format(S(g,p=>S(p.rows,r=>r.dist)))} кор.`:''}${grpPct(g)}</td></tr>`;
+    h+=`<tr class="mgroup" onclick="toggleG(1,${gi})"><td colspan="${NC}"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · заявлено ${nf.format(gq)} кор. · ${nf.format(S(g,p=>reqOf(p)*(p.box_qty||0)))} шт${showAg&&g.some(p=>p.ag!=null)?` · согласовано ${nf.format(S(g,p=>p.ag))} кор.`:''}${dist?` · распределено ${nf.format(S(g,p=>S(p.rows,r=>r.dist)))} кор.`:''}${grpPct(g)}</td></tr>`;
     if(!open) return;
     for(const p of g){
       const qv=reqOf(p), ns=p.rows.length&&p.rows.filter(r=>r.keep).every(r=>r.noSnap), bq=p.box_qty||0;
       h+=`<tr class="prow" onclick="toggle(${p.product_id})"><td>${OPEN===p.product_id?'▾':'▸'} <b>${esc(p.offer_id)}</b>${pkMiss(p)}<div class="pname">${esc(p.name)}</div></td>
-        <td class="n sep"${tip(demTip(p))}>${ns?dash:nf.format(S(p.rows,r=>r.ads))}</td><td class="n">${ns?dash:nf.format(S(p.rows,r=>r.av+r.tr))}</td><td class="n sep"${tip({h:'Расчёт, кор.',rows:[['Расчёт',nf.format(calcOf(p))+' кор.'],['Прошлые заявки',nf.format(S(p.rows,r=>r.prev))+' кор. = '+nf.format(S(p.rows,r=>r.prev)*bq)+' шт']],m:'Прошлые заявки вычтены из расчёта'})}>${ns?dash:p.nobox?'<span class="bad" title="Нет «в коробе» — расчёт не идёт">—</span>':nf.format(calcOf(p))}</td><td class="n"${tip({h:'Заявлено',rows:[['Короба',nf.format(qv)+' кор.'],['Штуки',nf.format(qv*bq)+' шт'],['В коробе',bq?bq+' шт':'не заполнено',bq?'':'r'],['На паллете',p.boxes_per_pallet>0?p.boxes_per_pallet+' кор.':'не заполнено',p.boxes_per_pallet>0?'':'r']]})}><b>${qv}</b></td>${needCells(p)}${showAg?agCell(p,qv):''}${dist?`<td class="n sep">${S(p.rows,r=>r.dist)}</td>`:''}</tr>`;
+        <td class="n sep"${tip(demTip(p))}>${ns?dash:nf.format(S(p.rows,r=>r.ads))}</td><td class="n">${ns?dash:nf.format(S(p.rows,r=>r.av+r.tr))}</td><td class="n sep"${tip({h:'Заявлено',rows:[['Короба',nf.format(qv)+' кор.'],['Расчёт',ns?'—':p.nobox?'нет «в коробе»':nf.format(calcOf(p))+' кор.',p.nobox?'r':''],['Прошлые заявки',nf.format(S(p.rows,r=>r.prev))+' кор.'],['Штуки',nf.format(qv*bq)+' шт'],['В коробе',bq?bq+' шт':'не заполнено',bq?'':'r'],['На паллете',p.boxes_per_pallet>0?p.boxes_per_pallet+' кор.':'не заполнено',p.boxes_per_pallet>0?'':'r']]})}><b>${qv}</b></td>${needCells(p)}${showAg?agCell(p,qv):''}${dist?`<td class="n sep">${S(p.rows,r=>r.dist)}</td>`:''}</tr>`;
       if(OPEN!==p.product_id) continue;
       h+=`<tr class="sub"><td colspan="${NC}"><table class="ct"><tr><th>Кластер</th><th class="n">Спрос, шт/дн</th><th class="n">Остаток, шт</th><th class="n">В пути, шт</th><th class="n">Прошлые заявки, кор.</th><th class="n">Расчёт, кор.</th><th class="n">Заявлено, кор.</th>${dist?'<th class="n">Распределено, кор.</th>':''}</tr>`;
       for(const r of p.rows){
@@ -658,14 +659,16 @@ const pctCls=(f,t)=>!(t>0)?'mute':f/t>1.1?'warn':f/t>=0.9?'ok':'bad';
 const tipCls=(f,t)=>!(t>0)?'':f/t>1.1?'y':f/t>=0.9?'g':'r';
 const sgn=x=>(x>0?'+':'')+nf.format(Math.round(x));
 let TIPS=[];
+// подсказка «Спрос» (17.11.2026, решения владельца): два варианта строками сверху, зелёным — тот, что в расчёте; между ними — отступ;
+// недели — под «Лучшей неделей», без выделения; без «÷ 7» и отдельной строки «в расчёте»
 function demTip(p){
-  const d=p.dem||{}, b=d.best, rows=[];
+  const d=p.dem||{}, b=d.best;
   if(d.mode==null) return {h:'Спрос, шт/дн',m:'Снимок на момент отправки заявки'};
-  rows.push(['Ozon, 28 дней',nf.format(d.sumAds)+' шт/дн',d.mode==='ads28'?'g':'']);
-  BEST_W.forEach(w=>rows.push(['  неделя '+ddmm(w),b&&b.all[w]!=null?nf.format(b.all[w])+' шт':'—',b&&b.week===w?'y':'']));
-  rows.push(['Лучшая неделя ÷ 7',b&&b.q?nf.format(b.q/7)+' шт/дн':'—',d.mode==='best5'?'g':'']);
-  if(d.mode==='best5') rows.push(['В расчёте',nf.format(S(p.rows,r=>r.ads))+' шт/дн','',1]);
-  return {h:'Спрос — '+(d.mode==='best5'?'лучшая неделя за 5 недель':'продажи за 28 дней (Ozon)'),rows,m:d.mode==='best5'?(d.sumAds>0?'По кластерам — в долях спроса Ozon за 28 дней':'Спроса Ozon по кластерам нет — делить не по чему, лучшая неделя не применена'):''};
+  const used=d.mode==='best5'&&d.sumAds>0?'best5':'ads28';
+  const rows=[['Продажи за 28 дней',nf.format(d.sumAds)+' шт/дн',used==='ads28'?'G':''],null,
+    ['Лучшая неделя за 5 недель',b&&b.q?nf.format(b.q/7)+' шт/дн':'—',used==='best5'?'G':''],
+    ...BEST_W.map(w=>['  неделя '+ddmm(w),b&&b.all[w]!=null?nf.format(b.all[w])+' шт':'—'])];
+  return {h:'Спрос',rows,m:d.mode==='best5'&&!(d.sumAds>0)?'Лучшая неделя не применена: спроса Ozon по кластерам нет — делить не по чему':''};
 }
 const tip=o=>` data-ti="${TIPS.push(o)-1}"`;
 function needCells(p){
@@ -686,7 +689,7 @@ function needCells(p){
 function pctSum(v){const hn=v.filter(hasNeed), hp=v.filter(p=>SPLAN[p.product_id]);return {nF:S(hn,mNowOf),nT:S(hn,needTo),pF:S(hp,factS),pT:S(hp,planTo)};}
 function grpPct(g){const x=pctSum(g);return (x.nT>0?` · потребность ${pctTxt(x.nF,x.nT)}`:'')+(x.pT>0?` · план продаж ${pctTxt(x.pF,x.pT)}`:'');}
 // карточка-подсказка ячеек таблицы заявки; ячейка без своей подсказки показывает title
-function ptipHtml(o){return `<div class="h">${esc(o.h)}</div>${o.rows?`<table>${o.rows.map(([l,v,c,big])=>`<tr${big?' class="big"':''}><td>${esc(l).replace(/^ {2}/,'&nbsp;&nbsp;&nbsp;')}</td><td class="v ${c||''}">${esc(String(v))}</td></tr>`).join('')}</table>`:''}${o.m?`<div class="m">${esc(o.m)}</div>`:''}`;}
+function ptipHtml(o){return `<div class="h">${esc(o.h)}</div>${o.rows?`<table>${o.rows.map(r=>{if(!r) return '<tr class="gap"><td colspan="2"></td></tr>'; const [l,v,c,big]=r; return `<tr class="${[big?'big':'',c==='G'?'rg':''].join(' ').trim()}"><td>${esc(l).replace(/^ {2}/,'&nbsp;&nbsp;&nbsp;')}</td><td class="v ${c&&c!=='G'?c:''}">${esc(String(v))}</td></tr>`;}).join('')}</table>`:''}${o.m?`<div class="m">${esc(o.m)}</div>`:''}`;}
 function ptipBind(){
   const box=document.getElementById('t1'); if(box._tip) return; box._tip=1;
   const tp=document.createElement('div'); tp.className='ptip'; document.body.appendChild(tp);
