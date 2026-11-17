@@ -589,9 +589,9 @@ function toggleG(t,i){ const set=[,OPEN1,OPEN2,OPEN3][t], k=[,K1,K2,K3][t][i]; s
 // «Согласовано» в таблице менеджера (16.11.2026, решение владельца): обеспечено (ФФ + согласовано) больше заявленного — зелёный, меньше — красный;
 // подсветка остаётся и после распределения. Вносит закупщик в сводной заявке поставщику.
 function agCell(p,req){
-  if(p.ag==null) return '<td class="n sep mute" title="Ещё не согласовано — вносит закупщик в сводной заявке поставщику">—</td>';
+  if(p.ag==null) return '<td class="n sep mute" title="Ещё не согласовано">—</td>';
   const sec=(p.ff||0)+p.ag, d=sec-req, bg=d>0?'background:rgba(34,197,94,.22);':d<0?'background:rgba(227,61,120,.22);':'';
-  return `<td class="n sep" style="${bg}" title="Согласовано ${p.ag} кор.${p.ff?` + на ФФ ${p.ff}`:''} = ${sec} к заявленным ${req} (${d>0?'+':''}${d})"><b>${p.ag}</b>${p.ff?`<div class="mute" style="font-size:.75em">+ФФ ${p.ff}</div>`:''}</td>`;
+  return `<td class="n sep" style="${bg}" title="Заявка ${d>0?'+':''}${d}"><b>${p.ag}</b>${p.ff?`<div class="mute" style="font-size:.75em">+ФФ ${p.ff}</div>`:''}</td>`;
 }
 // упаковка (17.11.2026): колонок «В коробе» / «На паллете» нет — товар без них помечен у артикула
 const pkMiss=p=>{const m=[p.box_qty>0?'':'«в коробе»',p.boxes_per_pallet>0?'':'«на паллете»'].filter(Boolean);return m.length?` <span class="miss" style="font-size:.75em;padding:1px 5px;border-radius:4px" title="Не заполнено ${m.join(' и ')} — заполните в «Базе товаров»">нет ${m.join(', ')}</span>`:'';};
@@ -689,7 +689,7 @@ function needCells(p){
 function pctSum(v){const hn=v.filter(hasNeed), hp=v.filter(p=>SPLAN[p.product_id]);return {nF:S(hn,mNowOf),nT:S(hn,needTo),pF:S(hp,factS),pT:S(hp,planTo)};}
 function grpPct(g){const x=pctSum(g);return (x.nT>0?` · потребность ${pctTxt(x.nF,x.nT)}`:'')+(x.pT>0?` · план продаж ${pctTxt(x.pF,x.pT)}`:'');}
 // карточка-подсказка ячеек таблицы заявки; ячейка без своей подсказки показывает title
-function ptipHtml(o){return `<div class="h">${esc(o.h)}</div>${o.rows?`<table>${o.rows.map(r=>{if(!r) return '<tr class="gap"><td colspan="2"></td></tr>'; const [l,v,c,big]=r; return `<tr class="${[big?'big':'',c==='G'?'rg':''].join(' ').trim()}"><td>${esc(l).replace(/^ {2}/,'&nbsp;&nbsp;&nbsp;')}</td><td class="v ${c&&c!=='G'?c:''}">${esc(String(v))}</td></tr>`;}).join('')}</table>`:''}${o.m?`<div class="m">${esc(o.m)}</div>`:''}`;}
+function ptipHtml(o){return `${o.t!=null?`<div>${esc(o.t)}</div>`:''}${o.h!=null?`<div class="h">${esc(o.h)}</div>`:''}${o.rows?`<table>${o.rows.map(r=>{if(!r) return '<tr class="gap"><td colspan="2"></td></tr>'; const [l,v,c,big]=r; return `<tr class="${[big?'big':'',c==='G'?'rg':''].join(' ').trim()}"><td>${esc(l).replace(/^ {2}/,'&nbsp;&nbsp;&nbsp;')}</td><td class="v ${c&&c!=='G'?c:''}">${esc(String(v))}</td></tr>`;}).join('')}</table>`:''}${o.m?`<div class="m">${esc(o.m)}</div>`:''}`;}
 function ptipBind(){
   const box=document.getElementById('t1'); if(box._tip) return; box._tip=1;
   const tp=document.createElement('div'); tp.className='ptip'; document.body.appendChild(tp);
@@ -698,7 +698,7 @@ function ptipBind(){
     const td=e.target.closest('td.n'); if(td===cur) return; off(); if(!td||!box.contains(td)) return;
     if(td.title){td.dataset.tt=td.title;td.removeAttribute('title');}
     cur=td; td.classList.add('hl');
-    const o=td.dataset.ti!=null?TIPS[+td.dataset.ti]:td.dataset.tt?{h:td.dataset.tt}:null; if(!o) return;
+    const o=td.dataset.ti!=null?TIPS[+td.dataset.ti]:td.dataset.tt?{t:td.dataset.tt}:null; if(!o) return;
     tp.innerHTML=ptipHtml(o);
     const r=td.getBoundingClientRect(), w=tp.offsetWidth, h=tp.offsetHeight; let x=r.left+r.width/2-w/2, y=r.top-h-10; if(y<8) y=r.bottom+10;
     tp.style.left=Math.max(8,Math.min(innerWidth-w-8,x))+'px'; tp.style.top=y+'px'; requestAnimationFrame(()=>tp.classList.add('on'));
