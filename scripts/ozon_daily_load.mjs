@@ -306,8 +306,8 @@ else{
     const b=batches.shift();const r=await order(b);
     if(!r){if(b.length>1)batches.unshift(...b.map(x=>[x]));else skipped.push(b[0]);continue;}
     const uuid=r.UUID||r.uuid;if(!uuid)throw new Error('Performance: отчёт не заказан');
-    let st='';for(let k=0;k<100&&st!=='OK';k++){await sleep(3000);st=(await perf(`/api/client/statistics/${uuid}`)).state;if(st==='ERROR')throw new Error('Performance: отчёт с ошибкой');}
-    if(st!=='OK')throw new Error('Performance: отчёт не готов за 5 минут');
+    let st='';for(let k=0;k<200&&st!=='OK';k++){await sleep(3000);st=(await perf(`/api/client/statistics/${uuid}`)).state;if(st==='ERROR')throw new Error('Performance: отчёт с ошибкой');}
+    if(st!=='OK')throw new Error('Performance: отчёт не готов за 10 минут'); // 18.11.2026: было 5 мин — 17.11 Ozon не успел, загрузка ИП и ООО упала
     const buf=await perf(`/api/client/statistics/report?UUID=${uuid}`,{raw:true});reports++;
     let txt=buf.toString('utf8');
     if(buf[0]===0x50&&buf[1]===0x4b){const {execSync}=await import('node:child_process');fs.writeFileSync('/tmp/ads.zip',buf);

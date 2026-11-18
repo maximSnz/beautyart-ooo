@@ -70,7 +70,7 @@ if(MODE==='load'){
   const alerts=[];
   const sync=(await gh('actions/workflows/ozon-products-sync.yml/runs?per_page=1'))?.workflow_runs?.[0];
   const load=(await gh('actions/workflows/ozon-daily-load.yml/runs?per_page=10'))?.workflow_runs||[];
-  const okToday=load.find(r=>r.conclusion==='success'&&mskDay(r.created_at)===TODAY&&r.event==='workflow_run');
+  const okToday=load.find(r=>r.conclusion==='success'&&mskDay(r.created_at)===TODAY&&['workflow_run','workflow_dispatch'].includes(r.event)); // 18.11.2026: ручной перезапуск тоже считается (17.11 ложная тревога после перезапуска в 07:59); свежесть данных проверяется отдельно
   if(sync&&sync.status==='completed'&&sync.conclusion!=='success'&&mskDay(sync.created_at)===TODAY)alerts.push(`❌ синхронизация товаров упала (${mskTime(sync.created_at)} Мск) — ночная загрузка не запускалась. <a href="${sync.html_url}">лог</a>`);
   if(!okToday&&EVENT!=='workflow_run')alerts.push(`❌ сегодня нет успешной ночной загрузки${load[0]?` — последняя: ${dm(mskDay(load[0].created_at))} ${mskTime(load[0].created_at)}, ${load[0].conclusion||load[0].status}`:''}`);
   if(fr.bad&&EVENT!=='workflow_run')alerts.push(`⚠️ устаревшие данные: ${fr.text}`);
