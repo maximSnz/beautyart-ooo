@@ -129,6 +129,10 @@
  .card{background:#f8f9fb;border:2px solid rgba(84,66,115,.1);border-radius:12px;padding:10px 12px}
  .card .l{color:#94a3b8;font-size:.82em}
  .card .v{font-size:1.5em;color:#1C0D2E}
+ /* карточка с подсказкой — как стадии заявки при наведении (19.11.2026) */
+ .card[data-ct]{cursor:default;transition:transform .2s,box-shadow .2s,border-color .2s}
+ .card[data-ct]:hover{transform:translateY(-2px);border-color:#E33D78;box-shadow:0 6px 14px rgba(227,61,120,.2)}
+ @media (prefers-reduced-motion:reduce){.card[data-ct]{transition:none}}
  .sec{margin:18px 0 6px;color:#544273;font-size:1.15em}
  .sechead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:18px 0 6px}.sechead .sec{margin:0 6px 0 0}.sechead #q{flex:1;min-width:200px}
  /* ⚙️ у «Заявки менеджера» (17.11.2026): менеджер и «Только отклонения» — во всплывающей панели; точка — фильтр включён */
