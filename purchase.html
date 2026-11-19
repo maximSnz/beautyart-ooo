@@ -599,7 +599,7 @@ function render(){
 function renderCards(){
   const v=vis(true), // «Только отклонения» — только для обработки таблицы, на итоги не влияет
     q=S(v,reqOf), b=S(v,buyOf), ag=S(v,p=>p.ag), has=v.some(p=>p.ag!=null);
-  document.getElementById('cards').innerHTML=[['Заявлено, кор.',nf.format(q)],['Согласовано, кор.',has?nf.format(ag):'—',has&&b?Math.round(ag/b*100)+'% к закупке ('+nf.format(b)+' кор.)':'вносит закупщик в сводной заявке'],...(()=>{const x=pctSum(v);return [['Потребность к сегодня',x.nT>0?pctTxt(x.nF,x.nT):'—',x.nT>0?'заказано '+nf.format(x.nF)+' из '+nf.format(Math.round(x.nT))+' кор.':''],['План продаж к сегодня',x.pT>0?pctTxt(x.pF,x.pT):'—',x.pT>0?'заказы '+nf.format(x.pF)+' из '+nf.format(Math.round(x.pT))+' шт':'']];})()]
+  document.getElementById('cards').innerHTML=[['Заявлено, кор.',nf.format(q)],['Согласовано, кор.',has?nf.format(ag):'—',has&&b?Math.round(ag/b*100)+'% к закупке ('+nf.format(b)+' кор.)':'вносит закупщик в сводной заявке'],...(()=>{const x=pctSum(v);return [['Потребность месяца',x.nN>0?needDisp(x.nF,x.nN):'—',x.nN>0?'заказано '+nf.format(x.nF)+' из '+nf.format(x.nN)+' кор.':''],['План продаж к сегодня',x.pT>0?pctTxt(x.pF,x.pT):'—',x.pT>0?'заказы '+nf.format(x.pF)+' из '+nf.format(Math.round(x.pT))+' шт':'']];})()]
     .map(([l,x,sub])=>`<div class="card"><div class="l">${l}</div><div class="v">${x}</div>${sub?`<div class="l">${sub}</div>`:''}</div>`).join('');
 }
 // окно «Настройки расчёта» (17.11.2026, решение владельца): 1) вариант спроса — карточки с расчётом недели по каждому варианту;
@@ -768,6 +768,8 @@ const pctTxt=(f,t)=>t>0?Math.round(f/t*100)+'%':'—';
 const pctCls=(f,t)=>!(t>0)?'mute':f/t>1.1?'warn':f/t>=0.9?'ok':'bad';
 const tipCls=(f,t)=>!(t>0)?'':f/t>1.1?'y':f/t>=0.9?'g':'r';
 const sgn=x=>(x>0?'+':'')+nf.format(Math.round(x));
+const dSgn=d=>(d>0?'+':d<0?'−':'±')+Math.abs(d);
+function needDisp(now,need){ if(!(need>0)) return '—'; const {i,n}=nShare(), f=Math.round(now/need*100), e=Math.round(i/n*100); return `${f}% (${dSgn(f-e)}%)`; }
 let TIPS=[];
 // подсказка «Спрос» (17.11.2026, решения владельца): два варианта строками сверху, зелёным — тот, что в расчёте; между ними — отступ;
 // недели — под «Лучшей неделей», без выделения; без «÷ 7» и отдельной строки «в расчёте»
@@ -789,8 +791,8 @@ function needCells(p){
   let a;
   if(!hasNeed(p)) a=now>0?`<td class="n sep warn"${tip({h:'Нет в потребности месяца',rows:[['Заказано за месяц',now+' кор.','y']],m:'Товара нет в потребности (нет плана) — заказ сверх потребности'})}>нет в потр.</td>`:'<td class="n sep mute">—</td>';
   else{
-    const need=mNeedOf(p), to=needTo(p);
-    a=`<td class="n sep ${pctCls(now,to)}"${tip({h:'Выполнение потребности к неделе '+ddmm(WEEK),rows:[['Потребность месяца',nf.format(need)+' кор.'],[`План к этой неделе (${i}/${n})`,nf.format(Math.round(to))+' кор.'],['Заказано за месяц',nf.format(now)+' кор.'],['  до этой недели',nf.format(mWasOf(p))+' кор.'],['  эта неделя',nf.format(reqOf(p))+' кор.'],['Отклонение к плану недели',sgn(now-to)+' кор.',tipCls(now,to)],['Отклонение к месяцу',sgn(now-need)+' кор.',now<need?'':'y'],['Выполнение к сегодня',pctTxt(now,to),tipCls(now,to),1],['Выполнение месяца',pctTxt(now,need)]]})}>${pctTxt(now,to)}</td>`;
+    const need=mNeedOf(p), to=needTo(p), e=Math.round(i/n*100), fm=Math.round(now/need*100);
+    a=`<td class="n sep ${pctCls(now,to)}"${tip({h:'Выполнение потребности к неделе '+ddmm(WEEK),rows:[['Потребность месяца',nf.format(need)+' кор.'],['Заказано за месяц',nf.format(now)+' кор.'],['  до этой недели',nf.format(mWasOf(p))+' кор.'],['  эта неделя',nf.format(reqOf(p))+' кор.'],null,['Выполнение месяца',fm+'%','',1],[`Эталон к этой неделе (${i}/${n})`,e+'%'],['Отклонение от эталона',dSgn(fm-e)+'%',tipCls(now,to)],['Отклонение от эталона, кор.',sgn(now-to)+' кор.',tipCls(now,to)]]})}>${needDisp(now,need)}</td>`;
   }
   const pl=SPLAN[p.product_id], f=factS(p), to=planTo(p);
   const b=!pl?`<td class="n mute"${tip({h:'План продаж',rows:[['Заказы с 1-го',nf.format(f)+' шт']],m:'Плана продаж на месяц нет'})}>—</td>`
@@ -799,8 +801,8 @@ function needCells(p){
   return a+b;
 }
 // итог группы / всех товаров: Σ факт ÷ Σ цели к сегодня (только товары с потребностью / с планом)
-function pctSum(v){const hn=v.filter(hasNeed), hp=v.filter(p=>SPLAN[p.product_id]);return {nF:S(hn,mNowOf),nT:S(hn,needTo),pF:S(hp,factS),pT:S(hp,planTo)};}
-function grpPct(g){const x=pctSum(g);return (x.nT>0?` · потребность ${pctTxt(x.nF,x.nT)}`:'')+(x.pT>0?` · план продаж ${pctTxt(x.pF,x.pT)}`:'');}
+function pctSum(v){const hn=v.filter(hasNeed), hp=v.filter(p=>SPLAN[p.product_id]);return {nF:S(hn,mNowOf),nT:S(hn,needTo),nN:S(hn,mNeedOf),pF:S(hp,factS),pT:S(hp,planTo)};}
+function grpPct(g){const x=pctSum(g);return (x.nN>0?` · потребность ${needDisp(x.nF,x.nN)}`:'')+(x.pT>0?` · план продаж ${pctTxt(x.pF,x.pT)}`:'');}
 // карточка-подсказка ячеек таблицы заявки; ячейка без своей подсказки показывает title
 function ptipHtml(o){return `${o.t!=null?`<div>${esc(o.t)}</div>`:''}${o.h!=null?`<div class="h">${esc(o.h)}</div>`:''}${o.rows?`<table>${o.rows.map(r=>{if(!r) return '<tr class="gap"><td colspan="2"></td></tr>'; const [l,v,c,big]=r; return `<tr class="${[big?'big':'',c==='G'?'rg':''].join(' ').trim()}"><td>${esc(l).replace(/^ {2}/,'&nbsp;&nbsp;&nbsp;')}</td><td class="v ${c&&c!=='G'?c:''}">${esc(String(v))}</td></tr>`;}).join('')}</table>`:''}${o.m?`<div class="m">${esc(o.m)}</div>`:''}`;}
 function ptipBind(){
