@@ -605,7 +605,7 @@ function renderCards(){
   const v=vis(true), // «Только отклонения» — только для обработки таблицы, на итоги не влияет
     q=S(v,reqOf), b=S(v,buyOf), ag=S(v,p=>p.ag), has=v.some(p=>p.ag!=null);
   CTIPS=[]; ptipOn(document.getElementById('cards'),'.card[data-ct]',el=>CTIPS[+el.dataset.ct]);
-  document.getElementById('cards').innerHTML=[['Заявлено, кор.',nf.format(q)],['Согласовано, кор.',has?nf.format(ag):'—',has&&b?Math.round(ag/b*100)+'% к закупке ('+nf.format(b)+' кор.)':'вносит закупщик в сводной заявке'],...(()=>{const x=pctSum(v);return [['Потребность месяца',x.nN>0?needDisp(x.nF,x.nN):'—',x.nN>0?'заказано '+nf.format(x.nF)+' из '+nf.format(x.nN)+' кор.':'',x.nN>0?(()=>{const hn=v.filter(hasNeed);return needTip(x.nN,x.nF,w=>S(hn,p=>MONTH_W[p.product_id]?.[w]||0),S(hn,p=>reqOf(p)));})():null],['План продаж к сегодня',x.pT>0?pctTxt(x.pF,x.pT):'—',x.pT>0?'заказы '+nf.format(x.pF)+' из '+nf.format(Math.round(x.pT))+' шт':'']];})()]
+  document.getElementById('cards').innerHTML=[['Заявлено, кор.',nf.format(q)],['Согласовано, кор.',has?nf.format(ag):'—',has&&b?Math.round(ag/b*100)+'% к закупке ('+nf.format(b)+' кор.)':'вносит закупщик в сводной заявке'],...(()=>{const x=pctSum(v);return [['Потребность месяца',x.nN>0?needDisp(x.nF,x.nN):'—',x.nN>0?'заказано '+nf.format(x.nF)+' из '+nf.format(x.nN)+' кор.':'',x.nN>0?(()=>{const hn=v.filter(hasNeed);return needTip(x.nN,x.nF,w=>S(hn,p=>MONTH_W[p.product_id]?.[w]||0),S(hn,p=>reqOf(p)));})():null],['План продаж месяца',x.pN>0&&ISO?.end?planDisp(x.pF,x.pT,x.pN):'—',x.pN>0?'заказы '+nf.format(x.pF)+' из '+nf.format(Math.round(x.pN))+' шт':'',x.pN>0&&ISO?.end?planTip(v.filter(hasPlan)):null]];})()]
     .map(([l,x,sub,ct])=>`<div class="card"${ct?` data-ct="${CTIPS.push(ct)-1}"`:''}><div class="l">${l}</div><div class="v">${x}</div>${sub?`<div class="l">${sub}</div>`:''}</div>`).join('');
 }
 // окно «Настройки расчёта» (17.11.2026, решение владельца): 1) вариант спроса — карточки с расчётом недели по каждому варианту;
@@ -747,28 +747,43 @@ function renderT1(){
 function toggle(pid){OPEN=OPEN===pid?null:pid;renderT1();}
 // выполнение к сегодня в строке заявки (17.11.2026, решения владельца; отдельного блока потребности нет) — два столбца рядом:
 // потребность, % — закупка: заказано за месяц (заявки недель месяца до этой + эта неделя) ÷ (потребность месяца × неделя ÷ недель в месяце);
-// план продаж, % — продажи: заказы товара с 1-го по вчера (product_sales, шт) ÷ (план месяца, шт × прошедшие эфф. дни ÷ эфф. дни месяца).
+// план продаж, % — продажи: по ISO-неделям, см. «План продаж в ISO-неделях» ниже.
 // Рядом видно, успевает ли закупка за продажами: продажи выше плана, а закупка по потребности — товар кончится, и наоборот.
 const mWasOf=p=>MONTH_REQ[p.product_id]||0, mNowOf=p=>mWasOf(p)+reqOf(p), hasNeed=p=>NEEDS[p.product_id]!=null, mNeedOf=p=>NEEDS[p.product_id]??0;
-let SALES={},SPLAN={},SHARE=null,SALES_M='';
+let SPLAN={},SALES_M='';
 const effOf=(a,b)=>{let e=0;for(let d=a;d<=b;d=addD(d,1)){const w=parseISO(d).getDay();e+=w===0||w===6?0.7:1;}return e;};
+// План продаж в ISO-неделях (19.11.2026, решение владельца): ISO-месяц — ISO-недели месяца заявки (ноябрь 2026 — 02.11–29.11), как у потребности;
+// план дня — план своего календарного месяца ÷ его эфф. дни (выходной × 0,7): в неделю на стыке месяцев попадают два плана.
+// Выполнение = заказы с начала ISO-месяца по вчера ÷ план ISO-месяца; эталон = план с начала ISO-месяца по вчера ÷ план ISO-месяца.
+let PLANS={}, SALESD={}, ISO=null;
+const PID=p=>p.product_id, dayW=d=>{const w=parseISO(d).getDay();return w===0||w===6?0.7:1;}, EFFM={};
+const effM=m=>EFFM[m]??=effOf(m+'-01',localISO(new Date(+m.slice(0,4),+m.slice(5),0)));
+const pDay=(id,d)=>{const m=d.slice(0,7), q=PLANS[m]?.[id]||0; return q?q/effM(m)*dayW(d):0;};
+const pSum=(id,a,b)=>{let s=0;for(let d=a;d<=b;d=addD(d,1)) s+=pDay(id,d);return s;};
+const fSum=(id,a,b)=>{const o=SALESD[id];if(!o) return 0;let s=0;for(let d=a;d<=b;d=addD(d,1)) s+=o[d]||0;return s;};
+function isoRange(month,yest){ const w=isoWeeksOfMonth(month), from=w[0], to=addD(w[w.length-1],6), ms=[];
+  for(let d=from;d<=to;d=addD(d,1)) if(!ms.includes(d.slice(0,7))) ms.push(d.slice(0,7));
+  return {weeks:w,from,to,end:yest>=from?(yest<to?yest:to):null,months:ms}; }
+const planM=p=>ISO?pSum(PID(p),ISO.from,ISO.to):0, planTo=p=>ISO?.end?pSum(PID(p),ISO.from,ISO.end):0, factS=p=>ISO?.end?fSum(PID(p),ISO.from,ISO.end):0, hasPlan=p=>planM(p)>0;
+function planDisp(f,e,t){ if(!(t>0)) return '—'; const a=Math.round(f/t*100), b=Math.round(e/t*100); return `${a}% (${dSgn(a-b)}%)`; }
+// подсказка: план ISO-месяца, заказы по неделям (факт из плана недели), выполнение, эталон, отклонение — ячейка товара и карточка
+function planTip(ps){ const P=(a,b)=>ps.reduce((s,p)=>s+pSum(PID(p),a,b),0), F=(a,b)=>ps.reduce((s,p)=>s+fSum(PID(p),a,b),0);
+  const t=P(ISO.from,ISO.to), e=P(ISO.from,ISO.end), f=F(ISO.from,ISO.end), a=Math.round(f/t*100), b=Math.round(e/t*100);
+  return {h:'Выполнение плана продаж к '+ddmm(ISO.end),rows:[[`План месяца (${ddmm(ISO.from)}–${ddmm(ISO.to)})`,nf.format(Math.round(t))+' шт'],['Заказы с '+ddmm(ISO.from),nf.format(f)+' шт'],
+    ...ISO.weeks.map(w=>{const we=addD(w,6); return ['  '+wkLbl(w),(w<=ISO.end?nf.format(F(w,we<ISO.end?we:ISO.end))+' из ':'план ')+nf.format(Math.round(P(w,we)))+' шт'];}),null,
+    ['Выполнение месяца',a+'%','',1],['Эталон к '+ddmm(ISO.end),b+'%'],['Отклонение от эталона',dSgn(a-b)+'%',tipCls(f,e)],['Отклонение от эталона, шт',sgn(f-e)+' шт',tipCls(f,e)]]}; }
 async function loadSales(month){
   if(SALES_M===month) return;
-  const first=month+'-01', last=localISO(new Date(+month.slice(0,4),+month.slice(5),0)), yest=addD(localISO(new Date()),-1), end=yest<last?yest:last;
-  SALES={}; SPLAN={}; SHARE=null;
+  const r=isoRange(month,addD(localISO(new Date()),-1)); PLANS={}; SALESD={}; ISO=null;
   const byOffer={}; PROD.forEach(p=>byOffer[p.offer_id]=p.product_id);
-  (await getAll(`/rest/v1/sales_plan?select=product_id,plan_qty&month=eq.${month}&order=product_id`)).forEach(x=>{ if(x.plan_qty>0) SPLAN[x.product_id]=Number(x.plan_qty); });
-  if(end>=first){
-    // product_sales — по складам: суммируем; постранично с сортировкой по полному ключу
-    (await getAll(`/rest/v1/product_sales?select=offer_id,qty&sale_date=gte.${first}&sale_date=lte.${end}&order=sale_date,offer_id,warehouse_name`)).forEach(r=>{ const pid=byOffer[r.offer_id]; if(pid!=null) SALES[pid]=(SALES[pid]||0)+(Number(r.qty)||0); });
-    SHARE={done:effOf(first,end),all:effOf(first,last),end};
-  }
-  SALES_M=month;
+  (await getAll(`/rest/v1/sales_plan?select=month,product_id,plan_qty&month=in.(${r.months.map(m=>'"'+m+'"').join(',')})&order=month,product_id`)).forEach(x=>{ if(x.plan_qty>0) (PLANS[x.month]=PLANS[x.month]||{})[x.product_id]=Number(x.plan_qty); });
+  SPLAN=PLANS[month]||{};
+  // product_sales — по складам: суммируем по дням; постранично с сортировкой по полному ключу
+  if(r.end) (await getAll(`/rest/v1/product_sales?select=offer_id,sale_date,qty&sale_date=gte.${r.from}&sale_date=lte.${r.end}&order=sale_date,offer_id,warehouse_name`)).forEach(x=>{ const pid=byOffer[x.offer_id]; if(pid==null) return; const o=SALESD[pid]=SALESD[pid]||{}; o[x.sale_date]=(o[x.sale_date]||0)+(Number(x.qty)||0); });
+  ISO=r; SALES_M=month;
 }
 const nShare=()=>{const w=isoWeeksOfMonth(monthOfWeek(WEEK));return {i:w.indexOf(WEEK)+1,n:w.length};};
 const needTo=p=>{const {i,n}=nShare();return mNeedOf(p)*i/n;};
-const planTo=p=>SHARE&&SPLAN[p.product_id]?SPLAN[p.product_id]*SHARE.done/SHARE.all:0;
-const factS=p=>SALES[p.product_id]||0;
 const pctTxt=(f,t)=>t>0?Math.round(f/t*100)+'%':'—';
 // цвет: ±10% к цели — зелёный, выше — жёлтый, ниже — розовый
 const pctCls=(f,t)=>!(t>0)?'mute':f/t>1.1?'warn':f/t>=0.9?'ok':'bad';
@@ -804,15 +819,15 @@ function needCells(p){
     const need=mNeedOf(p), to=needTo(p);
     a=`<td class="n sep ${pctCls(now,to)}"${tip(needTip(need,now,w=>MONTH_W[p.product_id]?.[w]||0,reqOf(p)))}>${needDisp(now,need)}</td>`;
   }
-  const pl=SPLAN[p.product_id], f=factS(p), to=planTo(p);
-  const b=!pl?`<td class="n mute"${tip({h:'План продаж',rows:[['Заказы с 1-го',nf.format(f)+' шт']],m:'Плана продаж на месяц нет'})}>—</td>`
-    :!SHARE?`<td class="n mute"${tip({h:'План продаж',rows:[['План месяца',nf.format(pl)+' шт']],m:'Месяц ещё не начался'})}>—</td>`
-    :`<td class="n ${pctCls(f,to)}"${tip({h:'Выполнение плана продаж к '+ddmm(SHARE.end),rows:[['План месяца',nf.format(pl)+' шт'],[`План к ${ddmm(SHARE.end)} (${nf.format(SHARE.done)} из ${nf.format(SHARE.all)} эфф. дн.)`,nf.format(Math.round(to))+' шт'],['Заказы с 1-го числа',nf.format(f)+' шт'],['Отклонение',sgn(f-to)+' шт',tipCls(f,to)],['Выполнение к сегодня',pctTxt(f,to),tipCls(f,to),1],['Выполнение месяца',pctTxt(f,pl)]],m:'Заказы — отчёт «Заказы» (PNL), выходной × 0,7'})}>${pctTxt(f,to)}</td>`;
+  const t=planM(p), f=factS(p), e=planTo(p);
+  const b=!(t>0)?`<td class="n mute"${tip({h:'План продаж',rows:[['Заказы с '+ddmm(ISO?.from||WEEK),nf.format(f)+' шт']],m:'Плана продаж нет'})}>—</td>`
+    :!ISO.end?`<td class="n mute"${tip({h:'План продаж',rows:[['План месяца',nf.format(Math.round(t))+' шт']],m:'Месяц ещё не начался'})}>—</td>`
+    :`<td class="n ${pctCls(f,e)}"${tip(planTip([p]))}>${planDisp(f,e,t)}</td>`;
   return a+b;
 }
 // итог группы / всех товаров: Σ факт ÷ Σ цели к сегодня (только товары с потребностью / с планом)
-function pctSum(v){const hn=v.filter(hasNeed), hp=v.filter(p=>SPLAN[p.product_id]);return {nF:S(hn,mNowOf),nT:S(hn,needTo),nN:S(hn,mNeedOf),pF:S(hp,factS),pT:S(hp,planTo)};}
-function grpPct(g){const x=pctSum(g);return (x.nN>0?` · потребность ${needDisp(x.nF,x.nN)}`:'')+(x.pT>0?` · план продаж ${pctTxt(x.pF,x.pT)}`:'');}
+function pctSum(v){const hn=v.filter(hasNeed), hp=v.filter(hasPlan);return {nF:S(hn,mNowOf),nT:S(hn,needTo),nN:S(hn,mNeedOf),pF:S(hp,factS),pT:S(hp,planTo),pN:S(hp,planM)};}
+function grpPct(g){const x=pctSum(g);return (x.nN>0?` · потребность ${needDisp(x.nF,x.nN)}`:'')+(x.pN>0&&ISO?.end?` · план продаж ${planDisp(x.pF,x.pT,x.pN)}`:'');}
 // карточка-подсказка ячеек таблицы заявки; ячейка без своей подсказки показывает title
 function ptipHtml(o){return `${o.t!=null?`<div>${esc(o.t)}</div>`:''}${o.h!=null?`<div class="h">${esc(o.h)}</div>`:''}${o.rows?`<table>${o.rows.map(r=>{if(!r) return '<tr class="gap"><td colspan="2"></td></tr>'; const [l,v,c,big]=r; return `<tr class="${[big?'big':'',c==='G'?'rg':''].join(' ').trim()}"><td>${esc(l).replace(/^ {2}/,'&nbsp;&nbsp;&nbsp;')}</td><td class="v ${c&&c!=='G'?c:''}">${esc(String(v))}</td></tr>`;}).join('')}</table>`:''}${o.m?`<div class="m">${esc(o.m)}</div>`:''}`;}
 let CTIPS=[];
