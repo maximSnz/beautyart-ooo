@@ -424,7 +424,7 @@ const weekQ=(bw,m)=>m==='best5'?(bw?.q||0):m==='last1'?(bw?.all?.[BEST_W[4]]||0)
 let MODE_FORCE=null, STEP_SEEN={};
 const MODE=()=>MODE_FORCE||(WEEKS[WEEK]?(WEEKS[WEEK].demand_mode||'ads28'):MODE_NEW);
 let WEEK=addD(keyOfMonday(new Date()),7),F='all',OPEN=null,OPEN1=new Set(),OPEN2=new Set(),OPEN3=new Set(),K1=[],K2=[],K3=[],NEED_ST=null;
-let WLT={},LT_SRC='',LINES=new Map(),PREV=new Map(),SUP={},NEEDS={},MONTH_REQ={},MODEL=[],DEBT={},FACT_OK=true;
+let WLT={},LT_SRC='',LINES=new Map(),PREV=new Map(),SUP={},NEEDS={},MONTH_REQ={},MONTH_W={},MWEEKS=[],MODEL=[],DEBT={},FACT_OK=true;
 
 async function go(){
   if(!await BA_AUTH.login(SUPABASE_URL,HD))return;
@@ -507,6 +507,7 @@ async function loadWeek(){
     needBuild({prod:PROD.filter(p=>!p.nobox),dem,demAt:DEM_AT,plan:pl,needs:ndb,turn:needTurnover(mdb,month).turn,req,cost:{},month,live:true}).forEach(p=>NEEDS[p.product_id]=p.ag??p.need);
   }else nd.forEach(n=>NEEDS[n.product_id]=n.agreed_boxes??n.need_boxes);
   MONTH_REQ={}; mr.forEach(l=>{ MONTH_REQ[l.product_id]=(MONTH_REQ[l.product_id]||0)+(l.requested_boxes||0); });
+  MONTH_W={}; MWEEKS=[...mWeeks].sort(); mr.forEach(l=>{ const o=MONTH_W[l.product_id]=MONTH_W[l.product_id]||{}; o[l.week]=(o[l.week]||0)+(l.requested_boxes||0); });
   await loadSales(month);
   OPEN=null; build(); render();
 }
@@ -768,6 +769,7 @@ const pctTxt=(f,t)=>t>0?Math.round(f/t*100)+'%':'—';
 const pctCls=(f,t)=>!(t>0)?'mute':f/t>1.1?'warn':f/t>=0.9?'ok':'bad';
 const tipCls=(f,t)=>!(t>0)?'':f/t>1.1?'y':f/t>=0.9?'g':'r';
 const sgn=x=>(x>0?'+':'')+nf.format(Math.round(x));
+const wkLbl=w=>{const d=parseISO(w),e=new Date(d);e.setDate(e.getDate()+6);return (d.getMonth()===e.getMonth()?pad(d.getDate()):ddmm(w))+'–'+ddmm(localISO(e));};
 const dSgn=d=>(d>0?'+':d<0?'−':'±')+Math.abs(d);
 function needDisp(now,need){ if(!(need>0)) return '—'; const {i,n}=nShare(), f=Math.round(now/need*100), e=Math.round(i/n*100); return `${f}% (${dSgn(f-e)}%)`; }
 let TIPS=[];
@@ -792,7 +794,7 @@ function needCells(p){
   if(!hasNeed(p)) a=now>0?`<td class="n sep warn"${tip({h:'Нет в потребности месяца',rows:[['Заказано за месяц',now+' кор.','y']],m:'Товара нет в потребности (нет плана) — заказ сверх потребности'})}>нет в потр.</td>`:'<td class="n sep mute">—</td>';
   else{
     const need=mNeedOf(p), to=needTo(p), e=Math.round(i/n*100), fm=Math.round(now/need*100);
-    a=`<td class="n sep ${pctCls(now,to)}"${tip({h:'Выполнение потребности к неделе '+ddmm(WEEK),rows:[['Потребность месяца',nf.format(need)+' кор.'],['Заказано за месяц',nf.format(now)+' кор.'],['  до этой недели',nf.format(mWasOf(p))+' кор.'],['  эта неделя',nf.format(reqOf(p))+' кор.'],null,['Выполнение месяца',fm+'%','',1],[`Эталон к этой неделе (${i}/${n})`,e+'%'],['Отклонение от эталона',dSgn(fm-e)+'%',tipCls(now,to)],['Отклонение от эталона, кор.',sgn(now-to)+' кор.',tipCls(now,to)]]})}>${needDisp(now,need)}</td>`;
+    a=`<td class="n sep ${pctCls(now,to)}"${tip({h:'Выполнение потребности к неделе '+ddmm(WEEK),rows:[['Потребность месяца',nf.format(need)+' кор.'],['Заказано за месяц',nf.format(now)+' кор.'],...MWEEKS.filter(w=>w<WEEK).map(w=>['  '+wkLbl(w),nf.format(MONTH_W[p.product_id]?.[w]||0)+' кор.']),['  '+wkLbl(WEEK),nf.format(reqOf(p))+' кор.'],null,['Выполнение месяца',fm+'%','',1],[`Эталон к этой неделе (${i}/${n})`,e+'%'],['Отклонение от эталона',dSgn(fm-e)+'%',tipCls(now,to)],['Отклонение от эталона, кор.',sgn(now-to)+' кор.',tipCls(now,to)]]})}>${needDisp(now,need)}</td>`;
   }
   const pl=SPLAN[p.product_id], f=factS(p), to=planTo(p);
   const b=!pl?`<td class="n mute"${tip({h:'План продаж',rows:[['Заказы с 1-го',nf.format(f)+' шт']],m:'Плана продаж на месяц нет'})}>—</td>`
