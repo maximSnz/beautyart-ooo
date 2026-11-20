@@ -507,16 +507,17 @@ else try{
       if(c.charge_type==='Вознаграждение за продажу'||c.charge_type==='Возврат вознаграждения')g.comm+=amt;
       if(c.charge_type==='Выручка'){g.gmv+=gv;g.sales+=qty;g.revP+=amt;}else if(c.charge_type==='Возврат выручки'){g.gmv+=gv;g.sales-=qty;g.revP+=amt;}});
     // pulseCal
-    const W=[];let oqAll=0,orAll=0;
+    const W=[],T={low:{c:0,g:0},high:{c:0,g:0}};let oqAll=0,orAll=0;
     for(let i=0;i<4;i++){const f=addDays(calFrom,i*7);let gmv=0,prop=0,unit=0,revP=0,cogs=0,oq=0,orev=0,comm=0;
       for(let k=0;k<7;k++){const d=addDays(f,k),g=byDay.get(d);if(g){gmv+=g.gmv;prop+=g.prop;unit+=g.unit;revP+=g.revP;comm+=g.comm;cogs+=costAt(pid,d).cost*g.sales;}
-        oq+=SQ.get(o+'|'+d)||0;orev+=SR_.get(o+'|'+d)||0;}
+        const dq=SQ.get(o+'|'+d)||0,dr=SR_.get(o+'|'+d)||0;oq+=dq;orev+=dr;
+        // ставка ступени — по дням, где цена заказа дня в ступени (как pulseCal в plan.html, 20.11.2026)
+        if(g&&g.gmv>0&&dq>0&&dr>0){const s=T[dr/dq>OZON_COMM_EDGE?'high':'low'];s.c-=g.comm;s.g+=g.gmv;}}
       oqAll+=oq;orAll+=orev;
-      if(gmv>0&&oq>0&&orev>0)W.push({b:gmv/orev,r:prop/gmv,t:TAX_RATE*revP/gmv,u:(cogs-unit)/oq,c:-comm/gmv});}
+      if(gmv>0&&oq>0&&orev>0)W.push({b:gmv/orev,r:prop/gmv,r0:(prop-comm)/gmv,t:TAX_RATE*revP/gmv,u:(cogs-unit)/oq});}
     if(!W.length){noCal++;continue;}
     const C={b:med(W.map(w=>w.b)),r:med(W.map(w=>w.r)),t:med(W.map(w=>w.t)),u:med(W.map(w=>w.u))},p0=oqAll>0?orAll/oqAll:null;
-    const c=med(W.map(w=>w.c)),own=p0!=null&&p0>OZON_COMM_EDGE?'high':'low';
-    C.r0=C.r+c;C.comm={low:own==='low'?c:OZON_COMM.low/100,high:own==='high'?c:OZON_COMM.high/100};
+    C.r0=med(W.map(w=>w.r0));C.comm={low:T.low.g>0?T.low.c/T.low.g:OZON_COMM.low/100,high:T.high.g>0?T.high.c/T.high.g:OZON_COMM.high/100};
     // цена — средняя за 7 дней (как priceNow в pulseHtml); unitPct при ДРР 0 = маржинальность до рекламы
     const s7=sumQR(o,p7From,p7To),P=s7.q>0?s7.r/s7.q:p0;
     const pre=((C.r0-(P<=OZON_COMM_EDGE?C.comm.low:C.comm.high))-C.t-C.u/(P*C.b))*100;
