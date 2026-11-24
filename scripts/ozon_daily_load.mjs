@@ -285,8 +285,15 @@ else{
       if(r.status!==200)throw new Error(`Performance ${path.split('?')[0]}: HTTP ${r.status} ${raw?'':String(t).slice(0,150)}`);
       return raw?t:(()=>{try{return JSON.parse(t);}catch(e){return t;}})();}
     throw new Error(`Performance ${path.split('?')[0]}: нет ответа`);};
-  const tk=await (await fetch(PERF+'/api/client/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:process.env.OZON_PERF_CLIENT_ID,client_secret:process.env.OZON_PERF_CLIENT_SECRET,grant_type:'client_credentials'})})).json();
-  if(!tk.access_token)throw new Error('Performance: токен не получен');
+  // 24.11.2026: Connect Timeout к api-performance.ozon.ru на запросе токена уронил всю загрузку ИП — теперь повтор, как у остальных запросов
+  let tk=null;
+  for(let a=0;a<5&&!tk;a++){let r=null,t='';
+    try{r=await fetch(PERF+'/api/client/token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({client_id:process.env.OZON_PERF_CLIENT_ID,client_secret:process.env.OZON_PERF_CLIENT_SECRET,grant_type:'client_credentials'}),signal:AbortSignal.timeout(30000)});t=await r.text();}
+    catch(e){await sleep(3000*(a+1));continue;}                                   // обрыв или таймаут 30 с — повтор
+    if(r.status===429||r.status>=500){await sleep(3000*(a+1));continue;}
+    if(!r.ok)throw new Error(`Performance token: HTTP ${r.status} ${t.slice(0,150)}`);
+    try{tk=JSON.parse(t);}catch(e){throw new Error('Performance token: не JSON '+t.slice(0,150));}}
+  if(!tk?.access_token)throw new Error('Performance: токен не получен');
   PT=tk.access_token;
   const ex=await perf(`/api/client/statistics/expense?dateFrom=${ADS_DAYS[0]}&dateTo=${ADS_DAYS[1]}`);
   const spent=new Set(),exp=new Map();String(ex).split('\n').slice(1).forEach(l=>{const c=l.split(';');const v=Number(String(c[3]).replace(',','.'));if(c.length>3&&v>0){const id=String(c[0]).trim();spent.add(id);exp.set(id,(exp.get(id)||0)+v);}});
