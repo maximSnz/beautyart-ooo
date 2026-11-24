@@ -172,6 +172,47 @@
  .password-input:focus{outline:none;border-color:#E33D78}
  .login-btn{width:100%;padding:14px;background:linear-gradient(135deg,#78A6C7,#E33D78);color:#fff;border:none;border-radius:10px;font-size:1.05em;font-family:'Forum',serif;cursor:pointer;transition:all .3s}
  .login-btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(227,61,120,.4)}
+ /* кнопки у даты недели (17.11.2026): ◀ ▶ ⚙️ — одинаковые квадраты 36×36, одна анимация (приподнимается, розовая рамка); стрелки — SVG, симметричные */
+ .wbtn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;box-sizing:border-box;background:#fff;color:#544273;border:2px solid rgba(84,66,115,.2);border-radius:8px;font-size:1.05em;line-height:1;cursor:pointer;transition:transform .2s,border-color .2s,box-shadow .2s,color .2s}
+ .wbtn:hover{border-color:#E33D78;color:#E33D78;transform:translateY(-2px);box-shadow:0 6px 14px rgba(227,61,120,.2)}
+ .wbtn:active{transform:translateY(0);box-shadow:none}
+ .smodal{position:fixed;inset:0;z-index:1000;background:rgba(28,13,46,.42);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:16px;opacity:0;pointer-events:none;transition:opacity .2s}
+ .smodal.on{opacity:1;pointer-events:auto}
+ .spanel{background:#fff;border-radius:18px;box-shadow:0 24px 60px rgba(28,13,46,.35);width:min(1280px,100%);max-height:90vh;display:flex;flex-direction:column;transform:translateY(14px) scale(.98);transition:transform .22s}
+ .smodal.on .spanel{transform:none}
+ .shead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:18px 22px 12px;border-bottom:1px solid rgba(84,66,115,.12)}
+ .stitle{font-size:1.35em;color:#1C0D2E}.ssub{font-size:.88em;color:#94a3b8;margin-top:3px}
+ .sx{background:none;border:0;font-size:1.3em;color:#94a3b8;cursor:pointer;padding:2px 6px;border-radius:8px}.sx:hover{color:#E33D78;background:#fdf2f7}
+ .sbody{padding:14px 22px 20px;overflow:auto}
+ .ssec{margin:6px 0 18px}.ssec h4{margin:0 0 8px;font-weight:normal;font-size:1.08em;color:#544273}.ssec .hint{font-size:.85em;color:#94a3b8;margin:-4px 0 10px}
+ .modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+ .mcard{border:2px solid rgba(84,66,115,.15);border-radius:14px;padding:12px 14px;cursor:pointer;transition:border-color .2s,box-shadow .2s,transform .2s;background:#fff}
+ .mcard:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(84,66,115,.12)}
+ .mcard.on{border-color:#E33D78;background:#fdf2f7;box-shadow:0 0 0 3px rgba(227,61,120,.12)}
+ .mcard.dis{cursor:default;opacity:.65}.mcard.dis:hover{transform:none;box-shadow:none}
+ .mcard .mt{color:#1C0D2E;font-size:1.05em}.mcard .md{font-size:.85em;color:#64748b;margin:4px 0 8px;line-height:1.35}
+ .mcard .mv{display:flex;gap:16px}.mcard .mv b{font-size:1.25em;color:#1C0D2E;font-weight:normal}.mcard .mv span{font-size:.8em;color:#94a3b8;display:block}
+ .mdot{display:inline-block;width:14px;height:14px;border-radius:50%;border:2px solid #cbd5e1;vertical-align:-2px;margin-right:6px}.mcard.on .mdot{border:4px solid #E33D78}
+ table.lt2{border-collapse:separate;border-spacing:0;width:100%;table-layout:fixed;min-width:1100px}table.lt2 th{font-weight:normal;font-size:.82em;color:#544273;padding:6px 8px;text-align:center;vertical-align:middle;line-height:1.15;background:rgba(120,166,199,.1);border-bottom:1px dashed #cbd5e1}
+ table.lt2 td{padding:5px 6px;border-bottom:1px dashed rgba(84,66,115,.12);text-align:center}table.lt2 td:first-child{text-align:left}
+ table.lt2 tr:hover td{background:#faf7fc}table.lt2 th.grp{background:linear-gradient(90deg,rgba(120,166,199,.18),transparent);font-size:.95em}
+ table.lt2 .cov{display:inline-block;min-width:34px;padding:2px 8px;border-radius:999px;background:#ede9fe;color:#544273;text-align:center}
+ table.lt2 .stp .num{width:34px;min-width:30px;padding:3px 2px;text-align:center}table.lt2 .stp button{padding:2px 6px}table.lt2 td{padding:5px 3px}
+ .pager{display:flex;align-items:center;gap:6px;margin-top:10px}.pager button{min-width:32px;height:32px;padding:0 8px;border-radius:8px;background:#fff;color:#544273;border:2px solid rgba(84,66,115,.18);cursor:pointer;transition:border-color .2s,background-color .2s}
+ .pager button:hover:not(:disabled){border-color:#E33D78;color:#E33D78}.pager button.on{background:#E33D78;border-color:#E33D78;color:#fff}.pager button:disabled{opacity:.35;cursor:default}.pager span{margin-left:8px;font-size:.85em;color:#94a3b8}
+ table.lt2 tbody tr{height:38px}table.lt2 tr.pad td{border-bottom-color:transparent}table.lt2 tr.pad:hover td{background:none}
+ table.lt2 th .u{display:block;font-size:.85em;color:#94a3b8;margin-top:1px}
+ table.lt2 .vs{border-left:1px dashed rgba(84,66,115,.3)}
+ .xsearch{position:relative;margin-bottom:10px}.xsearch input{width:100%;box-sizing:border-box}
+ .xres{position:absolute;left:0;right:0;top:100%;z-index:5;background:#fff;border-radius:10px;box-shadow:0 10px 24px rgba(28,13,46,.18);overflow:hidden}
+ .xres .xi{padding:7px 12px;cursor:pointer;font-size:.9em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.xres .xi span{color:#94a3b8}.xres .xi:hover{background:#fdf2f7}.xres .xi.mute{cursor:default}
+ .boost{margin-top:12px}.bmode{display:flex;gap:6px;align-items:center;margin-bottom:8px}.bmode input{flex:1;min-width:200px}.bmode .btn2{transition:transform .2s,border-color .2s,box-shadow .2s,color .2s}.bmode .btn2:hover{transform:translateY(-2px);box-shadow:0 6px 14px rgba(227,61,120,.2)}table.bt{border-collapse:collapse;width:100%;font-size:.9em;table-layout:fixed}table.bt tr:not(:first-child){height:44px}table.bt tr.pad td{border-bottom-color:transparent}table.bt td:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}table.bt th{font-weight:normal;color:#544273;background:rgba(120,166,199,.1);padding:6px 8px;text-align:center;border-bottom:1px dashed #cbd5e1}table.bt th:first-child,table.bt td:first-child{text-align:left}table.bt td{padding:4px 8px;border-bottom:1px dashed rgba(84,66,115,.12);text-align:center}
+ .bsl{display:inline-flex;align-items:center;gap:6px}.bsl input[type=range]{width:220px;accent-color:#E33D78}.bsl button{width:22px;height:24px;padding:0;border-radius:6px;background:#fff;color:#544273;border:1px solid rgba(84,66,115,.3);cursor:pointer}.bsl button:disabled,.bsl input:disabled{opacity:.4;cursor:default}.bsl b{font-weight:normal;min-width:44px;text-align:right;color:#1C0D2E}
+ .chips{display:flex;flex-wrap:wrap;gap:8px}
+ .chip{border:1.5px solid rgba(227,61,120,.35);background:#fdf2f7;color:#9d174d;border-radius:999px;padding:4px 10px;font-size:.9em}
+ .chip button{background:none;border:0;color:#E33D78;cursor:pointer;margin-left:4px;padding:0 2px;font-size:.95em}
+ .ban{background:none;border:1.5px solid rgba(84,66,115,.2);border-radius:8px;cursor:pointer;padding:2px 7px;color:#94a3b8;font-size:.85em}.ban:hover{border-color:#E33D78;color:#E33D78}
+ @media (prefers-reduced-motion:reduce){.wbtn,.smodal,.spanel,.mcard{transition:none}}
  .error-message{display:none;color:#E33D78;font-size:.9em;margin-top:15px;font-family:'Forum',serif}
 </style>
 </head>
@@ -198,9 +239,10 @@
     <div class="err" id="err"></div>
 
     <div class="wbar">
-      <button class="btn2" onclick="shiftMonth(-1)" title="Предыдущий месяц">◀</button>
+      <button class="wbtn" onclick="shiftMonth(-1)" title="Предыдущий месяц"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M8.5 1.5 3 6l5.5 4.5z" fill="currentColor"/></svg></button>
       <div class="wlbl" id="mlbl"></div>
-      <button class="btn2" onclick="shiftMonth(1)" title="Следующий месяц">▶</button>
+      <button class="wbtn" onclick="shiftMonth(1)" title="Следующий месяц"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 1.5 9 6l-5.5 4.5z" fill="currentColor"/></svg></button>
+      <button class="wbtn" onclick="openSet()" title="Настройки расчёта">⚙️</button>
       <span style="flex:1"></span>
       <span id="actions"></span>
     </div>
@@ -214,10 +256,12 @@
     </div>
     <div class="cards" id="cards"></div>
 
-    <details class="box" id="setBox">
-      <summary>⚙️ Параметры расчёта <span class="lock" id="setLock"></span></summary>
-      <div class="inner" id="settings"></div>
-    </details>
+    <div class="smodal" id="setModal" onclick="if(event.target===this)closeSet()">
+      <div class="spanel" role="dialog" aria-label="Настройки расчёта">
+        <div class="shead"><div><div class="stitle">⚙️ Настройки расчёта</div><div class="ssub" id="setSub"></div></div><button class="sx" onclick="closeSet()" title="Закрыть (Esc)">✕</button></div>
+        <div class="sbody" id="lt"></div>
+      </div>
+    </div>
 
     <details class="box" id="xlBox">
       <summary>📋 Перенос в Excel «Потребность на месяц» — ИП + ООО (временно, пока WB не в приложении)</summary>
@@ -230,7 +274,6 @@
       </div>
     </details>
 
-    <div class="note">Потребность = план месяца + план в день × дни оборачиваемости − (остаток FBO + в пути на Ozon) − две последние недельные заявки + продажи до конца текущего месяца. Всё в штуках, затем ÷ штук в коробе.</div>
     <div class="scroll"><table id="t1"></table></div>
     <div class="sec">По поставщикам</div>
     <div class="note">Нажмите на поставщика, чтобы скачать Excel: артикул, наименование, штуки, короба. Количество — согласованное, а пока его нет — заказ.</div>
@@ -238,7 +281,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="need_calc.js?v=20261027c"></script>
+<script src="need_calc.js?v=20261120b"></script>
 <script src="../beautyart-home/auth.js?v=20261021"></script>
 <script>
 function toggleNav(btn) {
@@ -261,7 +304,6 @@ function matrixOf(offer){ return (/^(CAP|INS|FW|MS|ML|SE)-/.test(offer))?'m1':'m
 const MGR={m1:'Илья',m2:'Ольга'};
 const STAGES=[['draft','Расчёт и заказ менеджеров'],['at_buyer','Закупщик: согласование с поставщиками'],['closed','Согласована']];
 const STAGE_BTN={draft:'Отправить закупщику',at_buyer:'Согласовано'};
-const DEFAULT_TURNOVER=NEED_DEFAULT_TURNOVER; // need_calc.js
 const MONTHS=['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -296,9 +338,9 @@ async function patchMonth(body){
   if(!r.ok) throw new Error('purchase_need_months HTTP '+r.status);
 }
 
-// ===== состояние =====
-let PROD=[],NOBOX=[],DEM={},DEM_AT='',COST={},MONTHS_DB={},REQ_WEEKS=[],REQ={},BLOCKED=new Set();
-let MONTH=addMonth(ymOf(new Date()),1),F='all',PLAN={},NEEDS={},TURN=DEFAULT_TURNOVER,TURN_SRC='',MODEL=[],OPEN_SUP=new Set();
+// ===== состояние ===== (данные и формула — need_calc.js: needLoad / needSettings / needBuild)
+let CTX=null,SET=null,PROD=[],NOBOX=[],DEM_AT='',COST={},MONTHS_DB={},PLAN={},HAS_SET=false;
+let MONTH=addMonth(ymOf(new Date()),1),F='all',MODEL=[],OPEN_SUP=new Set();
 
 async function go(){
   if(!await BA_AUTH.login(SUPABASE_URL,HD))return;
@@ -311,55 +353,103 @@ async function init(){
   try{ await loadBase(); await loadMonth(); }catch(e){ document.getElementById('err').textContent='Ошибка загрузки: '+e.message; }
 }
 async function loadBase(){
-  const [pr,dm,cs,ms,wk,lt]=await Promise.all([
-    getAll('/rest/v1/products?select=product_id,offer_id,name,supplier,box_qty,archived&order=product_id'),
-    getAll('/rest/v1/cluster_demand?select=product_id,cluster,ads_cluster,available,transit,updated_at&order=product_id,cluster'),
-    getAll('/rest/v1/product_prices?select=product_id,cost,created_at&order=created_at.desc'),
-    getAll('/rest/v1/purchase_need_months?select=*&order=month'),
-    getAll('/rest/v1/purchase_weeks?select=week,status&order=week.desc'),
-    getAll('/rest/v1/cluster_lead_times?select=*&order=cluster')
-  ]);
-  // кластеры с «Заказ запрещён» (27.10.2026) — закрыты, остатки распродаём: их спрос, остатки и заявки в потребность не входят
-  BLOCKED=new Set(lt.filter(c=>c.blocked).map(c=>c.cluster));
-  const act=pr.filter(p=>!p.archived);
-  PROD=act.map(p=>({...p,m:matrixOf(p.offer_id)})); // все неархивные, в т. ч. без «в коробе» (27.10.2026)
-  NOBOX=act.filter(p=>!(p.box_qty>0));
-  DEM={}; DEM_AT='';
-  dm.forEach(d=>{ if(BLOCKED.has(d.cluster)){ if(d.updated_at>DEM_AT)DEM_AT=d.updated_at; return; } const o=DEM[d.product_id]||(DEM[d.product_id]={ads:0,stock:0}); o.ads+=Number(d.ads_cluster)||0; o.stock+=(d.available||0)+(d.transit||0); if(d.updated_at>DEM_AT)DEM_AT=d.updated_at; });
-  COST={}; cs.forEach(c=>{ if(!(c.product_id in COST)) COST[c.product_id]=Number(c.cost); });
-  MONTHS_DB={}; ms.forEach(m=>MONTHS_DB[m.month]=m);
-  // «в пути» — две последние недельные заявки в любом статусе (решение 16.10.2026); у черновика — только сохранённое
-  REQ_WEEKS=wk.slice(0,2).map(w=>w.week);
-  REQ={};
-  if(REQ_WEEKS.length){
-    const ln=await getAll(`/rest/v1/purchase_lines?select=week,product_id,cluster,requested_boxes,distributed_boxes&week=in.(${REQ_WEEKS.join(',')})&order=week,product_id,cluster`);
-    ln.forEach(l=>{ if(BLOCKED.has(l.cluster)) return; REQ[l.product_id]=(REQ[l.product_id]||0)+((l.distributed_boxes??l.requested_boxes)||0); });
-  }
+  COST={}; (await getAll('/rest/v1/product_prices?select=product_id,cost,created_at&order=created_at.desc')).forEach(c=>{ if(!(c.product_id in COST)) COST[c.product_id]=Number(c.cost); });
 }
 const ST=()=>MONTHS_DB[MONTH]?.status||null;
+const LIVE=()=>!ST()||ST()==='draft';
 async function loadMonth(){
   document.getElementById('err').textContent='';
-  const [pl,nd]=await Promise.all([
-    getAll(`/rest/v1/sales_plan?select=product_id,plan_qty&month=eq.${MONTH}&order=product_id`),
-    getAll(`/rest/v1/purchase_needs?select=*&month=eq.${MONTH}&order=product_id`)
-  ]);
-  PLAN={}; pl.forEach(p=>{ if(p.plan_qty>0) PLAN[p.product_id]=p.plan_qty; });
-  NEEDS={}; nd.forEach(n=>NEEDS[n.product_id]=n);
-  ({turn:TURN,src:TURN_SRC}=needTurnover(MONTHS_DB,MONTH));
-  build(); render();
+  CTX=await needLoad(SUPABASE_URL,HD,MONTH);
+  CTX.prod.forEach(p=>p.m=matrixOf(p.offer_id));
+  PROD=CTX.prod; NOBOX=PROD.filter(p=>!(p.box_qty>0)); DEM_AT=CTX.demAt; MONTHS_DB=CTX.monthsDb; PLAN=CTX.plans[MONTH]||{};
+  HAS_SET=Object.values(MONTHS_DB).some(m=>'lead_times' in m);
+  SET=needSettings(MONTHS_DB,MONTH,CTX.seedLt); SET.turn=MONTHS_DB[MONTH]?.turnover_days;
+  build(); render(); renderLT();
 }
-
-// ===== расчёт ===== (формула — need_calc.js, общая с purchase.html)
-function daysToEom(){ return needDaysToEom(DEM_AT,MONTH); }
-function build(){
-  MODEL=needBuild({prod:PROD,dem:DEM,demAt:DEM_AT,plan:PLAN,needs:NEEDS,turn:TURN,req:REQ,cost:COST,month:MONTH,live:!ST()||ST()==='draft'});
-}
+function build(){ MODEL=needBuild({...CTX,set:SET,cost:COST,live:LIVE()}); }
 const S=(a,f)=>a.reduce((x,r)=>x+(Number(f(r))||0),0);
 const boxCost=p=>p.cost==null?null:p.cost*p.box_qty;
 // количество для денег и выгрузки: согласованное закупщиком, а пока его нет — заказ менеджера
 const qtyOf=p=>p.ag??p.need;
 const sumOf=p=>boxCost(p)==null?0:qtyOf(p)*boxCost(p);
 const vis=()=>{const q=document.getElementById('q').value.toLowerCase();return MODEL.filter(p=>(F==='all'||p.m===F)&&((p.offer_id||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q)));};
+
+// ===== окно «Настройки расчёта» (20.11.2026, решения владельца; как в заявке): повышение спроса по группам / товарам,
+// сроки по кластерам (срок поставки + страховой запас = запас на конец), запрещённые кластеры, товары, которые не заказываем.
+// Настройки — месяца (purchase_need_months), меняются в черновике; месяца нет — изменение создаёт черновик.
+const LT_F=NEED_LT_F, LT_H=['Форс-мажор','Согласование','Поставщик → ФФ','Сборка на ФФ','ФФ → Ozon','Приёмка'], LT_PER=5;
+let LT_PAGE=0,BT_PAGE=0,BT_MODE='grp',BT_Q='';
+const toInt=v=>{const n=Math.round(Number(String(v).replace(',','.')));return Number.isFinite(n)&&n>=0?n:0;};
+function openSet(){ document.getElementById('setModal').classList.add('on'); renderLT(); }
+function closeSet(){ document.getElementById('setModal').classList.remove('on'); }
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSet(); });
+function pagerHtml(pg,pages,total,fn){ const nums=Array.from({length:pages},(_,i)=>i).filter(i=>pages<=9||i===0||i===pages-1||Math.abs(i-pg)<=2); let prev=-1; return `<div class="pager"><button ${pg?'':'disabled'} onclick="${fn}(${pg-1})" title="Назад">‹</button>${nums.map(i=>{const gap=i-prev>1?'<span>…</span>':''; prev=i; return gap+`<button class="${i===pg?'on':''}" onclick="${fn}(${i})">${i+1}</button>`;}).join('')}<button ${pg<pages-1?'':'disabled'} onclick="${fn}(${pg+1})" title="Вперёд">›</button><span>${pg*LT_PER+1}–${Math.min(total,(pg+1)*LT_PER)} из ${total}</span></div>`; }
+function ltPage(i){ LT_PAGE=i; renderLT(); }
+function btPage(i){ BT_PAGE=i; renderLT(); }
+function btMode(m){ if(BT_MODE===m) return; BT_MODE=m; BT_PAGE=0; renderLT(); }
+function btSearch(v){ BT_Q=v; BT_PAGE=0; if(String(v).trim()) BT_MODE='prod'; renderLT(); const i=document.getElementById('btq'); if(i){ i.focus(); i.setSelectionRange(v.length,v.length); } }
+function renderLT(){
+  const ed=LIVE();
+  document.getElementById('setSub').innerHTML=ed?'':'🔒 только просмотр — потребность отправлена';
+  if(!document.getElementById('setModal').classList.contains('on')) return;
+  const sq=HAS_SET?'':'<div class="hint bad">Нужен SQL 2026-11-20_need_settings.sql — до него настройки не сохраняются</div>';
+  let h='';
+  if(ed){
+    const bo=SET.boost, calcOf=p=>p.calc||0, byG={}; MODEL.forEach(p=>{ const g=p.grp||'Без категории'; (byG[g]=byG[g]||[]).push(p); });
+    let items;
+    if(BT_MODE==='grp') items=Object.keys(byG).sort((a,b)=>S(byG[b],calcOf)-S(byG[a],calcOf)||a.localeCompare(b,'ru')).map(g=>({key:g,name:esc(g),title:'',v:Number(bo[g])||0,box:S(byG[g],calcOf)}));
+    else{ const q=BT_Q.trim().toLowerCase();
+      items=MODEL.filter(p=>!q||(p.offer_id||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q)).sort((a,b)=>calcOf(b)-calcOf(a)||a.offer_id.localeCompare(b.offer_id))
+        .map(p=>{ const own=bo['p:'+p.product_id]; return {key:'p:'+p.product_id,name:esc(p.offer_id)+(own==null&&bo[p.grp]?` <span class="mute">· группа +${bo[p.grp]}%</span>`:''),title:esc(p.name),v:Number(own)||0,box:calcOf(p)}; }); }
+    const pages=Math.max(1,Math.ceil(items.length/LT_PER)); BT_PAGE=Math.min(Math.max(0,BT_PAGE),pages-1);
+    const pg=items.slice(BT_PAGE*LT_PER,BT_PAGE*LT_PER+LT_PER);
+    h+=`<div class="ssec"><h4>Повышение спроса</h4>${sq}<div class="boost">`
+      +`<div class="bmode"><button class="btn2 ${BT_MODE==='grp'?'on':''}" onclick="btMode('grp')">Группы</button><button class="btn2 ${BT_MODE==='prod'?'on':''}" onclick="btMode('prod')">Товары</button><input id="btq" placeholder="Поиск по артикулу / названию" value="${esc(BT_Q)}" oninput="btSearch(this.value)"></div>`
+      +`<table class="bt"><colgroup><col style="width:40%"><col style="width:45%"><col style="width:15%"></colgroup><tr><th>${BT_MODE==='grp'?'Группа товаров':'Товар'}</th><th>Повышение спроса</th><th>Коробов</th></tr>`
+      +pg.map(it=>{ const k=it.key.replace(/'/g,'&#39;').replace(/"/g,'&quot;');
+        return `<tr><td title="${it.title}">${it.name}</td><td><span class="bsl"><button type="button" onclick="setBoost('${k}',${it.v-5})">−</button><input type="range" min="0" max="100" step="5" value="${it.v}" oninput="this.parentNode.querySelector('b').textContent='+'+this.value+'%'" onchange="setBoost('${k}',this.value)"><button type="button" onclick="setBoost('${k}',${it.v+5})">+</button><b>+${it.v}%</b></span></td><td>${nf.format(it.box)}</td></tr>`; }).join('')
+      +(items.length>LT_PER?Array.from({length:LT_PER-pg.length},()=>'<tr class="pad"><td colspan="3"></td></tr>').join(''):'')
+      +(items.length?'':'<tr><td colspan="3" class="mute">Ничего не найдено</td></tr>')
+      +`</table>${items.length>LT_PER?pagerHtml(BT_PAGE,pages,items.length,'btPage'):''}</div></div>`;
+  }
+  const used=new Set(); Object.values(CTX.dem).forEach(o=>Object.keys(o).forEach(c=>used.add(c)));
+  const names=[...new Set([...Object.keys(SET.lt),...used])].sort((a,b)=>a.localeCompare(b,'ru'));
+  const banned=names.filter(c=>SET.lt[c]?.blocked), open=names.filter(c=>!SET.lt[c]?.blocked);
+  h+=`<div class="ssec"><h4>Сроки реализации потребности</h4>${ed?'':sq}<div style="overflow-x:auto"><table class="lt2"><colgroup><col style="width:20%">${LT_F.map(()=>'<col style="width:10%">').join('')}<col style="width:9%"><col style="width:10%"><col style="width:5%"></colgroup>
+    <thead><tr><th rowspan="2">Кластер</th><th class="grp vs" colspan="6">Этапы поставки</th><th class="grp vs" colspan="2">Расчёт</th><th class="vs" rowspan="2"></th></tr>
+    <tr>${LT_H.map((x,i)=>`<th${i?'':' class="vs"'}>${x}<span class="u">дн</span></th>`).join('')}<th class="vs">Покрытие<span class="u">дн</span></th><th>Запас<span class="u">дн</span></th></tr></thead><tbody>`;
+  const pages=Math.max(1,Math.ceil(open.length/LT_PER)); LT_PAGE=Math.min(Math.max(0,LT_PAGE),pages-1);
+  const sl=open.slice(LT_PAGE*LT_PER,LT_PAGE*LT_PER+LT_PER);
+  for(const c of sl){
+    const r=SET.lt[c], ce=esc(c).replace(/'/g,'&#39;'), ban=`<td class="vs">${ed?`<button class="ban" title="Запретить заказ в кластер: его спрос, остатки и заявки в потребность не входят" onclick="setBlocked('${ce}',true)">🚫</button>`:''}</td>`;
+    if(!r){ h+=`<tr><td>${esc(c)}</td><td colspan="8" class="bad vs">сроки не заданы — берутся средние по кластерам ${ed?`<button class="btn2" onclick="setLT('${ce}','target_days',0)">задать</button>`:''}</td>${ban}</tr>`; continue; }
+    const inp=f=>ed?`<input class="num" type="number" min="0" step="1" value="${r[f]??0}" onchange="setLT('${ce}','${f}',this.value)">`:(r[f]??0);
+    h+=`<tr><td>${esc(c)}</td>${LT_F.map((f,i)=>`<td${i?'':' class="vs"'}>${inp(f)}</td>`).join('')}<td class="vs"><span class="cov">${needCov(r)}</span></td><td>${inp('target_days')}</td>${ban}</tr>`;
+  }
+  if(pages>1) for(let k=sl.length;k<LT_PER;k++) h+=`<tr class="pad"><td colspan="10"></td></tr>`;
+  h+=`</tbody></table></div>${pages>1?pagerHtml(LT_PAGE,pages,open.length,'ltPage'):''}</div>`;
+  if(banned.length) h+=`<div class="ssec"><h4>🚫 Заказ запрещён</h4><div class="chips">${banned.map(c=>`<span class="chip">${esc(c)}${ed?`<button title="Разрешить заказ" onclick="setBlocked('${esc(c).replace(/'/g,'&#39;')}',false)">✕</button>`:''}</span>`).join('')}</div></div>`;
+  const xs=PROD.filter(p=>SET.excl.has(p.product_id)).sort((a,b)=>a.offer_id.localeCompare(b.offer_id));
+  h+=`<div class="ssec"><h4>🚫 Товары не заказываем</h4>${ed?`<div class="xsearch"><input id="xq" placeholder="Найти товар: артикул или название" autocomplete="off" oninput="xSearch(this.value)"><div class="xres" id="xres"></div></div>`:''}${xs.length?`<div class="chips">${xs.map(p=>`<span class="chip" title="${esc(p.name)}">${esc(p.offer_id)}${ed?`<button title="Вернуть в расчёт" onclick="setExcl(${p.product_id},false)">✕</button>`:''}</span>`).join('')}</div>`:(ed?'':'<div class="mute">нет</div>')}</div>`;
+  document.getElementById('lt').innerHTML=h;
+}
+function xSearch(q){
+  const el=document.getElementById('xres'); q=String(q||'').trim().toLowerCase();
+  if(q.length<2){ el.innerHTML=''; return; }
+  const hits=PROD.filter(p=>!SET.excl.has(p.product_id)&&((p.offer_id||'').toLowerCase().includes(q)||(p.name||'').toLowerCase().includes(q))).slice(0,8);
+  el.innerHTML=hits.length?hits.map(p=>`<div class="xi" onclick="setExcl(${p.product_id},true)"><b>${esc(p.offer_id)}</b> <span>${esc(p.name)}</span></div>`).join(''):'<div class="xi mute">Ничего не найдено</div>';
+}
+// настройки пишутся сразу в месяц; месяца ещё нет — создаётся черновик с этими настройками
+async function saveSet(){
+  const body={lead_times:SET.lt,demand_boost:SET.boost,excluded_products:[...SET.excl]};
+  if(!ST()){ await upsert('purchase_need_months',[{month:MONTH,status:'draft',turnover_days:NEED_DEFAULT_TURNOVER,...body}],'month'); MONTHS_DB[MONTH]={month:MONTH,status:'draft',...body}; }
+  else{ await patchMonth(body); Object.assign(MONTHS_DB[MONTH],body); }
+}
+async function applySet(){ try{ if(HAS_SET) await saveSet(); }catch(e){ fail(e); } build(); render(); renderLT(); }
+function setBoost(k,v){ if(!LIVE()) return; v=Math.min(100,Math.max(0,Math.round(toInt(v)/5)*5)); if(v) SET.boost[k]=v; else delete SET.boost[k]; return applySet(); }
+function setLT(c,f,v){ if(!LIVE()) return; const r=SET.lt[c]=SET.lt[c]||{...Object.fromEntries(LT_F.map(x=>[x,0])),target_days:0,blocked:false}; r[f]=toInt(v); return applySet(); }
+function setBlocked(c,v){ if(!LIVE()) return; const r=SET.lt[c]=SET.lt[c]||{...Object.fromEntries(LT_F.map(x=>[x,0])),target_days:0}; r.blocked=!!v; return applySet(); }
+function setExcl(pid,v){ if(!LIVE()) return; const p=PROD.find(x=>x.product_id===pid); if(!v&&!confirm(`Вернуть в расчёт «${p?.offer_id}»?`)) return; v?SET.excl.add(pid):SET.excl.delete(pid); return applySet(); }
 
 // ===== отрисовка =====
 function setF(f){F=f;render();}
@@ -371,24 +461,13 @@ function render(){
   const a=document.getElementById('actions');
   if(!st) a.innerHTML=`<button onclick="createMonth()">Создать потребность на ${mLabel(MONTH)}</button>`;
   else a.innerHTML=(STAGE_BTN[st]?`<button onclick="nextStage()">${STAGE_BTN[st]}</button> `:'<span class="ok">Потребность согласована</span> ')+(stIdx>0?`<button class="btn2" onclick="prevStage()">↩ Вернуть на шаг</button>`:'');
-  const dAt=DEM_AT?new Date(DEM_AT):null, live=!st||st==='draft';
-  const noPlan=PROD.filter(p=>PLAN[p.product_id]==null).length;
-  document.getElementById('meta').innerHTML=(live?`Остатки и продажи Ozon (API): ${dAt?dAt.toLocaleString('ru-RU'):'нет данных'} • план продаж на ${mLabel(MONTH)}: ${Object.keys(PLAN).length} товаров`+(noPlan&&Object.keys(PLAN).length?` (без плана: ${noPlan})`:''):'Показан снимок на момент отправки закупщику')
+  const dAt=DEM_AT?new Date(DEM_AT):null, live=!st||st==='draft', iso=needIso(MONTH);
+  const noPlan=PROD.filter(p=>PLAN[p.product_id]==null).length, np=Object.keys(PLAN).length;
+  document.getElementById('meta').innerHTML=(MODEL.some(p=>p.legacy)?'календарный месяц (расчёт до 20.11.2026)':`ISO-месяц ${ddmm(iso.from)}–${ddmm(iso.to)}`)+(live?` • остатки и продажи Ozon: ${dAt?dAt.toLocaleString('ru-RU'):'нет данных'} • план продаж: ${np} товаров`+(noPlan&&np?` (без плана: ${noPlan})`:''):' • снимок на момент отправки закупщику')
     +(NOBOX.length?` • <span class="warn">без «в коробе»: ${NOBOX.length}</span>`:'')
-    +(live&&!Object.keys(PLAN).length?' • <span class="bad">нет плана продаж на этот месяц — заполните в «Реализации плана продаж»</span>':'');
-  renderSettings(); renderCards(); renderT1(); renderSup();
-}
-function renderSettings(){
-  const st=ST(), ed=!st||st==='draft';
-  document.getElementById('setLock').textContent=st==='draft'?'— можно менять, пока потребность в черновике':!st?'— можно менять; при изменении потребность на месяц создастся':'— только просмотр';
-  document.getElementById('settings').innerHTML=`<table class="lt">
-    <tr><td>Дни оборачиваемости на конец месяца</td><td class="n">${ed?`<input class="num" type="number" min="0" step="1" value="${TURN}" onchange="setTurn(this.value)">`:TURN}</td>
-      <td class="mute">${!st?(TURN_SRC.startsWith('copy')?'при создании скопируется из '+mLabel(TURN_SRC.slice(5)):'по умолчанию'):''}</td></tr>
-    <tr><td>Дней в месяце</td><td class="n">${daysIn(MONTH)}</td><td class="mute">план в день = план ÷ дней месяца</td></tr>
-    ${BLOCKED.size?`<tr><td>Не учитываются (заказ запрещён)</td><td class="n">${BLOCKED.size} кл.</td><td class="mute">${[...BLOCKED].sort().map(esc).join(', ')} — спрос, остатки и заявки</td></tr>`:''}
-    <tr><td>Продажи считаются до конца текущего месяца</td><td class="n">${daysToEom()} дн.</td><td class="mute">от даты данных Ozon</td></tr>
-    <tr><td>Недельные заявки «в пути»</td><td class="n">${REQ_WEEKS.length?REQ_WEEKS.map(ddmm).join(', '):'нет'}</td><td class="mute">две последние, в любом статусе (у черновика — только сохранённые строки)</td></tr>
-  </table>`;
+    +(live&&!np?' • <span class="bad">нет плана продаж на этот месяц — поставьте на картах Шухарта</span>':'')
+    +(live&&MODEL.some(p=>p.carried)?' • <span class="warn">плана на следующий месяц нет — запас на конец по плану текущего</span>':'');
+  renderCards(); renderT1(); renderSup();
 }
 function renderCards(){
   const v=vis(), need=S(v,p=>p.need), has=v.some(p=>p.ag!=null);
@@ -407,24 +486,29 @@ let SUP_KEYS=[];
 function renderT1(){
   const st=ST(), edN=st==='draft', edA=st==='at_buyer', q=document.getElementById('q').value.trim();
   const v=vis().sort((a,b)=>(a.supplier||'—').localeCompare(b.supplier||'—','ru')||(b.calc||0)-(a.calc||0)||a.offer_id.localeCompare(b.offer_id));
-  const fmt=x=>x==null?'<span class="mute">—</span>':nf.format(x);
-  let h=`<colgroup><col style="width:18%"><col span="6" style="width:6%"><col span="3" style="width:6%"><col style="width:6%"><col style="width:8.5%"><col style="width:7.5%"></colgroup>
-    <thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="6" class="mhead sep">Расчёт потребности</th><th colspan="3" class="mhead sep">Потребность</th><th colspan="2" class="whead sep">Закупщик</th><th rowspan="2" class="sub sep n" title="Согласованное × штук в коробе × себестоимость; пока согласованного нет — заказ">Сумма, ₽</th></tr>
-    <tr><th class="sub sep n">План месяца, шт</th><th class="sub n">Запас оборачи&shy;ваемости, шт</th><th class="sub n">Остаток + в пути на Ozon, шт</th><th class="sub n">Заявки в пути, шт</th><th class="sub n">Продадим до конца месяца, шт</th><th class="sub n">В коробе, шт</th>
+  const fmt=x=>x==null?'<span class="mute">—</span>':nf.format(Math.round(x));
+  let h=`<colgroup><col style="width:20%"><col span="4" style="width:7%"><col span="3" style="width:6.5%"><col style="width:7%"><col style="width:10%"><col style="width:8%"></colgroup>
+    <thead><tr><th rowspan="2" class="sub">Товар</th><th colspan="4" class="mhead sep">Расчёт потребности</th><th colspan="3" class="mhead sep">Потребность</th><th colspan="2" class="whead sep">Закупщик</th><th rowspan="2" class="sub sep n">Сумма, ₽</th></tr>
+    <tr><th class="sub sep n">План, шт</th><th class="sub n">Запас на конец, шт</th><th class="sub n">Запас на начало, шт</th><th class="sub n">В коробе, шт</th>
       <th class="sub sep n">Расчёт, кор.</th><th class="sub n">Заказ, кор.</th><th class="sub n">Заказ, шт</th><th class="wsub sep n">Согласовано, кор.</th><th class="wsub">Комментарий</th></tr></thead><tbody>`;
-  if(!v.length) h+=`<tr><td colspan="13" class="mute">Нет товаров с планом на ${mLabel(MONTH)}</td></tr>`;
+  if(!v.length) h+=`<tr><td colspan="11" class="mute">Нет товаров</td></tr>`;
   SUP_KEYS=[...new Set(v.map(p=>p.supplier||'—'))];
   SUP_KEYS.forEach((sup,i)=>{
     const g=v.filter(x=>(x.supplier||'—')===sup), gn=S(g,x=>x.need), ga=S(g,x=>x.ag), gr=S(g,sumOf), open=OPEN_SUP.has(sup)||!!q;
-    h+=`<tr class="mgroup" onclick="toggleSup(${i})"><td colspan="13"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,x=>x.calc))} кор. · заказ ${gn} кор. · ${rub.format(gr)} ₽${g.some(x=>x.ag!=null)?` · согласовано ${ga} кор.${gn?` (${Math.round(ga/gn*100)}%)`:''}`:''}</td></tr>`;
+    h+=`<tr class="mgroup" onclick="toggleSup(${i})"><td colspan="11"><span class="tg">${open?'▾':'▸'}</span>${esc(sup)} — ${g.length} тов. · расчёт ${nf.format(S(g,x=>x.calc))} кор. · заказ ${gn} кор. · ${rub.format(gr)} ₽${g.some(x=>x.ag!=null)?` · согласовано ${ga} кор.${gn?` (${Math.round(ga/gn*100)}%)`:''}`:''}</td></tr>`;
     if(!open) return;
     for(const p of g){
-      const bc=boxCost(p);
+      const bc=boxCost(p), r0=x=>nf.format(Math.round(x||0)), I=p.iso;
+      const tPlan=p.legacy?'План календарного месяца (расчёт до 20.11.2026)':`План ISO-месяца ${ddmm(I.from)}–${ddmm(I.to)}: план дня — план своего месяца ÷ эфф. дни (выходной × 0,7)`+(p.plan!=null?`; план ${mLabel(MONTH)} — ${r0(p.plan)} шт`:'')+(p.boost?`; повышение спроса +${p.boost}%`:'');
+      const tEnd=p.legacy?'План ÷ дней месяца × дни оборачиваемости (расчёт до 20.11.2026)':`Цель недельной заявки на ${ddmm(I.to)}: план следующих дней (срок поставки + страховой запас кластера)`+(p.carried?'; плана следующего месяца нет — по плану текущего':'');
+      const tSt=p.legacy?`Остаток + в пути ${r0(p.stock)} + заявки ${r0(p.reqQty)} − продажи до конца месяца ${r0(p.sell)} шт (расчёт до 20.11.2026)`
+        :`Сейчас: остаток + в пути ${r0(p.stock)} шт, две последние заявки ${r0(p.reqQty)} шт; продадим до ${ddmm(I.from)} ${r0(p.sell)} шт (${p.dts} дн.)`+(p.tStart!=null?`; цель на ${ddmm(I.from)} — ${r0(p.tStart)} шт: недельные заявки до начала месяца доберут запас до неё`:'');
+      const tCalc=p.nodem?'Нет спроса по кластерам — расчёт по товару в целом':p.rows?.length?'По кластерам: '+p.rows.filter(r=>r.box>0).sort((a,b)=>b.box-a.box).slice(0,8).map(r=>`${r.c} ${r.box}`).join(', ')+(p.rows.filter(r=>r.box>0).length>8?'…':''):'';
       h+=`<tr><td><b>${esc(p.offer_id)}</b><div class="pname">${esc(p.name)}</div></td>
-        <td class="n sep">${p.plan==null?'<span class="mute">нет плана</span>':nf.format(p.plan)}</td><td class="n">${fmt(p.turnover)}</td><td class="n">${fmt(p.stock)}</td><td class="n">${fmt(p.reqQty)}</td>
-        <td class="n" title="${p.ads==null?'':nf.format(p.ads)+' шт/дн × '+p.dte+' дн.'}">${fmt(p.sell)}</td>
+        <td class="n sep" title="${esc(tPlan)}">${p.planIso==null&&p.plan==null?'<span class="mute">нет плана</span>':fmt(p.planIso)}${p.boost?`<div class="mute" style="font-size:.75em">+${p.boost}%</div>`:''}</td>
+        <td class="n" title="${esc(tEnd)}">${fmt(p.tEnd)}</td><td class="n" title="${esc(tSt)}">${fmt(p.start)}</td>
         <td class="n${p.box_qty>0?'':' miss'}" title="${p.box_qty>0?'':'Не заполнено — заполните в «Базе товаров»'}">${p.box_qty>0?p.box_qty:''}</td>
-        <td class="n sep${p.nobox?' miss':''}">${p.nobox?'<span title="Не заполнено «в коробе» — заполните в «Базе товаров»">нет «в коробе»</span>':p.calc==null?'<span class="mute">—</span>':nf2.format(p.calc)}</td>
+        <td class="n sep${p.nobox?' miss':''}" title="${esc(tCalc)}">${p.nobox?'<span title="Не заполнено «в коробе» — заполните в «Базе товаров»">нет «в коробе»</span>':p.calc==null?'<span class="mute">—</span>':nf.format(p.calc)}</td>
         <td class="n">${edN&&!p.nobox?`<input class="num" type="number" min="0" step="1" value="${p.need}" title="${p.manual?'Изменено вручную; очистите поле, чтобы вернуть к расчёту':'Идёт за расчётом'}" onchange="setNeed(${p.product_id},this.value)">${p.manual?'<div class="mute" style="font-size:.75em">✎ вручную</div>':''}`:`<b>${p.need}</b>`}</td>
         <td class="n mute" title="${p.box_qty||0} шт в коробе">${nf.format(p.need*(p.box_qty||0))}</td>
         <td class="n sep">${edA?`<input class="num" type="number" min="0" step="1" value="${p.ag??''}" placeholder="—" onchange="setAg(${p.product_id},this.value)">`:(p.ag??'—')}</td>
@@ -483,14 +567,14 @@ function exportSup(i){
 // ===== действия =====
 function shiftMonth(n){MONTH=addMonth(MONTH,n);loadMonth().catch(e=>document.getElementById('err').textContent='Ошибка: '+e.message);}
 function fail(e){document.getElementById('err').textContent='Не сохранилось: '+e.message;}
-const toInt=v=>{const n=Math.round(Number(String(v).replace(',','.')));return Number.isFinite(n)&&n>=0?n:0;};
-function needRow(p,extra){return {month:MONTH,product_id:p.product_id,need_boxes:p.need,box_qty:p.box_qty,plan_qty:p.plan,stock_qty:p.stock,requests_qty:p.reqQty,ads:p.ads,days_to_eom:p.dte,calc_boxes:p.calc,unit_cost:p.cost,updated_at:new Date().toISOString(),...extra};}
+function needRow(p,extra){const r={month:MONTH,product_id:p.product_id,need_boxes:p.need,box_qty:p.box_qty,plan_qty:p.plan,stock_qty:p.stock,requests_qty:p.reqQty,ads:p.ads??null,days_to_eom:p.dts,calc_boxes:p.calc,unit_cost:p.cost,updated_at:new Date().toISOString()};
+  if(HAS_SET) Object.assign(r,{plan_iso:p.planIso,target_end:p.tEnd,target_start:p.tStart,start_qty:p.start,sell_to_start:p.sell,boost:p.boost||0}); return {...r,...extra};}
 async function setNeed(pid,v){
   if(ST()!=='draft') return;
-  const p=MODEL.find(x=>x.product_id===pid), auto=p.calc==null?0:Math.ceil(p.calc-1e-9);
+  const p=MODEL.find(x=>x.product_id===pid), auto=p.calc==null?0:p.calc;
   // пустое поле — вернуть к расчёту
   p.need=String(v).trim()===''?auto:toInt(v); p.manual=p.need!==auto;
-  try{ await upsert('purchase_needs',[needRow(p)],'month,product_id'); NEEDS[pid]={...(NEEDS[pid]||{}),need_boxes:p.need,calc_boxes:p.calc}; }catch(e){fail(e);}
+  try{ await upsert('purchase_needs',[needRow(p)],'month,product_id'); CTX.needs[pid]={...(CTX.needs[pid]||{}),need_boxes:p.need,calc_boxes:p.calc}; }catch(e){fail(e);}
   renderCards(); renderT1(); renderSup();
 }
 async function setAg(pid,v){
@@ -504,18 +588,9 @@ async function setComment(pid,v){
   const p=MODEL.find(x=>x.product_id===pid); p.comment=v;
   try{ await upsert('purchase_needs',[{month:MONTH,product_id:pid,comment:v||null,updated_at:new Date().toISOString()}],'month,product_id'); }catch(e){fail(e);}
 }
-async function setTurn(v){
-  const st=ST(); if(st&&st!=='draft') return;
-  TURN=toInt(v);
-  try{
-    if(!st){ await upsert('purchase_need_months',[{month:MONTH,status:'draft',turnover_days:TURN}],'month'); MONTHS_DB[MONTH]={month:MONTH,status:'draft',turnover_days:TURN}; }
-    else { await patchMonth({turnover_days:TURN}); MONTHS_DB[MONTH].turnover_days=TURN; }
-  }catch(e){fail(e);}
-  build(); render();
-}
 async function createMonth(){
-  if(!confirm(`Создать потребность на ${mLabel(MONTH)}? Дни оборачиваемости: ${TURN}.`)) return;
-  try{ await upsert('purchase_need_months',[{month:MONTH,status:'draft',turnover_days:TURN}],'month'); await loadBase(); await loadMonth(); }catch(e){fail(e);}
+  if(!confirm(`Создать потребность на ${mLabel(MONTH)}?`)) return;
+  try{ await upsert('purchase_need_months',[{month:MONTH,status:'draft',turnover_days:NEED_DEFAULT_TURNOVER,...(HAS_SET?{lead_times:SET.lt,demand_boost:SET.boost,excluded_products:[...SET.excl]}:{})}],'month'); await loadMonth(); }catch(e){fail(e);}
 }
 async function nextStage(){
   const st=ST(), err=document.getElementById('err'); err.textContent='';
@@ -524,20 +599,20 @@ async function nextStage(){
       if(!confirm('Отправить потребность закупщику? После этого «Заказ» и параметры расчёта менять нельзя.')) return;
       const now=new Date().toISOString();
       await upsert('purchase_needs',MODEL.filter(p=>!p.nobox).map(p=>needRow(p,{updated_at:now})),'month,product_id');
-      await patchMonth({status:'at_buyer',submitted_at:now});
+      await patchMonth({status:'at_buyer',submitted_at:now,...(HAS_SET?{lead_times:SET.lt,demand_boost:SET.boost,excluded_products:[...SET.excl]}:{})});
     }else if(st==='at_buyer'){
       const miss=MODEL.filter(p=>p.need>0&&p.ag==null);
       if(miss.length){ err.textContent=`Заполните «Согласовано» по всем товарам с заказом (не заполнено: ${miss.length}, напр. ${miss.slice(0,3).map(p=>p.offer_id).join(', ')})`; return; }
       if(!confirm('Отметить потребность согласованной?')) return;
       await patchMonth({status:'closed',agreed_at:new Date().toISOString()});
     }
-    await loadBase(); await loadMonth();
+    await loadMonth();
   }catch(e){fail(e);}
 }
 async function prevStage(){
   const i=STAGES.findIndex(s=>s[0]===ST()); if(i<=0) return;
   if(!confirm(`Вернуть потребность на шаг «${STAGES[i-1][1]}»?`)) return;
-  try{ await patchMonth({status:STAGES[i-1][0]}); await loadBase(); await loadMonth(); }catch(e){fail(e);}
+  try{ await patchMonth({status:STAGES[i-1][0]}); await loadMonth(); }catch(e){fail(e);}
 }
 // кнопки «−» / «+» у каждого поля числа: меняют на 1 и сохраняют, как ручной ввод (событие change)
 function stepNum(b,d){ const i=b.parentNode.querySelector('input'); if(!i||i.disabled) return; const x=Math.max(0,(Number(i.value)||0)+d); i.value=x; i.dispatchEvent(new Event('change',{bubbles:true})); }

@@ -343,7 +343,7 @@
   </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="need_calc.js?v=20261027c"></script>
+<script src="need_calc.js?v=20261120b"></script>
 <script src="../beautyart-home/auth.js?v=20261021"></script>
 <script>
 function toggleNav(btn) {
@@ -504,11 +504,8 @@ async function loadWeek(){
   const ndb={}; nd.forEach(n=>ndb[n.product_id]=n);
   NEEDS={};
   if(!NEED_ST||NEED_ST==='draft'){
-    const rw=Object.keys(WEEKS).sort().reverse().slice(0,2), req={};
-    if(rw.length) (await getAll(`/rest/v1/purchase_lines?select=week,product_id,cluster,requested_boxes,distributed_boxes&week=in.(${rw.join(',')})&order=week,product_id,cluster`)).forEach(l=>{ if(SEED[l.cluster]?.blocked) return; req[l.product_id]=(req[l.product_id]||0)+((l.distributed_boxes??l.requested_boxes)||0); });
-    const pl={}; (await getAll(`/rest/v1/sales_plan?select=product_id,plan_qty&month=eq.${month}&order=product_id`)).forEach(x=>{ if(x.plan_qty>0) pl[x.product_id]=x.plan_qty; });
-    const dem={}; DEM.forEach((m,pid)=>{ const o=dem[pid]={ads:0,stock:0}; m.forEach((d,c)=>{ if(SEED[c]?.blocked) return; o.ads+=Number(d.ads_cluster)||0; o.stock+=(d.available||0)+(d.transit||0); }); });
-    needBuild({prod:PROD.filter(p=>!p.nobox),dem,demAt:DEM_AT,plan:pl,needs:ndb,turn:needTurnover(mdb,month).turn,req,cost:{},month,live:true}).forEach(p=>NEEDS[p.product_id]=p.ag??p.need);
+    // новая формула (20.11.2026): needFetch загружает всё сам — план ISO-месяца, сроки и настройки потребности месяца
+    (await needFetch(SUPABASE_URL,HD,month)).model.forEach(p=>{ if(!p.nobox) NEEDS[p.product_id]=p.ag??p.need; });
   }else nd.forEach(n=>NEEDS[n.product_id]=n.agreed_boxes??n.need_boxes);
   MONTH_REQ={}; mr.forEach(l=>{ MONTH_REQ[l.product_id]=(MONTH_REQ[l.product_id]||0)+(l.requested_boxes||0); });
   MONTH_W={}; MWEEKS=[...mWeeks].sort(); mr.forEach(l=>{ const o=MONTH_W[l.product_id]=MONTH_W[l.product_id]||{}; o[l.week]=(o[l.week]||0)+(l.requested_boxes||0); });
