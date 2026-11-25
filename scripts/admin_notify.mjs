@@ -28,6 +28,11 @@ async function lastDayEq(table,col){
       if(!r.ok)return null;if((await r.json()).length)return d;}catch(e){return null;}}
   return null;
 }
+// есть ли строки за конкретный день (фильтр по дню, 1 строка) — свежесть снимка витрины цен Ozon (этап 5 плана цен).
+async function hasDay(table,col,day){
+  try{const r=await fetch(`${SB}/rest/v1/${table}?${col}=eq.${day}&select=${col}&limit=1`,{headers:SR,signal:AbortSignal.timeout(30000)});
+    if(!r.ok)return null;return (await r.json()).length>0;}catch(e){return null;}
+}
 // свежесть: заказы/начисления/остатки/маржа/реклама — по вчера (реклама из API с 30.10.2026); спрос — не старше суток
 async function freshness(){
   const f=[['заказы','product_sales','sale_date',YEST],['начисления','ozon_charges','charge_date',YEST],['остатки','stock_history','report_date',YEST],
@@ -74,6 +79,10 @@ if(MODE==='load'){
   if(sync&&sync.status==='completed'&&sync.conclusion!=='success'&&mskDay(sync.created_at)===TODAY)alerts.push(`❌ синхронизация товаров упала (${mskTime(sync.created_at)} Мск) — ночная загрузка не запускалась. <a href="${sync.html_url}">лог</a>`);
   if(!okToday&&EVENT!=='workflow_run')alerts.push(`❌ сегодня нет успешной ночной загрузки${load[0]?` — последняя: ${dm(mskDay(load[0].created_at))} ${mskTime(load[0].created_at)}, ${load[0].conclusion||load[0].status}`:''}`);
   if(fr.bad&&EVENT!=='workflow_run')alerts.push(`⚠️ устаревшие данные: ${fr.text}`);
+  // Цены Ozon (этап 5 плана цен): нет снимка витрины за сегодня. Проверяем вечером (после 15:00 Мск), чтобы утренний
+  // сторож не тревожил раньше, чем отработает расписание на Mac (run-daily.sh; при спящем Mac — запуск после пробуждения).
+  if(new Date(Date.now()+3*3600e3).getUTCHours()>=15&&(await hasDay('market_price_snapshot','day',TODAY))===false)
+    alerts.push(`⚠️ нет снимка витрины Ozon за сегодня (${dm(TODAY)}) — цены не собраны (расписание на Mac)`);
   if(alerts.length){await send(`<b>${ENT}</b> · сторож\n${alerts.join('\n')}`);
     await log({kind:'watch',day:TODAY,status:'alert',summary:alerts.join('\n').replace(/<[^>]+>/g,''),freshness:fr.text,run_url:sync&&alerts[0].includes('синхронизация')?sync.html_url:RUN_URL});}
   else if(EVENT==='workflow_dispatch')await send(`🟢 <b>${ENT}</b> · сторож: всё в порядке\nсинхронизация ${sync?dm(mskDay(sync.created_at))+' '+mskTime(sync.created_at)+' '+(sync.conclusion||sync.status):'—'} · загрузка ${okToday?'сегодня ✅':'—'}\n<i>Свежесть:</i> ${fr.text}`);
